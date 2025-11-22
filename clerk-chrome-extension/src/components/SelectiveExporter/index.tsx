@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
-import { useMessageScanner, type Message } from "~hooks/useMessageScanner"
+import { useMessageScanner } from "~hooks/useMessageScanner"
 
 interface SelectiveExporterProps {
   isOpen: boolean
@@ -8,21 +8,55 @@ interface SelectiveExporterProps {
 }
 
 export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) => {
-  const { messages } = useMessageScanner()
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [previewTab, setPreviewTab] = useState<"markdown" | "json">("markdown")
+  const hasInitializedRef = useRef(false)
+
+  const handleToggleSelection = useCallback((id: string) => {
+    console.log("[SelectiveExporter] Toggle selection for:", id)
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        console.log("[SelectiveExporter] Removing:", id)
+        next.delete(id)
+      } else {
+        console.log("[SelectiveExporter] Adding:", id)
+        next.add(id)
+      }
+      console.log("[SelectiveExporter] New selectedIds size:", next.size)
+      return next
+    })
+  }, [])
+
+  const { messages } = useMessageScanner({
+    selectedIds,
+    onToggleSelection: handleToggleSelection,
+    isExporterOpen: isOpen
+  })
 
   // Select all messages by default when first loaded
   useEffect(() => {
-    if (isOpen && messages.length > 0 && selectedIds.size === 0) {
+    if (isOpen && messages.length > 0 && !hasInitializedRef.current) {
+      console.log("[SelectiveExporter] Initializing - selecting all", messages.length, "messages")
       setSelectedIds(new Set(messages.map((m) => m.id)))
+      hasInitializedRef.current = true
     }
-  }, [isOpen, messages])
 
-  if (!isOpen) return null
+    // Reset when drawer closes
+    if (!isOpen) {
+      hasInitializedRef.current = false
+    }
+  }, [isOpen, messages.length])
 
-  // Get selected messages in order
+  // Get selected messages in order (must be before early return to maintain hook order)
   const selectedMessages = messages.filter((m) => selectedIds.has(m.id))
+
+  // Debug log when selection changes
+  useEffect(() => {
+    if (isOpen) {
+      console.log("[SelectiveExporter] selectedMessages updated:", selectedMessages.length, "of", messages.length)
+    }
+  }, [isOpen, selectedMessages.length, messages.length])
 
   // Generate Markdown preview
   const generateMarkdown = () => {
@@ -44,21 +78,7 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     }))
   }
 
-  const handleToggleSelection = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
-  }
-
   const handleClose = () => {
-    // Clean up body padding
-    document.documentElement.style.paddingRight = ""
     onClose()
   }
 
@@ -72,27 +92,23 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     }
   }
 
-  // Add body padding when drawer opens
-  if (isOpen) {
-    document.documentElement.style.paddingRight = "420px"
-  }
+  // Manage body padding when drawer opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      document.documentElement.style.paddingRight = "420px"
+    } else {
+      document.documentElement.style.paddingRight = ""
+    }
+
+    return () => {
+      document.documentElement.style.paddingRight = ""
+    }
+  }, [isOpen])
+
+  if (!isOpen) return null
 
   return (
-    <>
-      {/* Overlay */}
-      <div
-        onClick={handleClose}
-        style={{
-          position: "fixed",
-          inset: 0,
-          backgroundColor: "rgba(0, 0, 0, 0.3)",
-          zIndex: 9998,
-          backdropFilter: "blur(2px)"
-        }}
-      />
-
-      {/* Drawer */}
-      <div
+    <div
         style={{
           position: "fixed",
           top: 0,
@@ -265,6 +281,5 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
           </button>
         </div>
       </div>
-    </>
   )
 }
