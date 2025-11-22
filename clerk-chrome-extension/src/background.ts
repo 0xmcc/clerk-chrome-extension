@@ -32,3 +32,12 @@ async function initializeClerk() {
 }
 
 initializeClerk()
+
+// Listen for messages from content scripts
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "openOptionsPage") {
+    chrome.runtime.openOptionsPage()
+    sendResponse({ success: true })
+  }
+  return true
+})
