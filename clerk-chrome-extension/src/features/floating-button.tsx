@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react"
 
-export const FloatingButton = () => {
+interface FloatingButtonProps {
+  onOpenExporter?: () => void
+}
+
+export const FloatingButton = ({ onOpenExporter }: FloatingButtonProps) => {
   const [isEnabled, setIsEnabled] = useState(true)
   const [isActive, setIsActive] = useState(false)
 
@@ -28,10 +32,12 @@ export const FloatingButton = () => {
     e.preventDefault()
     e.stopPropagation()
 
-    // Toggle active state
-    setIsActive(!isActive)
+    // Open selective exporter
+    if (onOpenExporter) {
+      onOpenExporter()
+    }
 
-    console.log("[FloatingButton] Clicked!")
+    console.log("[FloatingButton] Clicked - opening exporter")
   }
 
   const handleRightClick = (e: React.MouseEvent) => {
