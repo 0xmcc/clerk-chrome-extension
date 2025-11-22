@@ -8,7 +8,6 @@ import {
   SignedOut,
   UserButton,
   useAuth,
-  useClerk,
   useUser
 } from "@clerk/chrome-extension"
 import { Link, MemoryRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom"
@@ -18,16 +17,20 @@ import { CountButton } from "~features/count-button"
 import "~style.css"
 
 const PUBLISHABLE_KEY = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY
+const SYNC_HOST = process.env.PLASMO_PUBLIC_CLERK_SYNC_HOST
 const POPUP_URL = chrome.runtime.getURL("popup.html")
 
 if (!PUBLISHABLE_KEY) {
   throw new Error("Please add the PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY to the .env.development file")
 }
 
+if (!SYNC_HOST) {
+  throw new Error("Please add PLASMO_PUBLIC_CLERK_SYNC_HOST to the .env.development file")
+}
+
 function AuthDebugger() {
   const { isSignedIn, user, isLoaded: userLoaded } = useUser()
   const { sessionId, isLoaded: authLoaded } = useAuth()
-  const clerk = useClerk()
 
   useEffect(() => {
     if (!userLoaded || !authLoaded) {
@@ -45,42 +48,6 @@ function AuthDebugger() {
       timestamp: new Date().toISOString()
     })
   }, [authLoaded, isSignedIn, sessionId, user?.id, userLoaded])
-
-  // Check for OAuth callback in URL
-  useEffect(() => {
-    const checkForCallback = () => {
-      const urlParams = new URLSearchParams(window.location.search)
-      const hashParams = new URLSearchParams(window.location.hash.substring(1))
-      
-      console.log("[Clerk Debug] URL params:", {
-        search: window.location.search,
-        hash: window.location.hash,
-        urlParams: Object.fromEntries(urlParams),
-        hashParams: Object.fromEntries(hashParams)
-      })
-
-      // If there's a callback, try to reload the session
-      if (urlParams.has('__clerk_redirect_url') || hashParams.has('__clerk_redirect_url')) {
-        console.log("[Clerk Debug] OAuth callback detected, reloading session...")
-        // Force a session reload
-        clerk.load().then(() => {
-          console.log("[Clerk Debug] Session reloaded")
-        })
-      }
-    }
-
-    checkForCallback()
-    
-    // Also check periodically in case the session was created in another tab
-    const interval = setInterval(() => {
-      if (clerk && !isSignedIn) {
-        console.log("[Clerk Debug] Checking for session update...")
-        clerk.load()
-      }
-    }, 2000) // Check every 2 seconds
-
-    return () => clearInterval(interval)
-  }, [clerk, isSignedIn])
 
   return null
 }
@@ -129,6 +96,7 @@ function RoutedClerkProvider({ refreshKey }: { refreshKey: number }) {
     <ClerkProvider
       key={refreshKey}
       publishableKey={PUBLISHABLE_KEY}
+      syncHost={SYNC_HOST}
       afterSignOutUrl={POPUP_URL}
       signInFallbackRedirectUrl={POPUP_URL}
       signUpFallbackRedirectUrl={POPUP_URL}
