@@ -1,11 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { useMessageScanner } from "~hooks/useMessageScanner"
-import { getPlatformLabel } from "~utils/platform"
+import { detectPlatform, getPlatformLabel } from "~utils/platform"
 
 interface SelectiveExporterProps {
   isOpen: boolean
   onClose: () => void
+}
+
+type PromptContainer = {
+  id: string
+  name: string
+  systemPrompt: string
+  profileJson: string
+  suggestion: string
+  status: "idle" | "loading" | "error" | "ready"
+  error?: string
 }
 
 const requestClerkToken = async () => {
@@ -56,6 +66,35 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
   const [statusMessage, setStatusMessage] = useState("")
   const hasInitializedRef = useRef(false)
   const platformLabelRef = useRef(getPlatformLabel())
+  const isLinkedIn = useMemo(() => detectPlatform() === "linkedin", [])
+  const [promptContainers, setPromptContainers] = useState<PromptContainer[]>(() => {
+    const stored = localStorage.getItem("linkedinPromptContainers")
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((c) => ({
+            ...c,
+            suggestion: "",
+            status: "idle" as const,
+            error: ""
+          }))
+        }
+      } catch (err) {
+        console.warn("[SelectiveExporter] Failed to parse stored prompt containers", err)
+      }
+    }
+    return [
+      {
+        id: "default-linkedin-1",
+        name: "Suggest reply",
+        systemPrompt: "Be concise, warm, and include a clear next step. Keep it to 3 sentences max.",
+        profileJson: JSON.stringify({ tone: "friendly", cta: "Ask for a short call", signoff: "Thanks!" }, null, 2),
+        suggestion: "",
+        status: "idle"
+      }
+    ]
+  })
 
   const handleToggleSelection = useCallback((id: string) => {
     console.log("[SelectiveExporter] Toggle selection for:", id)
@@ -163,6 +202,73 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
       setStatusMessage("")
     }
   }, [isOpen])
+
+  // Persist prompt containers
+  useEffect(() => {
+    try {
+      const toPersist = promptContainers.map(({ id, name, systemPrompt, profileJson }) => ({
+        id,
+        name,
+        systemPrompt,
+        profileJson,
+        suggestion: ""
+      }))
+      localStorage.setItem("linkedinPromptContainers", JSON.stringify(toPersist))
+    } catch (err) {
+      console.warn("[SelectiveExporter] Failed to persist prompt containers", err)
+    }
+  }, [promptContainers])
+
+  const updateContainer = (id: string, changes: Partial<PromptContainer>) => {
+    setPromptContainers((prev) => prev.map((c) => (c.id === id ? { ...c, ...changes } : c)))
+  }
+
+  const buildSuggestion = (container: PromptContainer): string => {
+    let profile: Record<string, any> = {}
+    try {
+      profile = JSON.parse(container.profileJson || "{}")
+    } catch (err) {
+      throw new Error("Profile JSON is invalid")
+    }
+
+    const lastInbound =
+      [...messages].reverse().find((m) => m.role !== "user") || messages[messages.length - 1] || null
+    const contactName = lastInbound?.authorName || profile.contactName || "there"
+    const lastLine = lastInbound?.text ? lastInbound.text.slice(0, 400) : ""
+    const tone = profile.tone ? `Tone: ${profile.tone}. ` : ""
+    const signoff = profile.signoff ? ` ${profile.signoff}` : ""
+    const cta = profile.cta ? ` ${profile.cta}` : ""
+
+    const base =
+      container.systemPrompt.trim() ||
+      "Craft a concise, helpful reply for LinkedIn. Keep it respectful and specific."
+
+    const context = lastLine ? `Context: "${lastLine}"` : "No recent message content available."
+
+    return `${base}\n\n${tone}${context}\n\nSuggested reply:\nHi ${contactName}, thanks for reaching out.${cta}${signoff}`.trim()
+  }
+
+  const handleSuggest = (id: string, opts?: { copy?: boolean }) => {
+    const container = promptContainers.find((c) => c.id === id)
+    if (!container) return
+    updateContainer(id, { status: "loading", error: "" })
+
+    try {
+      const suggestion = buildSuggestion(container)
+      updateContainer(id, { suggestion, status: "ready" })
+      if (opts?.copy) {
+        navigator.clipboard
+          .writeText(suggestion)
+          .then(() => console.log("[SelectiveExporter] Suggestion copied to clipboard"))
+          .catch((err) => console.warn("[SelectiveExporter] Failed to copy suggestion", err))
+      }
+    } catch (err) {
+      updateContainer(id, {
+        status: "error",
+        error: err instanceof Error ? err.message : "Failed to build suggestion"
+      })
+    }
+  }
 
   const handleExport = async () => {
     if (selectedIds.size === 0 || exportState === "loading") return
@@ -352,6 +458,38 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
           </div>
         )}
       </div>
+
+      {/* LinkedIn Response Helpers - minimal CTA button */}
+      {isLinkedIn && promptContainers.length > 0 && (
+        <div
+          style={{
+            borderTop: "1px solid #e5e7eb",
+            padding: "14px 20px",
+            backgroundColor: "#f9fafb"
+          }}>
+          <button
+            onClick={() => handleSuggest(promptContainers[0].id, { copy: true })}
+            disabled={promptContainers[0].status === "loading"}
+            style={{
+              width: "100%",
+              padding: "12px",
+              borderRadius: "8px",
+              border: "none",
+              background:
+                promptContainers[0].status === "loading"
+                  ? "#9ca3af"
+                  : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+              color: "#ffffff",
+              cursor: promptContainers[0].status === "loading" ? "not-allowed" : "pointer",
+              fontSize: "15px",
+              fontWeight: 600,
+              textAlign: "center",
+              boxShadow: "0 8px 20px rgba(103, 126, 234, 0.35)"
+            }}>
+            {promptContainers[0].name || "Suggest reply"}
+          </button>
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div
