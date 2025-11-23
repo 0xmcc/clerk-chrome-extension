@@ -11,12 +11,22 @@ if (!syncHost) {
   throw new Error("Please add PLASMO_PUBLIC_CLERK_SYNC_HOST to your .env file")
 }
 
-async function initializeClerk() {
-  try {
-    const clerkClient = await createClerkClient({
+let clerkClientPromise: ReturnType<typeof createClerkClient> | null = null
+
+const getClerkClient = async () => {
+  if (!clerkClientPromise) {
+    clerkClientPromise = createClerkClient({
       publishableKey,
       syncHost
     })
+  }
+
+  return clerkClientPromise
+}
+
+async function initializeClerk() {
+  try {
+    const clerkClient = await getClerkClient()
 
     console.log("[Background] Clerk initialized", {
       isSignedIn: !!clerkClient.session,
@@ -38,6 +48,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "openOptionsPage") {
     chrome.runtime.openOptionsPage()
     sendResponse({ success: true })
+    return true
   }
+
+  if (message.action === "getClerkToken") {
+    getClerkClient()
+      .then(async (clerkClient) => {
+        const token = await clerkClient.session?.getToken()
+        sendResponse({
+          success: !!token,
+          token: token || null
+        })
+      })
+      .catch((error) => {
+        console.error("[Background] Failed to fetch Clerk token:", error)
+        sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown Clerk error"
+        })
+      })
+
+    return true
+  }
+
   return true
 })
