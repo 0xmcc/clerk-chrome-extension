@@ -76,6 +76,7 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
   const [systemContextIds, setSystemContextIds] = useState<Set<string>>(new Set())
   const [analyzeMode, setAnalyzeMode] = useState(false)
   const [analysisMessages, setAnalysisMessages] = useState<ChatEntry[]>([])
+  const [analysisInput, setAnalysisInput] = useState("")
   const [exportState, setExportState] = useState<"idle" | "loading" | "success" | "error">("idle")
   const [statusMessage, setStatusMessage] = useState("")
   const hasInitializedRef = useRef(false)
@@ -142,6 +143,7 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     setSystemContextIds(new Set())
     setAnalyzeMode(false)
     setAnalysisMessages([])
+    setAnalysisInput("")
     setPromptContainers((prev) =>
       prev.map((c) => ({
         ...c,
@@ -483,6 +485,20 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     setAnalyzeMode(true)
   }
 
+  const handleAnalysisSend = () => {
+    const text = analysisInput.trim()
+    if (!text) return
+
+    const userMsg: ChatEntry = { id: `analysis-user-${Date.now()}`, role: "user", text }
+    const reply: ChatEntry = {
+      id: `analysis-assistant-${Date.now() + 1}`,
+      role: "assistant",
+      text: "Thanks for the note. I’ll use it to refine the next steps for this conversation."
+    }
+    setAnalysisMessages((prev) => [...prev, userMsg, reply])
+    setAnalysisInput("")
+  }
+
   if (!isOpen) return null
 
   return (
@@ -618,18 +634,18 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: "10px",
-                  padding: "8px 0"
+                  gap: "12px",
+                  padding: "8px 0",
+                  height: "100%"
                 }}>
                 <div
                   style={{
-                    background: "#f9fafb",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "10px",
-                    padding: "12px",
                     display: "flex",
                     flexDirection: "column",
-                    gap: "8px"
+                    gap: "10px",
+                    flex: 1,
+                    overflowY: "auto",
+                    padding: "4px 2px"
                   }}>
                   {analysisMessages.length === 0 ? (
                     <div style={{ color: "#9ca3af", fontSize: "13px" }}>Analyzing...</div>
@@ -639,12 +655,14 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
                         key={m.id}
                         style={{
                           alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                          background: m.role === "user" ? "#eef2ff" : "#f3f4f6",
+                          background: m.role === "user" ? "#eef2ff" : "transparent",
                           color: "#1f2937",
-                          padding: "10px 12px",
-                          borderRadius: "12px",
+                          padding: m.role === "user" ? "10px 12px" : "2px",
+                          borderRadius: m.role === "user" ? "16px 16px 4px 16px" : "0",
                           maxWidth: "100%",
-                          lineHeight: 1.5
+                          lineHeight: 1.5,
+                          border: m.role === "user" ? "1px solid #e5e7eb" : "none",
+                          boxShadow: m.role === "user" ? "0 4px 10px rgba(0,0,0,0.06)" : "none"
                         }}>
                         {m.text}
                       </div>
@@ -965,37 +983,110 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
         </div>
       )} */}
 
-      {/* Action Button */}
+      {/* Action Button / Analysis Input */}
       <div
         style={{
           padding: "16px 20px",
           borderTop: "1px solid #e5e7eb",
           backgroundColor: "#f9fafb",
           display: "flex",
-          gap: "12px"
+          gap: "12px",
+          flexDirection: analyzeMode ? "column" : "row"
         }}>
-        <button
-          onClick={() => (analyzeMode ? setAnalyzeMode(false) : runAnalysis())}
-          disabled={selectedIds.size === 0 && !analyzeMode}
-          style={{
-            flex: 1,
-            padding: "12px",
-            borderRadius: "8px",
-            border: analyzeMode ? "1px solid #d1d5db" : "none",
-            background: analyzeMode
-              ? "#ffffff"
-              : selectedIds.size === 0
-                ? "#9ca3af"
-                : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-            color: analyzeMode ? "#374151" : "#ffffff",
-            cursor: analyzeMode ? "pointer" : selectedIds.size === 0 ? "not-allowed" : "pointer",
-            fontSize: "15px",
-            fontWeight: 600,
-            boxShadow: analyzeMode ? "none" : "0 8px 20px rgba(103, 126, 234, 0.35)",
-            opacity: analyzeMode ? 1 : selectedIds.size === 0 ? 0.7 : 1
-          }}>
-          {analyzeMode ? "Back to export tools" : "Analyze this conversation"}
-        </button>
+        {analyzeMode ? (
+          <>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <textarea
+                placeholder="Type to ask or refine..."
+                value={analysisInput}
+                onChange={(e) => setAnalysisInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault()
+                    handleAnalysisSend()
+                  }
+                }}
+                rows={2}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: "10px",
+                  border: "1px solid #d1d5db",
+                  fontSize: "13px",
+                  resize: "vertical",
+                  background: "#ffffff"
+                }}
+              />
+              <button
+                onClick={handleAnalysisSend}
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid #d1d5db",
+                  background: "#ffffff",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  color: "#374151",
+                  minWidth: "48px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}>
+                <svg
+                  aria-hidden="true"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#4b5563"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+              </button>
+            </div>
+            <button
+              onClick={() => setAnalyzeMode(false)}
+              style={{
+                flex: 1,
+                padding: "12px",
+                borderRadius: "8px",
+                border: "1px solid #d1d5db",
+                background: "#ffffff",
+                color: "#374151",
+                cursor: "pointer",
+                fontSize: "14px",
+                fontWeight: 600
+              }}>
+              Back to export tools
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => runAnalysis()}
+            disabled={selectedIds.size === 0}
+            style={{
+              flex: 1,
+              padding: "12px",
+              borderRadius: "8px",
+              border: "none",
+              background:
+                selectedIds.size === 0
+                  ? "#9ca3af"
+                  : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+              color: "#ffffff",
+              cursor: selectedIds.size === 0 ? "not-allowed" : "pointer",
+              fontSize: "15px",
+              fontWeight: 600,
+              boxShadow: "0 8px 20px rgba(103, 126, 234, 0.35)",
+              opacity: selectedIds.size === 0 ? 0.7 : 1
+            }}>
+            Analyze this conversation
+          </button>
+        )}
       </div>
       {statusMessage && (
         <div
