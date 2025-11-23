@@ -37,3 +37,6 @@ keys.json
 
 # typescript
 .tsbuildinfo
+
+..clerk-chrome-extension.zip
+repomix-output.xml

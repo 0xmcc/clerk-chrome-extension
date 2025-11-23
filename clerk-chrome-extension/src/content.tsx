@@ -45,9 +45,9 @@ const PlasmoOverlay = () => {
 
   return (
     <>
-      <div className="plasmo-z-50 plasmo-flex plasmo-fixed plasmo-top-32 plasmo-right-8">
+      {/* <div className="plasmo-z-50 plasmo-flex plasmo-fixed plasmo-top-32 plasmo-right-8">
         <CountButton />
-      </div>
+      </div> */}
       <FloatingButton onOpenExporter={() => setIsExporterOpen(true)} />
       <SelectiveExporter isOpen={isExporterOpen} onClose={() => setIsExporterOpen(false)} />
     </>

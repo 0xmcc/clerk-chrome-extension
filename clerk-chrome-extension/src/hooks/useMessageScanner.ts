@@ -1,22 +1,47 @@
 import { useEffect, useState, useCallback, useRef } from "react"
 
+import { detectPlatform, getPlatformLabel, type Platform } from "~utils/platform"
+
 export interface Message {
   id: string
   role: "user" | "assistant"
   text: string
+  authorName: string
   node: Element
 }
 
-// ChatGPT message selectors (multiple fallbacks)
-const MESSAGE_SELECTORS = [
-  ".group.w-full.text-token-text-primary",
-  "[data-message-id]",
-  '[data-testid="conversation-turn"]',
-  "[data-message-author-role]"
-]
+// Message selectors per platform (ordered by specificity)
+const PLATFORM_SELECTORS: Record<Platform, string[]> = {
+  chatgpt: [
+    ".group.w-full.text-token-text-primary",
+    "[data-message-id]",
+    '[data-testid="conversation-turn"]',
+    "[data-message-author-role]"
+  ],
+  claude: [
+    '[data-testid="message-row"]',
+    '[data-testid="message"]',
+    '[data-testid*="chat-message"]',
+    '[data-testid*="assistant-message"]',
+    '[data-testid*="user-message"]'
+  ],
+  linkedin: [
+    "[data-event-urn]",
+    "li.msg-s-event-listitem",
+    ".msg-s-event-listitem__message-bubble",
+    "[data-event-id]",
+    "[data-urn]",
+    "[data-id]"
+  ],
+  unknown: [
+    "[data-message-id]",
+    '[data-testid="conversation-turn"]',
+    "[data-message-author-role]"
+  ]
+}
 
 // Detect message role from various attributes
-const detectRole = (node: Element): "user" | "assistant" => {
+const detectRole = (node: Element, platform: Platform): "user" | "assistant" => {
   const roleAttr =
     node.getAttribute("data-message-author-role") ||
     node.getAttribute("data-role") ||
@@ -30,6 +55,61 @@ const detectRole = (node: Element): "user" | "assistant" => {
     if (lower.includes("user") || lower.includes("you")) {
       return "user"
     }
+  }
+
+  // Check platform-specific hints
+  if (platform === "claude") {
+    const authorLabel =
+      node.querySelector('[data-testid="message-author"]')?.textContent?.toLowerCase() ||
+      node.querySelector('[data-testid="avatar"]')?.getAttribute("aria-label")?.toLowerCase()
+
+    if (authorLabel?.includes("you")) return "user"
+    if (authorLabel?.includes("claude")) return "assistant"
+  }
+
+  if (platform === "linkedin") {
+    const liLabel = node.getAttribute("aria-label")?.toLowerCase()
+    if (liLabel?.includes("you said") || liLabel?.includes("you sent")) return "user"
+  }
+
+  // Inspect dataset and class names for role hints
+  const datasetValues = Object.values((node as HTMLElement).dataset || {})
+    .join(" ")
+    .toLowerCase()
+  const className = (node as HTMLElement).className?.toString().toLowerCase() || ""
+
+  if (
+    datasetValues.includes("user") ||
+    datasetValues.includes("human") ||
+    datasetValues.includes("self") ||
+    datasetValues.includes("outgoing") ||
+    datasetValues.includes("sender") ||
+    datasetValues.includes("me") ||
+    className.includes("user") ||
+    className.includes("human") ||
+    className.includes("self") ||
+    className.includes("outgoing") ||
+    className.includes("sent") ||
+    className.includes("me") ||
+    className.includes("mine") ||
+    className.includes("you")
+  ) {
+    return "user"
+  }
+
+  if (
+    datasetValues.includes("assistant") ||
+    datasetValues.includes("bot") ||
+    datasetValues.includes("claude") ||
+    datasetValues.includes("incoming") ||
+    datasetValues.includes("received") ||
+    className.includes("assistant") ||
+    className.includes("bot") ||
+    className.includes("claude") ||
+    className.includes("incoming") ||
+    className.includes("received")
+  ) {
+    return "assistant"
   }
 
   const ariaLabel = node.getAttribute("aria-label")
@@ -57,6 +137,7 @@ const detectRole = (node: Element): "user" | "assistant" => {
 // Generate unique ID for message
 const generateMessageId = (node: Element, index: number): string => {
   const dataId =
+    node.getAttribute("data-event-urn") ||
     node.getAttribute("data-message-id") ||
     node.getAttribute("data-id") ||
     node.getAttribute("id")
@@ -71,6 +152,41 @@ const generateMessageId = (node: Element, index: number): string => {
   return `msg-${Math.abs(hash)}-${index}`
 }
 
+const normalizeText = (text: string): string => {
+  return text.replace(/\s+\n\s+/g, "\n").replace(/\n{3,}/g, "\n\n").trim()
+}
+
+const getLinkedInAuthor = (node: Element, role: "user" | "assistant"): string => {
+  const nameFromHeading = node.querySelector(".msg-s-message-group__name")?.textContent
+  if (nameFromHeading) return normalizeText(nameFromHeading)
+
+  const a11yHeading = node.querySelector(".msg-s-event-listitem--group-a11y-heading")?.textContent
+  if (a11yHeading) {
+    const cleaned = normalizeText(a11yHeading)
+    const parts = cleaned.split(" sent")
+    if (parts[0]) return parts[0]
+  }
+
+  const imgAlt = node.querySelector(".msg-s-event-listitem__profile-picture")?.getAttribute("alt")
+  if (imgAlt) return normalizeText(imgAlt)
+
+  return role === "user" ? "You" : "Contact"
+}
+
+const getMessageText = (node: Element, platform: Platform): string => {
+  if (platform === "linkedin") {
+    const body =
+      node.querySelector(".msg-s-event-listitem__body") ||
+      node.querySelector(".msg-s-event__content") ||
+      node.querySelector(".msg-s-event-listitem__message-bubble")
+
+    if (body?.textContent) return normalizeText(body.textContent)
+  }
+
+  const text = node.textContent?.trim() || ""
+  return normalizeText(text)
+}
+
 interface UseMessageScannerProps {
   selectedIds: Set<string>
   onToggleSelection: (id: string) => void
@@ -81,6 +197,7 @@ export const useMessageScanner = ({ selectedIds, onToggleSelection, isExporterOp
   const [messages, setMessages] = useState<Message[]>([])
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const selectedIdsRef = useRef(selectedIds)
+  const platformRef = useRef<Platform>(detectPlatform())
 
   // Keep latest selection without re-creating callbacks
   useEffect(() => {
@@ -148,8 +265,15 @@ export const useMessageScanner = ({ selectedIds, onToggleSelection, isExporterOp
   const scanMessages = useCallback(() => {
     const foundMessages: Message[] = []
     const processedIds = new Set<string>()
+    const selectors = PLATFORM_SELECTORS[platformRef.current] || PLATFORM_SELECTORS.unknown
+    const platformLabel = getPlatformLabel(platformRef.current)
 
-    for (const selector of MESSAGE_SELECTORS) {
+    if (selectors.length === 0) {
+      setMessages([])
+      return
+    }
+
+    for (const selector of selectors) {
       const nodes = document.querySelectorAll(selector)
       if (nodes.length > 0) {
         nodes.forEach((node, index) => {
@@ -158,11 +282,13 @@ export const useMessageScanner = ({ selectedIds, onToggleSelection, isExporterOp
           if (processedIds.has(id)) return
           processedIds.add(id)
 
-          const role = detectRole(node)
-          const text = node.textContent?.trim() || ""
+          const role = detectRole(node, platformRef.current)
+          const text = getMessageText(node, platformRef.current)
+          const authorName =
+            platformRef.current === "linkedin" ? getLinkedInAuthor(node, role) : platformLabel
 
           if (text) {
-            foundMessages.push({ id, role, text, node })
+            foundMessages.push({ id, role, text, authorName, node })
 
             // Inject checkbox if exporter is open
             if (isExporterOpen) {

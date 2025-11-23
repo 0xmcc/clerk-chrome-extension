@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { useMessageScanner } from "~hooks/useMessageScanner"
+import { getPlatformLabel } from "~utils/platform"
 
 interface SelectiveExporterProps {
   isOpen: boolean
@@ -32,6 +33,12 @@ const requestClerkToken = async () => {
 
 const deriveConversationId = () => {
   const path = window.location.pathname
+  const linkedinMatch = path.match(/messaging\/thread\/([^/?#]+)/)
+  if (linkedinMatch?.[1]) return linkedinMatch[1]
+
+  const claudeMatch = path.match(/\/chat\/([^/?#]+)/)
+  if (claudeMatch?.[1]) return claudeMatch[1]
+
   const chatMatch = path.match(/\/c\/([^/?#]+)/)
   if (chatMatch?.[1]) return chatMatch[1]
 
@@ -48,6 +55,7 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
   const [exportState, setExportState] = useState<"idle" | "loading" | "success" | "error">("idle")
   const [statusMessage, setStatusMessage] = useState("")
   const hasInitializedRef = useRef(false)
+  const platformLabelRef = useRef(getPlatformLabel())
 
   const handleToggleSelection = useCallback((id: string) => {
     console.log("[SelectiveExporter] Toggle selection for:", id)
@@ -99,8 +107,8 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
   const generateMarkdown = () => {
     return selectedMessages
       .map((msg, index) => {
-        const roleLabel = msg.role === "user" ? "User" : "Assistant"
-        return `**${index + 1}. ${roleLabel}**\n${msg.text}\n`
+        const fromLabel = msg.authorName || (msg.role === "user" ? "User" : "Assistant")
+        return `**${index + 1}. ${fromLabel}**\n${msg.text}\n`
       })
       .join("\n")
   }
@@ -111,6 +119,7 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
       index: index + 1,
       id: msg.id,
       role: msg.role,
+      from: msg.authorName,
       text: msg.text
     }))
   }
@@ -166,15 +175,18 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
         messages: selectedMessages.map((msg) => ({
           id: msg.id,
           role: msg.role,
+          from: msg.authorName,
           content: msg.text,
           tokens: Math.ceil(msg.text.length / 4),
           metadata: {
-            extensionMessageId: msg.id
+            extensionMessageId: msg.id,
+            senderName: msg.authorName
           }
         })),
         metadata: {
           source: "chrome_extension",
-          host: window.location.hostname
+          host: window.location.hostname,
+          platform: platformLabelRef.current.toLowerCase()
         }
       }
 
@@ -229,7 +241,7 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
         }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#111827" }}>
-            ChatGPT Export
+            {platformLabelRef.current} Export
           </h2>
           <button
             onClick={handleClose}
