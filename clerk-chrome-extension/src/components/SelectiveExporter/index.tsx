@@ -74,6 +74,8 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
   const [replyNote, setReplyNote] = useState("")
   const [systemJsonText, setSystemJsonText] = useState("")
   const [systemContextIds, setSystemContextIds] = useState<Set<string>>(new Set())
+  const [analyzeMode, setAnalyzeMode] = useState(false)
+  const [analysisMessages, setAnalysisMessages] = useState<ChatEntry[]>([])
   const [exportState, setExportState] = useState<"idle" | "loading" | "success" | "error">("idle")
   const [statusMessage, setStatusMessage] = useState("")
   const hasInitializedRef = useRef(false)
@@ -138,6 +140,8 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     setReplyNote("")
     setSystemJsonText("")
     setSystemContextIds(new Set())
+    setAnalyzeMode(false)
+    setAnalysisMessages([])
     setPromptContainers((prev) =>
       prev.map((c) => ({
         ...c,
@@ -376,6 +380,12 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
   }
 
   const selectedPromptId = promptContainers[0]?.id
+  const historyMenuOptions: { label: string; value: "markdown" | "json" | "copy" | "export" }[] = [
+    { label: "Markdown", value: "markdown" },
+    { label: "JSON", value: "json" },
+    { label: "— Copy —", value: "copy" },
+    { label: "— Export —", value: "export" }
+  ]
 
   const handleExport = async () => {
     if (selectedIds.size === 0 || exportState === "loading") return
@@ -434,6 +444,45 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     }
   }
 
+  const handleHistoryMenuChange = (value: "markdown" | "json" | "copy" | "export") => {
+    if (value === "copy") {
+      if (selectedIds.size > 0) handleCopy()
+      return
+    }
+    if (value === "export") {
+      if (selectedIds.size > 0 && exportState !== "loading") handleExport()
+      return
+    }
+    setHistoryFormat(value)
+  }
+
+  const runAnalysis = () => {
+    const total = selectedMessages.length
+    const userCount = selectedMessages.filter((m) => m.role === "user").length
+    const assistantCount = total - userCount
+    const last = selectedMessages[selectedMessages.length - 1]
+    const summary = `I see ${total} messages (${userCount} user, ${assistantCount} assistant). Last message from ${last?.authorName || "unknown"}: "${(last?.text || "").slice(0, 140)}${(last?.text || "").length > 140 ? "..." : ""}".`
+    const themes = selectedMessages
+      .map((m) => m.text)
+      .join(" ")
+      .toLowerCase()
+    const tone =
+      themes.includes("thank") || themes.includes("appreciate")
+        ? "Tone feels thankful and warm."
+        : themes.includes("urgent")
+          ? "Tone feels urgent."
+          : "Tone feels neutral."
+
+    setAnalysisMessages([
+      {
+        id: `analysis-${Date.now()}`,
+        role: "assistant",
+        text: `${summary} ${tone} Next step: clarify intent and propose a concise CTA.`
+      }
+    ])
+    setAnalyzeMode(true)
+  }
+
   if (!isOpen) return null
 
   return (
@@ -481,44 +530,69 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
         </div>
       </div>
 
-      {/* Tabs */}
-      <div
-        style={{
-          display: "flex",
-          borderBottom: "1px solid #e5e7eb",
-          backgroundColor: "#f9fafb"
-        }}>
-        <button
-          onClick={() => setPreviewTab("markdown")}
+      {/* Tabs or Analysis Header */}
+      {analyzeMode ? (
+        <div
           style={{
-            flex: 1,
-            padding: "12px",
-            border: "none",
-            background: previewTab === "markdown" ? "#ffffff" : "transparent",
-            borderBottom: previewTab === "markdown" ? "2px solid #667eea" : "2px solid transparent",
-            cursor: "pointer",
-            fontSize: "14px",
-            fontWeight: 500,
-            color: previewTab === "markdown" ? "#667eea" : "#6b7280"
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "12px 20px",
+            borderBottom: "1px solid #e5e7eb",
+            backgroundColor: "#f9fafb"
           }}>
-          Markdown
-        </button>
-        <button
-          onClick={() => setPreviewTab("json")}
+          <button
+            onClick={() => setAnalyzeMode(false)}
+            style={{
+              border: "none",
+              background: "none",
+              cursor: "pointer",
+              fontSize: "18px",
+              color: "#4b5563"
+            }}>
+            ←
+          </button>
+          <div style={{ fontWeight: 700, color: "#111827" }}>AI Analysis</div>
+        </div>
+      ) : (
+        <div
           style={{
-            flex: 1,
-            padding: "12px",
-            border: "none",
-            background: previewTab === "json" ? "#ffffff" : "transparent",
-            borderBottom: previewTab === "json" ? "2px solid #667eea" : "2px solid transparent",
-            cursor: "pointer",
-            fontSize: "14px",
-            fontWeight: 500,
-            color: previewTab === "json" ? "#667eea" : "#6b7280"
+            display: "flex",
+            borderBottom: "1px solid #e5e7eb",
+            backgroundColor: "#f9fafb"
           }}>
-          JSON
-        </button>
-      </div>
+          <button
+            onClick={() => setPreviewTab("markdown")}
+            style={{
+              flex: 1,
+              padding: "12px",
+              border: "none",
+              background: previewTab === "markdown" ? "#ffffff" : "transparent",
+              borderBottom: previewTab === "markdown" ? "2px solid #667eea" : "2px solid transparent",
+              cursor: "pointer",
+              fontSize: "14px",
+              fontWeight: 500,
+              color: previewTab === "markdown" ? "#667eea" : "#6b7280"
+            }}>
+            Markdown
+          </button>
+          <button
+            onClick={() => setPreviewTab("json")}
+            style={{
+              flex: 1,
+              padding: "12px",
+              border: "none",
+              background: previewTab === "json" ? "#ffffff" : "transparent",
+              borderBottom: previewTab === "json" ? "2px solid #667eea" : "2px solid transparent",
+              cursor: "pointer",
+              fontSize: "14px",
+              fontWeight: 500,
+              color: previewTab === "json" ? "#667eea" : "#6b7280"
+            }}>
+            JSON
+          </button>
+        </div>
+      )}
 
       {/* Preview Area */}
       <div
@@ -539,65 +613,73 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
           </div>
         ) : (
           <div style={{ fontSize: "14px", lineHeight: 1.6, color: "#374151" }}>
-            {previewTab === "markdown" ? (
+            {analyzeMode ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                  padding: "8px 0"
+                }}>
+                <div
+                  style={{
+                    background: "#f9fafb",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "10px",
+                    padding: "12px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px"
+                  }}>
+                  {analysisMessages.length === 0 ? (
+                    <div style={{ color: "#9ca3af", fontSize: "13px" }}>Analyzing...</div>
+                  ) : (
+                    analysisMessages.map((m) => (
+                      <div
+                        key={m.id}
+                        style={{
+                          alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                          background: m.role === "user" ? "#eef2ff" : "#f3f4f6",
+                          color: "#1f2937",
+                          padding: "10px 12px",
+                          borderRadius: "12px",
+                          maxWidth: "100%",
+                          lineHeight: 1.5
+                        }}>
+                        {m.text}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : previewTab === "markdown" ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div
                   style={{
                     display: "flex",
-                    justifyContent: "space-between",
+                    justifyContent: "flex-end",
                     alignItems: "center",
-                    gap: "12px",
+                    gap: "8px",
                     flexWrap: "wrap"
                   }}>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <button
-                      onClick={handleCopy}
-                      disabled={selectedIds.size === 0}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "12px",
-                        border: "1px solid #e5e7eb",
-                        background: "#f9fafb",
-                        color: selectedIds.size === 0 ? "#9ca3af" : "#4b5563",
-                        cursor: selectedIds.size === 0 ? "not-allowed" : "pointer",
-                        fontWeight: 600
-                      }}>
-                      📋 Copy
-                    </button>
-                    <button
-                      onClick={handleExport}
-                      disabled={selectedIds.size === 0 || exportState === "loading"}
-                      style={{
-                        padding: "6px 10px",
-                        borderRadius: "12px",
-                        border: "1px solid #e5e7eb",
-                        background: "#f9fafb",
-                        color:
-                          selectedIds.size === 0 || exportState === "loading" ? "#9ca3af" : "#4b5563",
-                        cursor:
-                          selectedIds.size === 0 || exportState === "loading" ? "not-allowed" : "pointer",
-                        fontWeight: 600
-                      }}>
-                      ⬇️ Export
-                    </button>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px" }}>
-                    <span style={{ color: "#6b7280" }}>Format:</span>
-                    <select
-                      value={historyFormat}
-                      onChange={(e) => setHistoryFormat(e.target.value as any)}
-                      style={{
-                        border: "1px solid #d1d5db",
-                        borderRadius: "6px",
-                        padding: "6px 10px",
-                        fontSize: "12px",
-                        background: "#ffffff",
-                        color: "#374151"
-                      }}>
-                      <option value="markdown">Markdown</option>
-                      <option value="json">JSON</option>
-                    </select>
-                  </div>
+                  <select
+                    value={historyFormat}
+                    onChange={(e) => handleHistoryMenuChange(e.target.value as any)}
+                    style={{
+                      border: "1px solid #d1d5db",
+                      borderRadius: "10px",
+                      padding: "6px 12px",
+                      fontSize: "12px",
+                      background: "#f9fafb",
+                      color: "#374151",
+                      minWidth: "140px"
+                    }}>
+                    {historyMenuOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 {historyFormat === "markdown" ? (
                   <pre
@@ -883,7 +965,7 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
         </div>
       )} */}
 
-      {/* Action Buttons */}
+      {/* Action Button */}
       <div
         style={{
           padding: "16px 20px",
@@ -893,41 +975,26 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
           gap: "12px"
         }}>
         <button
-          onClick={handleCopy}
-          disabled={selectedIds.size === 0}
+          onClick={() => (analyzeMode ? setAnalyzeMode(false) : runAnalysis())}
+          disabled={selectedIds.size === 0 && !analyzeMode}
           style={{
             flex: 1,
-            padding: "10px",
-            border: "1px solid #d1d5db",
-            borderRadius: "6px",
-            background: "#ffffff",
-            cursor: selectedIds.size === 0 ? "not-allowed" : "pointer",
-            fontSize: "14px",
-            fontWeight: 500,
-            color: selectedIds.size === 0 ? "#9ca3af" : "#374151",
-            opacity: selectedIds.size === 0 ? 0.5 : 1
-          }}>
-          Copy
-        </button>
-        <button
-          onClick={handleExport}
-          disabled={selectedIds.size === 0 || exportState === "loading"}
-          style={{
-            flex: 1,
-            padding: "10px",
-            border: "none",
-            borderRadius: "6px",
-            background:
-              selectedIds.size === 0 || exportState === "loading"
+            padding: "12px",
+            borderRadius: "8px",
+            border: analyzeMode ? "1px solid #d1d5db" : "none",
+            background: analyzeMode
+              ? "#ffffff"
+              : selectedIds.size === 0
                 ? "#9ca3af"
                 : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-            cursor: selectedIds.size === 0 || exportState === "loading" ? "not-allowed" : "pointer",
-            fontSize: "14px",
-            fontWeight: 500,
-            color: "#ffffff",
-            opacity: selectedIds.size === 0 || exportState === "loading" ? 0.5 : 1
+            color: analyzeMode ? "#374151" : "#ffffff",
+            cursor: analyzeMode ? "pointer" : selectedIds.size === 0 ? "not-allowed" : "pointer",
+            fontSize: "15px",
+            fontWeight: 600,
+            boxShadow: analyzeMode ? "none" : "0 8px 20px rgba(103, 126, 234, 0.35)",
+            opacity: analyzeMode ? 1 : selectedIds.size === 0 ? 0.7 : 1
           }}>
-          {exportState === "loading" ? "Exporting..." : "Export"}
+          {analyzeMode ? "Back to export tools" : "Analyze this conversation"}
         </button>
       </div>
       {statusMessage && (
