@@ -73,11 +73,17 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     })
   }, [])
 
-  const { messages } = useMessageScanner({
+  const { messages, conversationKey } = useMessageScanner({
     selectedIds,
     onToggleSelection: handleToggleSelection,
     isExporterOpen: isOpen
   })
+
+  // Reset selection when conversation changes
+  useEffect(() => {
+    setSelectedIds(new Set())
+    hasInitializedRef.current = false
+  }, [conversationKey])
 
   // Select all messages by default when first loaded
   useEffect(() => {

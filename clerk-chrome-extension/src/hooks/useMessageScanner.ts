@@ -198,11 +198,16 @@ export const useMessageScanner = ({ selectedIds, onToggleSelection, isExporterOp
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const selectedIdsRef = useRef(selectedIds)
   const platformRef = useRef<Platform>(detectPlatform())
+  const conversationKeyRef = useRef<string>(`${window.location.hostname}${window.location.pathname}${window.location.search}`)
 
   // Keep latest selection without re-creating callbacks
   useEffect(() => {
     selectedIdsRef.current = selectedIds
   }, [selectedIds])
+
+  const getConversationKey = useCallback(() => {
+    return `${window.location.hostname}${window.location.pathname}${window.location.search}`
+  }, [])
 
   // Inject checkbox into message node
   const injectCheckbox = useCallback((node: Element, id: string) => {
@@ -368,5 +373,22 @@ export const useMessageScanner = ({ selectedIds, onToggleSelection, isExporterOp
     }
   }, [isExporterOpen, scanMessages, scheduleScan, removeAllCheckboxes])
 
-  return { messages, rescan: scanMessages }
+  // Detect conversation changes via URL changes
+  useEffect(() => {
+    if (!isExporterOpen) return
+
+    const interval = setInterval(() => {
+      const key = getConversationKey()
+      if (key !== conversationKeyRef.current) {
+        conversationKeyRef.current = key
+        removeAllCheckboxes()
+        setMessages([])
+        scanMessages()
+      }
+    }, 500)
+
+    return () => clearInterval(interval)
+  }, [getConversationKey, isExporterOpen, removeAllCheckboxes, scanMessages])
+
+  return { messages, rescan: scanMessages, conversationKey: conversationKeyRef.current }
 }
