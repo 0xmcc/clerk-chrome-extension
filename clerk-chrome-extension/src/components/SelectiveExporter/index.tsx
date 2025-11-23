@@ -18,6 +18,12 @@ type PromptContainer = {
   error?: string
 }
 
+type ChatEntry = {
+  id: string
+  role: "user" | "assistant"
+  text: string
+}
+
 const requestClerkToken = async () => {
   return new Promise<string>((resolve, reject) => {
     if (!chrome?.runtime?.sendMessage) {
@@ -62,6 +68,12 @@ const deriveConversationId = () => {
 export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [previewTab, setPreviewTab] = useState<"markdown" | "json">("markdown")
+  const [jsonView, setJsonView] = useState<"messages" | "system">("messages")
+  const [historyFormat, setHistoryFormat] = useState<"markdown" | "json">("markdown")
+  const [chatEntries, setChatEntries] = useState<ChatEntry[]>([])
+  const [replyNote, setReplyNote] = useState("")
+  const [systemJsonText, setSystemJsonText] = useState("")
+  const [systemContextIds, setSystemContextIds] = useState<Set<string>>(new Set())
   const [exportState, setExportState] = useState<"idle" | "loading" | "success" | "error">("idle")
   const [statusMessage, setStatusMessage] = useState("")
   const hasInitializedRef = useRef(false)
@@ -87,7 +99,7 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     return [
       {
         id: "default-linkedin-1",
-        name: "Suggest reply",
+        name: "Friendly follow-up",
         systemPrompt: "Be concise, warm, and include a clear next step. Keep it to 3 sentences max.",
         profileJson: JSON.stringify({ tone: "friendly", cta: "Ask for a short call", signoff: "Thanks!" }, null, 2),
         suggestion: "",
@@ -122,6 +134,18 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
   useEffect(() => {
     setSelectedIds(new Set())
     hasInitializedRef.current = false
+    setChatEntries([])
+    setReplyNote("")
+    setSystemJsonText("")
+    setSystemContextIds(new Set())
+    setPromptContainers((prev) =>
+      prev.map((c) => ({
+        ...c,
+        suggestion: "",
+        status: "idle",
+        error: ""
+      }))
+    )
   }, [conversationKey])
 
   // Select all messages by default when first loaded
@@ -129,6 +153,7 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     if (isOpen && messages.length > 0 && !hasInitializedRef.current) {
       console.log("[SelectiveExporter] Initializing - selecting all", messages.length, "messages")
       setSelectedIds(new Set(messages.map((m) => m.id)))
+      setSystemContextIds(new Set(messages.slice(-5).map((m) => m.id)))
       hasInitializedRef.current = true
     }
 
@@ -149,7 +174,22 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
   }, [isOpen, selectedMessages.length, messages.length])
 
   // Generate Markdown preview
-  const generateMarkdown = () => {
+  const generateHistory = () => {
+    if (historyFormat === "json") {
+      return JSON.stringify(
+        selectedMessages.map((msg, index) => ({
+          index: index + 1,
+          id: msg.id,
+          role: msg.role,
+          from: msg.authorName,
+          text: msg.text
+        })),
+        null,
+        2
+      )
+    }
+
+    // default markdown format
     return selectedMessages
       .map((msg, index) => {
         const fromLabel = msg.authorName || (msg.role === "user" ? "User" : "Assistant")
@@ -168,6 +208,43 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
       text: msg.text
     }))
   }
+
+  const generateSystemJSON = () => {
+    const container = promptContainers[0]
+    if (!container) return {}
+    let profile: any = container.profileJson
+    try {
+      profile = JSON.parse(container.profileJson || "{}")
+    } catch {
+      // keep raw string if parsing fails
+    }
+    const recentContext = selectedMessages
+      .filter((m) => systemContextIds.has(m.id))
+      .slice(-5)
+      .map((m) => ({
+        id: m.id,
+        from: m.authorName,
+        role: m.role,
+        text: m.text
+      }))
+
+    return {
+      name: container.name,
+      systemPrompt: container.systemPrompt,
+      profile,
+      platform: platformLabelRef.current.toLowerCase(),
+      recentContext
+    }
+  }
+
+  // Keep system JSON text in sync when switching views or data updates (reset on conversation change above)
+  useEffect(() => {
+    if (!(previewTab === "json" && jsonView === "system")) return
+    const generated = JSON.stringify(generateSystemJSON(), null, 2)
+    if (!systemJsonText) {
+      setSystemJsonText(generated)
+    }
+  }, [previewTab, jsonView, messages, selectedMessages, systemContextIds, promptContainers, systemJsonText])
 
   const handleClose = () => {
     onClose()
@@ -244,8 +321,14 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
       "Craft a concise, helpful reply for LinkedIn. Keep it respectful and specific."
 
     const context = lastLine ? `Context: "${lastLine}"` : "No recent message content available."
+    const userMessages = chatEntries.filter((c) => c.role === "user" && c.text.trim())
+    const userNoteBlock =
+      userMessages.length > 0
+        ? `User messages:\n${userMessages.map((m) => `- ${m.text}`).join("\n")}\n`
+        : ""
+    const freeNote = replyNote ? `User note: ${replyNote}\n` : ""
 
-    return `${base}\n\n${tone}${context}\n\nSuggested reply:\nHi ${contactName}, thanks for reaching out.${cta}${signoff}`.trim()
+    return `${base}\n\n${tone}${context}\n${userNoteBlock}${freeNote}\nSuggested reply:\nHi ${contactName}, thanks for reaching out.${cta}${signoff}`.trim()
   }
 
   const handleSuggest = (id: string, opts?: { copy?: boolean }) => {
@@ -262,6 +345,14 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
           .then(() => console.log("[SelectiveExporter] Suggestion copied to clipboard"))
           .catch((err) => console.warn("[SelectiveExporter] Failed to copy suggestion", err))
       }
+      setChatEntries((prev) => [
+        ...prev,
+        {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          text: suggestion
+        }
+      ])
     } catch (err) {
       updateContainer(id, {
         status: "error",
@@ -269,6 +360,22 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
       })
     }
   }
+
+  const handleAddChatMessage = () => {
+    const text = replyNote.trim()
+    if (!text) return
+    setChatEntries((prev) => [
+      ...prev,
+      {
+        id: `user-${Date.now()}`,
+        role: "user",
+        text
+      }
+    ])
+    setReplyNote("")
+  }
+
+  const selectedPromptId = promptContainers[0]?.id
 
   const handleExport = async () => {
     if (selectedIds.size === 0 || exportState === "loading") return
@@ -433,63 +540,348 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
         ) : (
           <div style={{ fontSize: "14px", lineHeight: 1.6, color: "#374151" }}>
             {previewTab === "markdown" ? (
-              <pre
-                style={{
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  fontFamily: "inherit",
-                  margin: 0
-                }}>
-                {generateMarkdown()}
-              </pre>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "12px",
+                    flexWrap: "wrap"
+                  }}>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <button
+                      onClick={handleCopy}
+                      disabled={selectedIds.size === 0}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: "12px",
+                        border: "1px solid #e5e7eb",
+                        background: "#f9fafb",
+                        color: selectedIds.size === 0 ? "#9ca3af" : "#4b5563",
+                        cursor: selectedIds.size === 0 ? "not-allowed" : "pointer",
+                        fontWeight: 600
+                      }}>
+                      📋 Copy
+                    </button>
+                    <button
+                      onClick={handleExport}
+                      disabled={selectedIds.size === 0 || exportState === "loading"}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: "12px",
+                        border: "1px solid #e5e7eb",
+                        background: "#f9fafb",
+                        color:
+                          selectedIds.size === 0 || exportState === "loading" ? "#9ca3af" : "#4b5563",
+                        cursor:
+                          selectedIds.size === 0 || exportState === "loading" ? "not-allowed" : "pointer",
+                        fontWeight: 600
+                      }}>
+                      ⬇️ Export
+                    </button>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px" }}>
+                    <span style={{ color: "#6b7280" }}>Format:</span>
+                    <select
+                      value={historyFormat}
+                      onChange={(e) => setHistoryFormat(e.target.value as any)}
+                      style={{
+                        border: "1px solid #d1d5db",
+                        borderRadius: "6px",
+                        padding: "6px 10px",
+                        fontSize: "12px",
+                        background: "#ffffff",
+                        color: "#374151"
+                      }}>
+                      <option value="markdown">Markdown</option>
+                      <option value="json">JSON</option>
+                    </select>
+                  </div>
+                </div>
+                {historyFormat === "markdown" ? (
+                  <pre
+                    style={{
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      fontFamily: "inherit",
+                      margin: 0
+                    }}>
+                    {generateHistory()}
+                  </pre>
+                ) : (
+                  <pre
+                    style={{
+                      background: "#f3f4f6",
+                      padding: "12px",
+                      borderRadius: "8px",
+                      border: "1px solid #e5e7eb",
+                      overflow: "auto",
+                      fontSize: "12px",
+                      margin: 0,
+                      fontFamily: "monospace"
+                    }}>
+                    {generateHistory()}
+                  </pre>
+                )}
+              </div>
             ) : (
-              <pre
-                style={{
-                  background: "#f3f4f6",
-                  padding: "12px",
-                  borderRadius: "6px",
-                  overflow: "auto",
-                  fontSize: "12px",
-                  margin: 0
-                }}>
-                {JSON.stringify(generateJSON(), null, 2)}
-              </pre>
+              <div style={{ position: "relative" }}>
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "-8px",
+                    right: "0",
+                    display: "flex",
+                    gap: "6px",
+                    fontSize: "12px"
+                  }}>
+                  <button
+                    onClick={() => setJsonView("messages")}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "14px",
+                      border: jsonView === "messages" ? "1px solid #667eea" : "1px solid #d1d5db",
+                      background: jsonView === "messages" ? "rgba(102, 126, 234, 0.1)" : "#ffffff",
+                      color: jsonView === "messages" ? "#4c51bf" : "#374151",
+                      cursor: "pointer"
+                    }}>
+                    Messages
+                  </button>
+                  <button
+                    onClick={() => setJsonView("system")}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "14px",
+                      border: jsonView === "system" ? "1px solid #667eea" : "1px solid #d1d5db",
+                      background: jsonView === "system" ? "rgba(102, 126, 234, 0.1)" : "#ffffff",
+                      color: jsonView === "system" ? "#4c51bf" : "#374151",
+                      cursor: "pointer"
+                    }}>
+                    System
+                  </button>
+                </div>
+                {jsonView === "messages" ? (
+                  <pre
+                    style={{
+                      background: "#f3f4f6",
+                      padding: "12px",
+                      borderRadius: "6px",
+                      overflow: "auto",
+                      fontSize: "12px",
+                      margin: 0,
+                      marginTop: "14px"
+                    }}>
+                    {JSON.stringify(generateJSON(), null, 2)}
+                  </pre>
+                ) : (
+                  <textarea
+                    value={systemJsonText || JSON.stringify(generateSystemJSON(), null, 2)}
+                    onChange={(e) => setSystemJsonText(e.target.value)}
+                    rows={10}
+                    style={{
+                      width: "100%",
+                      background: "#ffffff",
+                      padding: "12px",
+                      borderRadius: "6px",
+                      border: "1px solid #d1d5db",
+                      overflow: "auto",
+                      fontSize: "12px",
+                      margin: 0,
+                      marginTop: "14px",
+                      fontFamily: "monospace",
+                      resize: "vertical",
+                      minHeight: "180px"
+                    }}
+                  />
+                )}
+                {jsonView === "system" && selectedMessages.length > 0 && (
+                  <div
+                    style={{
+                      marginTop: "12px",
+                      padding: "10px",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: "8px",
+                      background: "#ffffff",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px"
+                    }}>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#111827" }}>
+                      Recent context to include
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "140px", overflowY: "auto" }}>
+                      {selectedMessages.slice(-8).map((m) => (
+                        <label
+                          key={m.id}
+                          style={{
+                            display: "flex",
+                            gap: "8px",
+                            alignItems: "flex-start",
+                            cursor: "pointer",
+                            fontSize: "12px",
+                            color: "#374151"
+                          }}>
+                          <input
+                            type="checkbox"
+                            checked={systemContextIds.has(m.id)}
+                            onChange={(e) => {
+                              setSystemContextIds((prev) => {
+                                const next = new Set(prev)
+                                if (e.target.checked) next.add(m.id)
+                                else next.delete(m.id)
+                                return next
+                              })
+                            }}
+                            style={{ marginTop: "2px" }}
+                          />
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{m.authorName}</div>
+                            <div style={{ color: "#6b7280" }}>{m.text.slice(0, 140)}</div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
       </div>
 
-      {/* LinkedIn Response Helpers - minimal CTA button */}
-      {isLinkedIn && promptContainers.length > 0 && (
+      {/* LinkedIn Response Helper - chat-style UI
+      {isLinkedIn && previewTab === "markdown" && promptContainers.length > 0 && selectedPromptId && (
         <div
           style={{
             borderTop: "1px solid #e5e7eb",
             padding: "14px 20px",
-            backgroundColor: "#f9fafb"
+            backgroundColor: "#f9fafb",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px"
           }}>
-          <button
-            onClick={() => handleSuggest(promptContainers[0].id, { copy: true })}
-            disabled={promptContainers[0].status === "loading"}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              fontSize: "13px",
+              color: "#374151"
+            }}>
+            <div style={{ fontWeight: 600 }}>Chat</div>
+            <div style={{ fontSize: "11px", color: "#6b7280" }}>Press Enter to add your message</div>
+          </div>
+          <div
+            style={{
+              background: "#ffffff",
+              border: "1px solid #e5e7eb",
+              borderRadius: "10px",
+              padding: "10px",
+              maxHeight: "200px",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px"
+            }}>
+            {chatEntries.length === 0 ? (
+              <div style={{ color: "#9ca3af", fontSize: "13px" }}>No chat yet. Add a message or suggest a reply.</div>
+            ) : (
+              chatEntries.map((entry) => (
+                <div
+                  key={entry.id}
+                  style={{
+                    alignSelf: entry.role === "user" ? "flex-end" : "flex-start",
+                    maxWidth: "82%"
+                  }}>
+                  <div
+                    style={{
+                      background:
+                        entry.role === "user"
+                          ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                          : "#f3f4f6",
+                      color: entry.role === "user" ? "#ffffff" : "#1f2937",
+                      padding: "10px 12px",
+                      borderRadius: entry.role === "user" ? "12px 12px 4px 12px" : "12px 12px 12px 4px",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+                      fontSize: "13px",
+                      lineHeight: 1.5
+                    }}>
+                    {entry.text}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              alignItems: "center"
+            }}>
+            <textarea
+              placeholder="Type a message…"
+              value={replyNote}
+              onChange={(e) => setReplyNote(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault()
+                  handleAddChatMessage()
+                }
+              }}
+              rows={2}
+              style={{
+                flex: 1,
+                padding: "10px",
+                borderRadius: "10px",
+                border: "1px solid #d1d5db",
+                fontSize: "13px",
+                resize: "vertical",
+                background: "#ffffff"
+              }}
+            />
+            <button
+              onClick={handleAddChatMessage}
+              style={{
+                padding: "10px 12px",
+                borderRadius: "10px",
+                border: "1px solid #d1d5db",
+                background: "#ffffff",
+                cursor: "pointer",
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "#374151",
+                minWidth: "64px"
+              }}>
+              Send
+            </button>
+          </div>
+          { <button
+            onClick={() => handleSuggest(selectedPromptId, { copy: true })}
+            disabled={promptContainers.find((c) => c.id === selectedPromptId)?.status === "loading"}
             style={{
               width: "100%",
               padding: "12px",
               borderRadius: "8px",
               border: "none",
               background:
-                promptContainers[0].status === "loading"
+                promptContainers.find((c) => c.id === selectedPromptId)?.status === "loading"
                   ? "#9ca3af"
                   : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
               color: "#ffffff",
-              cursor: promptContainers[0].status === "loading" ? "not-allowed" : "pointer",
+              cursor:
+                promptContainers.find((c) => c.id === selectedPromptId)?.status === "loading"
+                  ? "not-allowed"
+                  : "pointer",
               fontSize: "15px",
               fontWeight: 600,
               textAlign: "center",
               boxShadow: "0 8px 20px rgba(103, 126, 234, 0.35)"
             }}>
-            {promptContainers[0].name || "Suggest reply"}
-          </button>
+            {"Suggest reply"}
+          </button> }
         </div>
-      )}
+      )} */}
 
       {/* Action Buttons */}
       <div
