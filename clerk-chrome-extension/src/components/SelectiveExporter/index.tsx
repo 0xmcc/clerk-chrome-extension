@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { marked } from "marked"
 
 import { useMessageScanner } from "~hooks/useMessageScanner"
 import { detectPlatform, getPlatformLabel } from "~utils/platform"
@@ -23,6 +24,13 @@ type ChatEntry = {
   role: "user" | "assistant"
   text: string
 }
+
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+  headerIds: false,
+  mangle: false
+})
 
 const requestClerkToken = async () => {
   return new Promise<string>((resolve, reject) => {
@@ -203,7 +211,14 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
       })
       .join("\n")
   }
-
+  const generateMarkdown = () => {
+    return selectedMessages
+      .map((msg, index) => {
+        const fromLabel = msg.authorName || (msg.role === "user" ? "User" : "Assistant")
+        return `**${index + 1}. ${fromLabel}**\n${msg.text}\n`
+      })
+      .join("\n")
+  }
   // Generate JSON preview
   const generateJSON = () => {
     return selectedMessages.map((msg, index) => ({
@@ -553,7 +568,7 @@ Please provide your analysis in markdown format with clear section headings.`
       setAnalysisMessages([{
         id: `analysis-${Date.now()}`,
         role: "assistant",
-        text: analysis
+        text: formatAnalysisText(analysis)
       }])
 
       setExportState("success")
@@ -623,7 +638,7 @@ Please provide your analysis in markdown format with clear section headings.`
       }
 
       const data = await response.json()
-      const answer = data.choices?.[0]?.message?.content
+      const answer = data.data?.choices?.[0]?.message?.content
 
       if (!answer) throw new Error("No response from API")
 
@@ -631,7 +646,7 @@ Please provide your analysis in markdown format with clear section headings.`
       setAnalysisMessages(prev => [...prev, {
         id: `analysis-assistant-${Date.now()}`,
         role: "assistant",
-        text: answer
+        text: formatAnalysisText(answer)
       }])
 
       setExportState("success")
@@ -644,6 +659,15 @@ Please provide your analysis in markdown format with clear section headings.`
         text: `❌ Error: ${error.message}`
       }])
     }
+  }
+
+  const formatAnalysisText = (text: string) => {
+    if (!text) return ""
+    let formatted = text.trim()
+    formatted = formatted.replace(/(^|\n)(#{1,6}\s+)/g, "\n\n$2") // headings on their own block
+    formatted = formatted.replace(/(^|\n)([-*+]\s+)/g, "\n$2") // bullets
+    formatted = formatted.replace(/(^|\n)(\d+\.\s+)/g, "\n$2") // numbered lists
+    return formatted.trim()
   }
 
   if (!isOpen) return null
@@ -760,11 +784,20 @@ Please provide your analysis in markdown format with clear section headings.`
       {/* Preview Area */}
       <div
         style={{
-          flex: 1,
-          overflow: "auto",
-          padding: "20px",
-          backgroundColor: "#ffffff"
-        }}>
+        flex: 1,
+        overflow: "auto",
+        padding: "20px",
+        backgroundColor: "#ffffff"
+      }}>
+        <style>{`
+          .analysis-markdown h1 { font-size: 18px; margin: 10px 0 6px; font-weight: 700; }
+          .analysis-markdown h2 { font-size: 16px; margin: 8px 0 4px; font-weight: 700; }
+          .analysis-markdown h3 { font-size: 14px; margin: 6px 0 4px; font-weight: 700; }
+          .analysis-markdown p { margin: 6px 0; }
+          .analysis-markdown ul { margin: 6px 0 6px 18px; padding: 0; }
+          .analysis-markdown li { list-style: disc; margin: 4px 0; }
+          .analysis-markdown strong { font-weight: 700; }
+        `}</style>
         {selectedIds.size === 0 ? (
           <div style={{ textAlign: "center", padding: "40px 20px", color: "#9ca3af" }}>
             <div style={{ fontSize: "48px", marginBottom: "16px" }}>📋</div>
@@ -811,7 +844,15 @@ Please provide your analysis in markdown format with clear section headings.`
                           border: m.role === "user" ? "1px solid #e5e7eb" : "none",
                           boxShadow: m.role === "user" ? "0 4px 10px rgba(0,0,0,0.06)" : "none"
                         }}>
-                        {m.text}
+                        {m.role === "assistant" ? (
+                          <div
+                            style={{ fontSize: "14px", lineHeight: 1.6 }}
+                            className="analysis-markdown"
+                            dangerouslySetInnerHTML={{ __html: marked.parse(formatAnalysisText(m.text)) }}
+                          />
+                        ) : (
+                          m.text
+                        )}
                       </div>
                     ))
                   )}
