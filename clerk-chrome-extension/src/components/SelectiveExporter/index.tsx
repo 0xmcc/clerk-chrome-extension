@@ -458,45 +458,192 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     setHistoryFormat(value)
   }
 
-  const runAnalysis = () => {
-    const total = selectedMessages.length
-    const userCount = selectedMessages.filter((m) => m.role === "user").length
-    const assistantCount = total - userCount
-    const last = selectedMessages[selectedMessages.length - 1]
-    const summary = `I see ${total} messages (${userCount} user, ${assistantCount} assistant). Last message from ${last?.authorName || "unknown"}: "${(last?.text || "").slice(0, 140)}${(last?.text || "").length > 140 ? "..." : ""}".`
-    const themes = selectedMessages
-      .map((m) => m.text)
-      .join(" ")
-      .toLowerCase()
-    const tone =
-      themes.includes("thank") || themes.includes("appreciate")
-        ? "Tone feels thankful and warm."
-        : themes.includes("urgent")
-          ? "Tone feels urgent."
-          : "Tone feels neutral."
+  const buildAnalysisSystemPrompt = () => {
+    return `You are an expert conversation analyst. Analyze the following conversation and provide a comprehensive analysis with these sections:
 
-    setAnalysisMessages([
-      {
-        id: `analysis-${Date.now()}`,
-        role: "assistant",
-        text: `${summary} ${tone} Next step: clarify intent and propose a concise CTA.`
-      }
-    ])
-    setAnalyzeMode(true)
+## Summary
+Provide a concise 2-3 sentence summary of what the conversation is about.
+
+## Key Topics
+List the main topics discussed (bullet points).
+
+## Key Insights
+Identify the most important insights, decisions, or conclusions (bullet points).
+
+## Conversation Quality
+- Clarity: How clear and well-structured is the conversation?
+- Depth: How thorough is the discussion?
+- Outcome: What was accomplished or resolved?
+
+## Recommendations
+Suggest 2-3 actionable next steps or areas for follow-up.
+
+Please provide your analysis in markdown format with clear section headings.`
   }
 
-  const handleAnalysisSend = () => {
-    const text = analysisInput.trim()
-    if (!text) return
+  const runAnalysis = async () => {
+    try {
+      setExportState("loading")
+      setAnalyzeMode(true)
 
-    const userMsg: ChatEntry = { id: `analysis-user-${Date.now()}`, role: "user", text }
-    const reply: ChatEntry = {
-      id: `analysis-assistant-${Date.now() + 1}`,
-      role: "assistant",
-      text: "Thanks for the note. I’ll use it to refine the next steps for this conversation."
+      // Get Clerk token
+      const token = await requestClerkToken()
+
+      // Build OpenRouter API payload
+      const payload = {
+        model: "openai/gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: buildAnalysisSystemPrompt()
+          },
+          ...selectedMessages.map(msg => ({
+            role: msg.role,
+            content: msg.text
+          }))
+        ],
+        temperature: 0.3,
+        max_tokens: 1500
+      }
+
+      // Call backend OpenRouter endpoint
+      const response = await fetch("http://localhost:3000/v1/openrouter/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`API error ${response.status}: ${errorText}`)
+      }
+
+      const data = await response.json()
+      console.log("🔍 Full API Response:", JSON.stringify(data, null, 2))
+      console.log("🔍 Response keys:", Object.keys(data))
+      console.log("🔍 data.status:", data.status)
+      console.log("🔍 data.data:", data.data)
+      console.log("🔍 data.data keys:", data.data ? Object.keys(data.data) : 'data.data is null/undefined')
+      console.log("🔍 data.choices:", data.choices)
+      console.log("🔍 data.error:", data.error)
+
+      // Check if there's an error in the response
+      if (data.status === 'error' || data.error) {
+        throw new Error(data.error || 'API returned an error')
+      }
+
+      const analysis = data.data?.choices?.[0]?.message?.content
+
+      if (!analysis) {
+        console.error("❌ No analysis found. Full data structure:", {
+          hasData: !!data.data,
+          dataKeys: data.data ? Object.keys(data.data) : null,
+          hasChoices: !!data.data?.choices,
+          choicesLength: data.data?.choices?.length,
+          firstChoice: data.data?.choices?.[0],
+          fullDataData: JSON.stringify(data.data, null, 2)
+        })
+        throw new Error("No analysis returned from API")
+      }
+
+      // Add analysis result to chat
+      setAnalysisMessages([{
+        id: `analysis-${Date.now()}`,
+        role: "assistant",
+        text: analysis
+      }])
+
+      setExportState("success")
+    } catch (error) {
+      console.error("Analysis failed:", error)
+      setExportState("error")
+      setAnalysisMessages([{
+        id: `analysis-error-${Date.now()}`,
+        role: "assistant",
+        text: `❌ Analysis failed: ${error.message}\n\nPlease make sure:\n- You're signed in to PromptMarket\n- The backend server is running on http://localhost:3000\n- You have selected at least one message`
+      }])
     }
-    setAnalysisMessages((prev) => [...prev, userMsg, reply])
+  }
+
+  const handleAnalysisSend = async () => {
+    const question = analysisInput.trim()
+    if (!question) return
+
+    // Clear input and add user question to chat immediately
     setAnalysisInput("")
+    const userMsg: ChatEntry = {
+      id: `analysis-user-${Date.now()}`,
+      role: "user",
+      text: question
+    }
+    setAnalysisMessages(prev => [...prev, userMsg])
+
+    try {
+      setExportState("loading")
+
+      // Get Clerk token
+      const token = await requestClerkToken()
+
+      // Build conversation context with entire analysis history + new question
+      const payload = {
+        model: "openai/gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "You are a helpful conversation analyst. Answer follow-up questions about the conversation analysis concisely and clearly."
+          },
+          ...analysisMessages.map(msg => ({
+            role: msg.role,
+            content: msg.text
+          })),
+          {
+            role: "user",
+            content: question
+          }
+        ],
+        temperature: 0.5,
+        max_tokens: 800
+      }
+
+      const response = await fetch("http://localhost:3000/v1/openrouter/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`API error ${response.status}: ${errorText}`)
+      }
+
+      const data = await response.json()
+      const answer = data.choices?.[0]?.message?.content
+
+      if (!answer) throw new Error("No response from API")
+
+      // Add assistant response to chat
+      setAnalysisMessages(prev => [...prev, {
+        id: `analysis-assistant-${Date.now()}`,
+        role: "assistant",
+        text: answer
+      }])
+
+      setExportState("success")
+    } catch (error) {
+      console.error("Follow-up question failed:", error)
+      setExportState("error")
+      setAnalysisMessages(prev => [...prev, {
+        id: `analysis-error-${Date.now()}`,
+        role: "assistant",
+        text: `❌ Error: ${error.message}`
+      }])
+    }
   }
 
   if (!isOpen) return null
