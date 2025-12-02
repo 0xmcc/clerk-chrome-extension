@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>echo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #09090b;
+      color: #fff;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    
+    /* Onboarding container */
+    .onboarding {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    
+    .onboarding-content {
+      max-width: 480px;
+      width: 100%;
+    }
+    
+    .onboarding-step {
+      display: none;
+      animation: fadeIn 0.4s ease;
+    }
+    
+    .onboarding-step.active {
+      display: block;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Step styles */
+    .step-logo {
+      font-size: 2.5rem;
+      font-weight: 300;
+      letter-spacing: -0.025em;
+      margin-bottom: 0.5rem;
+    }
+    
+    .step-tagline {
+      color: #71717a;
+      font-size: 1rem;
+      margin-bottom: 2.5rem;
+    }
+    
+    .step-title {
+      font-size: 1.25rem;
+      font-weight: 500;
+      margin-bottom: 0.75rem;
+      color: #e4e4e7;
+    }
+    
+    .step-text {
+      color: #a1a1aa;
+      line-height: 1.7;
+      margin-bottom: 2rem;
+    }
+    
+    /* Value props */
+    .value-props {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 2.5rem;
+    }
+    
+    .value-prop {
+      display: flex;
+      gap: 1rem;
+      align-items: start;
+    }
+    
+    .value-prop-icon {
+      width: 40px;
+      height: 40px;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: #71717a;
+    }
+    
+    .value-prop-text {
+      padding-top: 0.25rem;
+    }
+    
+    .value-prop-title {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: #e4e4e7;
+      margin-bottom: 0.25rem;
+    }
+    
+    .value-prop-desc {
+      font-size: 0.85rem;
+      color: #71717a;
+      line-height: 1.5;
+    }
+    
+    /* Connect sources */
+    .sources-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+    }
+    
+    .source-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .source-item:hover {
+      border-color: #3f3f46;
+    }
+    
+    .source-item.connected {
+      border-color: #22c55e40;
+      background: #22c55e08;
+    }
+    
+    .source-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 0.875rem;
+    }
+    
+    .source-icon.claude { background: rgba(249, 115, 22, 0.2); color: #fdba74; }
+    .source-icon.gpt { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+    .source-icon.gemini { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+    
+    .source-info {
+      flex: 1;
+    }
+    
+    .source-name {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: #e4e4e7;
+      margin-bottom: 0.125rem;
+    }
+    
+    .source-status {
+      font-size: 0.8rem;
+      color: #71717a;
+    }
+    
+    .source-status.connected {
+      color: #4ade80;
+    }
+    
+    .source-action {
+      padding: 0.5rem 1rem;
+      background: #27272a;
+      border: none;
+      border-radius: 0.5rem;
+      color: #e4e4e7;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .source-action:hover {
+      background: #3f3f46;
+    }
+    
+    .source-item.connected .source-action {
+      background: transparent;
+      color: #4ade80;
+    }
+    
+    .source-check {
+      display: none;
+      color: #4ade80;
+    }
+    
+    .source-item.connected .source-check {
+      display: block;
+    }
+    
+    .source-item.connected .source-action-text {
+      display: none;
+    }
+    
+    /* Extension install */
+    .extension-card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+    
+    .extension-icon {
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      border-radius: 16px;
+      margin: 0 auto 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .extension-title {
+      font-size: 1.1rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+    
+    .extension-desc {
+      font-size: 0.875rem;
+      color: #71717a;
+      margin-bottom: 1.25rem;
+      line-height: 1.5;
+    }
+    
+    .extension-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.25rem;
+      background: #fff;
+      color: #09090b;
+      border: none;
+      border-radius: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .extension-btn:hover {
+      background: #e4e4e7;
+    }
+    
+    /* Syncing state */
+    .syncing-container {
+      text-align: center;
+      padding: 2rem 0;
+    }
+    
+    .syncing-animation {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 1.5rem;
+      position: relative;
+    }
+    
+    .syncing-circle {
+      position: absolute;
+      inset: 0;
+      border: 2px solid #27272a;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    .syncing-circle:nth-child(2) {
+      inset: 10px;
+      animation-duration: 1.5s;
+      animation-direction: reverse;
+      border-top-color: #8b5cf6;
+    }
+    
+    .syncing-circle:nth-child(3) {
+      inset: 20px;
+      animation-duration: 2s;
+      border-top-color: #6366f1;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .syncing-title {
+      font-size: 1.1rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+    
+    .syncing-status {
+      font-size: 0.875rem;
+      color: #71717a;
+      margin-bottom: 0.25rem;
+    }
+    
+    .syncing-count {
+      font-size: 0.8rem;
+      color: #52525b;
+    }
+    
+    /* Progress bar */
+    .progress-bar {
+      width: 200px;
+      height: 4px;
+      background: #27272a;
+      border-radius: 2px;
+      margin: 1.5rem auto 0;
+      overflow: hidden;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+    
+    /* Buttons */
+    .btn {
+      padding: 0.875rem 1.5rem;
+      border-radius: 0.75rem;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      width: 100%;
+    }
+    
+    .btn-primary {
+      background: #fff;
+      color: #09090b;
+      font-weight: 500;
+    }
+    
+    .btn-primary:hover {
+      background: #e4e4e7;
+    }
+    
+    .btn-primary:disabled {
+      background: #27272a;
+      color: #52525b;
+      cursor: not-allowed;
+    }
+    
+    .btn-secondary {
+      background: transparent;
+      color: #71717a;
+      margin-top: 0.75rem;
+    }
+    
+    .btn-secondary:hover {
+      color: #fff;
+    }
+    
+    /* Progress dots */
+    .progress-dots {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-top: 2rem;
+    }
+    
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #27272a;
+      transition: all 0.2s;
+    }
+    
+    .dot.active {
+      background: #fff;
+      width: 24px;
+      border-radius: 4px;
+    }
+    
+    /* Skip link */
+    .skip-link {
+      text-align: center;
+      margin-top: 2rem;
+    }
+    
+    .skip-link a {
+      font-size: 0.8rem;
+      color: #52525b;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    
+    .skip-link a:hover {
+      color: #a1a1aa;
+    }
+    
+    /* Demo banner */
+    .demo-banner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 0.625rem;
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+      text-align: center;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+    
+    .demo-banner a {
+      color: #fff;
+      text-decoration: underline;
+      margin-left: 0.25rem;
+    }
+    
+    /* Main App styles */
+    .app {
+      display: none;
+      min-height: 100vh;
+      flex-direction: column;
+    }
+    
+    .app.visible {
+      display: flex;
+    }
+    
+    .canvas {
+      flex: 1;
+      padding: 2rem;
+      padding-bottom: 120px;
+      overflow-y: auto;
+    }
+    
+    .ready-state {
+      max-width: 640px;
+      margin: 0 auto;
+      padding-top: 3rem;
+    }
+    
+    .ready-greeting {
+      font-size: 1.5rem;
+      font-weight: 300;
+      color: #e4e4e7;
+      margin-bottom: 0.5rem;
+    }
+    
+    .ready-subtext {
+      color: #71717a;
+      margin-bottom: 2.5rem;
+    }
+    
+    .quick-actions-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #52525b;
+      margin-bottom: 0.75rem;
+    }
+    
+    .quick-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    
+    .quick-action {
+      padding: 0.625rem 1rem;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 2rem;
+      font-size: 0.875rem;
+      color: #a1a1aa;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .quick-action:hover {
+      border-color: #3f3f46;
+      color: #fff;
+    }
+    
+    /* Prompt bar */
+    .prompt-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 1.5rem 2rem;
+      background: linear-gradient(to top, #09090b 80%, transparent);
+    }
+    
+    .prompt-container {
+      max-width: 640px;
+      margin: 0 auto;
+      position: relative;
+    }
+    
+    .prompt-input {
+      width: 100%;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 1rem;
+      padding: 1rem 3rem 1rem 1.25rem;
+      font-size: 1rem;
+      color: #fff;
+      outline: none;
+      transition: all 0.2s;
+    }
+    
+    .prompt-input::placeholder {
+      color: #52525b;
+    }
+    
+    .prompt-input:focus {
+      border-color: #52525b;
+    }
+    
+    .prompt-button {
+      position: absolute;
+      right: 0.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      padding: 0.5rem;
+      cursor: pointer;
+      color: #52525b;
+      transition: color 0.2s;
+    }
+    
+    .prompt-button:hover {
+      color: #fff;
+    }
+    
+    .prompt-button svg {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  
+  <!-- Demo mode banner -->
+  <div class="demo-banner">
+    This is a prototype. <a href="#" onclick="skipToApp()">Skip to demo with sample data →</a>
+  </div>
+
+  <!-- Onboarding -->
+  <div class="onboarding" id="onboarding" style="padding-top: 4rem;">
+    <div class="onboarding-content">
+      
+      <!-- Step 1: Welcome / Value prop -->
+      <div class="onboarding-step active" data-step="1">
+        <h1 class="step-logo">echo</h1>
+        <p class="step-tagline">your AI conversations, searchable</p>
+        
+        <div class="value-props">
+          <div class="value-prop">
+            <div class="value-prop-icon">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <div class="value-prop-text">
+              <div class="value-prop-title">Find what you figured out</div>
+              <div class="value-prop-desc">Search across all your AI conversations. That architecture decision from March? One query away.</div>
+            </div>
+          </div>
+          <div class="value-prop">
+            <div class="value-prop-icon">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16m-7 6h7" />
+              </svg>
+            </div>
+            <div class="value-prop-text">
+              <div class="value-prop-title">All sources, one place</div>
+              <div class="value-prop-desc">Claude, ChatGPT, Gemini—it doesn't matter where the conversation happened.</div>
+            </div>
+          </div>
+          <div class="value-prop">
+            <div class="value-prop-icon">
+              <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <div class="value-prop-text">
+              <div class="value-prop-title">Your data stays yours</div>
+              <div class="value-prop-desc">Stored locally or in your own cloud. Export or delete anytime.</div>
+            </div>
+          </div>
+        </div>
+        
+        <button class="btn btn-primary" onclick="nextStep()">Get started</button>
+        
+        <div class="progress-dots">
+          <div class="dot active"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+      </div>
+      
+      <!-- Step 2: Install extension -->
+      <div class="onboarding-step" data-step="2">
+        <h2 class="step-title">Install the extension</h2>
+        <p class="step-text">
+          Echo captures your AI conversations automatically as you chat. Nothing to copy, nothing to export.
+        </p>
+        
+        <div class="extension-card">
+          <div class="extension-icon">
+            <svg width="28" height="28" fill="none" stroke="#fff" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          </div>
+          <h3 class="extension-title">Echo for Chrome</h3>
+          <p class="extension-desc">
+            Works silently in the background. Your conversations sync as they happen.
+          </p>
+          <button class="extension-btn" onclick="simulateInstall()">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Add to Chrome
+          </button>
+        </div>
+        
+        <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+        
+        <div class="skip-link">
+          <a href="#" onclick="nextStep()">I'll do this later</a>
+        </div>
+        
+        <div class="progress-dots">
+          <div class="dot"></div>
+          <div class="dot active"></div>
+          <div class="dot"></div>
+        </div>
+      </div>
+      
+      <!-- Step 3: Connect sources -->
+      <div class="onboarding-step" data-step="3">
+        <h2 class="step-title">Connect your sources</h2>
+        <p class="step-text">
+          Select which AI tools to sync. You can change this anytime.
+        </p>
+        
+        <div class="sources-list">
+          <div class="source-item" data-source="claude" onclick="toggleSource(this)">
+            <div class="source-icon claude">C</div>
+            <div class="source-info">
+              <div class="source-name">Claude</div>
+              <div class="source-status">Click to connect</div>
+            </div>
+            <button class="source-action">
+              <span class="source-action-text">Connect</span>
+              <svg class="source-check" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </button>
+          </div>
+          <div class="source-item" data-source="gpt" onclick="toggleSource(this)">
+            <div class="source-icon gpt">G</div>
+            <div class="source-info">
+              <div class="source-name">ChatGPT</div>
+              <div class="source-status">Click to connect</div>
+            </div>
+            <button class="source-action">
+              <span class="source-action-text">Connect</span>
+              <svg class="source-check" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </button>
+          </div>
+          <div class="source-item" data-source="gemini" onclick="toggleSource(this)">
+            <div class="source-icon gemini">G</div>
+            <div class="source-info">
+              <div class="source-name">Gemini</div>
+              <div class="source-status">Click to connect</div>
+            </div>
+            <button class="source-action">
+              <span class="source-action-text">Connect</span>
+              <svg class="source-check" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        
+        <button class="btn btn-primary" id="continueBtn" onclick="startSync()" disabled>
+          Continue
+        </button>
+        <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+        
+        <div class="progress-dots">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot active"></div>
+        </div>
+      </div>
+      
+      <!-- Step 4: Syncing -->
+      <div class="onboarding-step" data-step="4">
+        <div class="syncing-container">
+          <div class="syncing-animation">
+            <div class="syncing-circle"></div>
+            <div class="syncing-circle"></div>
+            <div class="syncing-circle"></div>
+          </div>
+          <h2 class="syncing-title">Syncing your conversations</h2>
+          <p class="syncing-status" id="syncStatus">Connecting to Claude...</p>
+          <p class="syncing-count" id="syncCount">0 conversations found</p>
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+  
+  <!-- Main App -->
+  <div class="app" id="app">
+    <div class="canvas">
+      <div class="ready-state">
+        <h1 class="ready-greeting">You're all set</h1>
+        <p class="ready-subtext" id="finalCount">847 conversations ready to explore</p>
+        
+        <div class="quick-actions-label">Try asking</div>
+        <div class="quick-actions">
+          <button class="quick-action">"What did I figure out about..."</button>
+          <button class="quick-action">"Show me my decisions on..."</button>
+          <button class="quick-action">"What am I stuck on?"</button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="prompt-bar">
+      <div class="prompt-container">
+        <input 
+          type="text" 
+          class="prompt-input" 
+          id="promptInput"
+          placeholder="What do you want to see?"
+        >
+        <button class="prompt-button">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentStep = 1;
+    let connectedSources = new Set();
+    
+    function nextStep() {
+      document.querySelector(`[data-step="${currentStep}"]`).classList.remove('active');
+      currentStep++;
+      document.querySelector(`[data-step="${currentStep}"]`).classList.add('active');
+    }
+    
+    function prevStep() {
+      document.querySelector(`[data-step="${currentStep}"]`).classList.remove('active');
+      currentStep--;
+      document.querySelector(`[data-step="${currentStep}"]`).classList.add('active');
+    }
+    
+    function simulateInstall() {
+      const btn = document.querySelector('.extension-btn');
+      btn.innerHTML = `
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="animation: spin 1s linear infinite">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        Installing...
+      `;
+      
+      setTimeout(() => {
+        btn.innerHTML = `
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          Installed
+        `;
+        btn.style.background = '#22c55e';
+        
+        setTimeout(() => nextStep(), 800);
+      }, 1500);
+    }
+    
+    function toggleSource(el) {
+      const source = el.dataset.source;
+      const statusEl = el.querySelector('.source-status');
+      
+      if (el.classList.contains('connected')) {
+        el.classList.remove('connected');
+        statusEl.textContent = 'Click to connect';
+        statusEl.classList.remove('connected');
+        connectedSources.delete(source);
+      } else {
+        el.classList.add('connected');
+        statusEl.textContent = 'Connected';
+        statusEl.classList.add('connected');
+        connectedSources.add(source);
+      }
+      
+      document.getElementById('continueBtn').disabled = connectedSources.size === 0;
+    }
+    
+    function startSync() {
+      nextStep();
+      
+      const statuses = [
+        { text: 'Connecting to Claude...', count: 0 },
+        { text: 'Reading Claude history...', count: 156 },
+        { text: 'Connecting to ChatGPT...', count: 312 },
+        { text: 'Reading ChatGPT history...', count: 523 },
+        { text: 'Processing conversations...', count: 687 },
+        { text: 'Extracting insights...', count: 784 },
+        { text: 'Almost done...', count: 834 },
+      ];
+      
+      let i = 0;
+      const interval = setInterval(() => {
+        if (i >= statuses.length) {
+          clearInterval(interval);
+          setTimeout(finishSync, 500);
+          return;
+        }
+        
+        document.getElementById('syncStatus').textContent = statuses[i].text;
+        document.getElementById('syncCount').textContent = `${statuses[i].count} conversations found`;
+        document.getElementById('progressFill').style.width = `${(i + 1) / statuses.length * 100}%`;
+        i++;
+      }, 800);
+    }
+    
+    function finishSync() {
+      document.getElementById('onboarding').classList.add('hidden');
+      document.getElementById('app').classList.add('visible');
+      document.querySelector('.demo-banner').style.display = 'none';
+      document.getElementById('promptInput').focus();
+    }
+    
+    function skipToApp() {
+      document.getElementById('finalCount').textContent = '847 sample conversations loaded';
+      finishSync();
+    }
+  </script>
+</body>
+</html>

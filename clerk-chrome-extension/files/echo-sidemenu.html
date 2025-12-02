@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Echo Sidemenu</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a1a;
+      min-height: 100vh;
+      display: flex;
+    }
+    
+    /* Fake chat window */
+    .fake-chat {
+      flex: 1;
+      background: #0d0d0d;
+      padding: 2rem;
+      opacity: 0.4;
+      font-size: 0.9rem;
+      color: #888;
+      line-height: 1.8;
+    }
+    
+    .fake-chat-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #444;
+      margin-bottom: 1rem;
+    }
+    
+    /* Sidemenu */
+    .sidemenu {
+      width: 380px;
+      background: #0d0d0d;
+      border-left: 1px solid #252525;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    
+    /* Header */
+    .sidemenu-header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid #252525;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .sidemenu-logo {
+      font-size: 1rem;
+      font-weight: 500;
+      color: #fff;
+      letter-spacing: -0.025em;
+    }
+    
+    .sidemenu-status {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      font-size: 0.75rem;
+      color: #4ade80;
+    }
+    
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      background: #4ade80;
+      border-radius: 50%;
+    }
+    
+    /* Content area */
+    .sidemenu-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.25rem;
+    }
+    
+    /* Conversation detected card */
+    .convo-card {
+      background: #181818;
+      border: 1px solid #252525;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    
+    .convo-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #666;
+      margin-bottom: 0.5rem;
+    }
+    
+    .convo-title {
+      font-size: 0.95rem;
+      color: #e4e4e7;
+      margin-bottom: 0.375rem;
+      font-weight: 500;
+    }
+    
+    .convo-meta {
+      font-size: 0.75rem;
+      color: #666;
+    }
+    
+    /* Transform section */
+    .section-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #666;
+      margin-bottom: 0.75rem;
+    }
+    
+    .transform-options {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .transform-option {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.875rem 1rem;
+      background: #181818;
+      border: 1px solid #252525;
+      border-radius: 0.625rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    
+    .transform-option:hover {
+      border-color: #333;
+      background: #1c1c1c;
+    }
+    
+    .transform-option.selected {
+      border-color: #3b82f6;
+      background: #3b82f610;
+    }
+    
+    .transform-icon {
+      width: 32px;
+      height: 32px;
+      background: #252525;
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #888;
+      flex-shrink: 0;
+    }
+    
+    .transform-option.selected .transform-icon {
+      background: #3b82f620;
+      color: #60a5fa;
+    }
+    
+    .transform-text {
+      flex: 1;
+    }
+    
+    .transform-title {
+      font-size: 0.875rem;
+      color: #e4e4e7;
+      margin-bottom: 0.125rem;
+    }
+    
+    .transform-desc {
+      font-size: 0.75rem;
+      color: #666;
+    }
+    
+    /* Generate button */
+    .generate-btn {
+      width: 100%;
+      padding: 0.875rem;
+      background: #fff;
+      color: #0d0d0d;
+      border: none;
+      border-radius: 0.625rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-bottom: 1.5rem;
+    }
+    
+    .generate-btn:hover {
+      background: #e4e4e7;
+    }
+    
+    .generate-btn:disabled {
+      background: #252525;
+      color: #666;
+      cursor: not-allowed;
+    }
+    
+    .generate-btn.loading {
+      background: #252525;
+      color: #888;
+    }
+    
+    /* Output section */
+    .output-section {
+      display: none;
+    }
+    
+    .output-section.visible {
+      display: block;
+    }
+    
+    .output-card {
+      background: #181818;
+      border: 1px solid #252525;
+      border-radius: 0.75rem;
+      overflow: hidden;
+    }
+    
+    .output-header {
+      padding: 0.875rem 1rem;
+      border-bottom: 1px solid #252525;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .output-title {
+      font-size: 0.8rem;
+      color: #a1a1aa;
+      font-weight: 500;
+    }
+    
+    .output-actions {
+      display: flex;
+      gap: 0.25rem;
+    }
+    
+    .output-action {
+      padding: 0.375rem 0.625rem;
+      background: transparent;
+      border: none;
+      color: #666;
+      font-size: 0.7rem;
+      cursor: pointer;
+      border-radius: 0.375rem;
+      transition: all 0.15s;
+    }
+    
+    .output-action:hover {
+      background: #252525;
+      color: #a1a1aa;
+    }
+    
+    .output-body {
+      padding: 1rem;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    
+    .output-text {
+      font-size: 0.8rem;
+      color: #d4d4d8;
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+    
+    .output-text h3 {
+      font-size: 0.85rem;
+      color: #fff;
+      margin: 1rem 0 0.5rem 0;
+      font-weight: 600;
+    }
+    
+    .output-text h3:first-child {
+      margin-top: 0;
+    }
+    
+    .output-text ul {
+      margin: 0.5rem 0;
+      padding-left: 1.25rem;
+    }
+    
+    .output-text li {
+      margin-bottom: 0.375rem;
+    }
+    
+    /* JSON output */
+    .output-json {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.75rem;
+      color: #a1a1aa;
+      line-height: 1.6;
+      white-space: pre;
+    }
+    
+    .json-key { color: #f472b6; }
+    .json-string { color: #4ade80; }
+    .json-boolean { color: #60a5fa; }
+    
+    /* Saved indicator */
+    .saved-toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 0.75rem 1.25rem;
+      background: #18181b;
+      border: 1px solid #3b82f6;
+      border-radius: 0.5rem;
+      color: #fff;
+      font-size: 0.85rem;
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+      z-index: 100;
+    }
+    
+    .saved-toast.visible {
+      display: flex;
+    }
+    
+    /* Recent transforms */
+    .recent-section {
+      margin-top: 1.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #252525;
+    }
+    
+    .recent-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #1a1a1a;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    
+    .recent-item:hover {
+      padding-left: 0.5rem;
+    }
+    
+    .recent-item:last-child {
+      border-bottom: none;
+    }
+    
+    .recent-icon {
+      width: 28px;
+      height: 28px;
+      background: #252525;
+      border-radius: 0.375rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      flex-shrink: 0;
+    }
+    
+    .recent-text {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .recent-title {
+      font-size: 0.8rem;
+      color: #a1a1aa;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .recent-meta {
+      font-size: 0.7rem;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  
+  <!-- Fake chat window to simulate context -->
+  <div class="fake-chat">
+    <div class="fake-chat-label">← Your AI chat (Claude, GPT, etc.)</div>
+    <p>User: I keep running into this issue where my product specs don't translate cleanly into code. Like there's a missing layer...</p>
+    <br>
+    <p>Assistant: You're describing what I'd call the Logic Layer Problem—the gap between product requirements and technical implementation context...</p>
+    <br>
+    <p>User: That makes sense. So with BLoC, where exactly does that translation happen?</p>
+    <br>
+    <p>Assistant: The bloc itself becomes the translation layer. Think of it as...</p>
+    <br>
+    <p style="color: #444;">[conversation continues for 47 messages...]</p>
+  </div>
+  
+  <!-- Sidemenu -->
+  <div class="sidemenu">
+    <div class="sidemenu-header">
+      <div class="sidemenu-logo">echo</div>
+      <div class="sidemenu-status">
+        <div class="status-dot"></div>
+        Syncing
+      </div>
+    </div>
+    
+    <div class="sidemenu-content">
+      <!-- Detected conversation -->
+      <div class="convo-card">
+        <div class="convo-label">This conversation</div>
+        <div class="convo-title">Flutter architecture deep dive</div>
+        <div class="convo-meta">47 messages · Claude · Just now</div>
+      </div>
+      
+      <!-- Transform options -->
+      <div class="section-label">Transform into</div>
+      <div class="transform-options">
+        <div class="transform-option" data-type="insights" onclick="selectOption(this)">
+          <div class="transform-icon">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </div>
+          <div class="transform-text">
+            <div class="transform-title">Key Insights</div>
+            <div class="transform-desc">Decisions, learnings, takeaways</div>
+          </div>
+        </div>
+        
+        <div class="transform-option" data-type="profile" onclick="selectOption(this)">
+          <div class="transform-icon">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+          </div>
+          <div class="transform-text">
+            <div class="transform-title">Context Profile</div>
+            <div class="transform-desc">JSON to prime fresh conversations</div>
+          </div>
+        </div>
+        
+        <div class="transform-option" data-type="summary" onclick="selectOption(this)">
+          <div class="transform-icon">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <div class="transform-text">
+            <div class="transform-title">Strategy Doc</div>
+            <div class="transform-desc">Structured summary for sharing</div>
+          </div>
+        </div>
+        
+        <div class="transform-option" data-type="blog" onclick="selectOption(this)">
+          <div class="transform-icon">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </div>
+          <div class="transform-text">
+            <div class="transform-title">Blog Draft</div>
+            <div class="transform-desc">Content in your voice</div>
+          </div>
+        </div>
+      </div>
+      
+      <button class="generate-btn" id="generateBtn" onclick="generate()" disabled>
+        Select a format
+      </button>
+      
+      <!-- Output -->
+      <div class="output-section" id="outputSection">
+        <div class="output-card">
+          <div class="output-header">
+            <div class="output-title" id="outputTitle">Key Insights</div>
+            <div class="output-actions">
+              <button class="output-action" onclick="copyOutput()">Copy</button>
+              <button class="output-action" onclick="saveOutput()">Save</button>
+            </div>
+          </div>
+          <div class="output-body">
+            <div class="output-text" id="outputText"></div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Recent transforms -->
+      <div class="recent-section">
+        <div class="section-label">Recent</div>
+        <div class="recent-item">
+          <div class="recent-icon">
+            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+          </div>
+          <div class="recent-text">
+            <div class="recent-title">Video-transcript sync</div>
+            <div class="recent-meta">Context Profile · 2h ago</div>
+          </div>
+        </div>
+        <div class="recent-item">
+          <div class="recent-icon">
+            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </div>
+          <div class="recent-text">
+            <div class="recent-title">Pricing strategy</div>
+            <div class="recent-meta">Key Insights · Yesterday</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Saved toast -->
+  <div class="saved-toast" id="savedToast">
+    <svg width="16" height="16" fill="none" stroke="#4ade80" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+    </svg>
+    Saved to library
+  </div>
+
+  <script>
+    let selectedType = null;
+    
+    const outputs = {
+      insights: `<h3>Core Decision</h3>
+<ul>
+  <li>BLoC over Provider for complex state management—Provider felt too implicit for the logic layer problem</li>
+  <li>The bloc itself serves as the translation layer between product requirements and technical implementation</li>
+</ul>
+
+<h3>Key Learnings</h3>
+<ul>
+  <li>The "Logic Layer Problem" = gap between what product wants and what code needs to know</li>
+  <li>BLoC makes business logic explicit and testable, separate from UI</li>
+  <li>Events describe what happened, states describe what to show—this separation is the key insight</li>
+</ul>
+
+<h3>Open Questions</h3>
+<ul>
+  <li>How to handle complex async flows across multiple blocs?</li>
+  <li>When does BLoC become overkill vs. simpler approaches?</li>
+</ul>
+
+<h3>Next Steps</h3>
+<ul>
+  <li>Refactor auth flow to use BLoC pattern as test case</li>
+  <li>Document the event/state naming conventions for team</li>
+</ul>`,
+      
+      profile: `<pre class="output-json">{
+  <span class="json-key">"context"</span>: {
+    <span class="json-key">"domain"</span>: <span class="json-string">"Flutter architecture"</span>,
+    <span class="json-key">"project"</span>: <span class="json-string">"Workshop platform"</span>,
+    <span class="json-key">"stack"</span>: [<span class="json-string">"Flutter"</span>, <span class="json-string">"Dart"</span>, <span class="json-string">"BLoC"</span>]
+  },
+  <span class="json-key">"decisions"</span>: {
+    <span class="json-key">"state_management"</span>: <span class="json-string">"BLoC over Provider"</span>,
+    <span class="json-key">"rationale"</span>: <span class="json-string">"Explicit logic layer separation"</span>
+  },
+  <span class="json-key">"user_model"</span>: {
+    <span class="json-key">"expertise"</span>: <span class="json-string">"senior"</span>,
+    <span class="json-key">"style"</span>: <span class="json-string">"direct, minimal hand-holding"</span>,
+    <span class="json-key">"preferences"</span>: {
+      <span class="json-key">"code_over_explanation"</span>: <span class="json-boolean">true</span>,
+      <span class="json-key">"skip_basics"</span>: <span class="json-boolean">true</span>
+    }
+  },
+  <span class="json-key">"established_understanding"</span>: [
+    <span class="json-string">"Logic Layer Problem defined"</span>,
+    <span class="json-string">"BLoC event/state separation"</span>,
+    <span class="json-string">"Bloc as translation layer"</span>
+  ]
+}</pre>`,
+      
+      summary: `<h3>Flutter Architecture: BLoC Decision</h3>
+
+<p><strong>Context:</strong> Evaluating state management approaches for the workshop platform, specifically addressing the gap between product requirements and technical implementation.</p>
+
+<h3>Problem Statement</h3>
+<p>Product specs don't translate cleanly into code. There's a missing "logic layer" where business rules live, separate from both UI and data.</p>
+
+<h3>Decision</h3>
+<p>Adopt BLoC pattern over Provider for state management.</p>
+
+<h3>Rationale</h3>
+<ul>
+  <li>Provider felt too implicit—state changes happen but the "why" isn't clear</li>
+  <li>BLoC makes the logic layer explicit through events and states</li>
+  <li>The bloc becomes the translation layer between product intent and code execution</li>
+  <li>Testability improves significantly—business logic can be tested in isolation</li>
+</ul>
+
+<h3>Implications</h3>
+<ul>
+  <li>More boilerplate upfront, but clearer architecture long-term</li>
+  <li>Team needs alignment on event/state naming conventions</li>
+  <li>Auth flow refactor is the first test case</li>
+</ul>`,
+      
+      blog: `<h3>The Logic Layer Problem (and How BLoC Solves It)</h3>
+
+<p>I've been building Flutter apps for a while now, and I kept running into the same issue: my product specs wouldn't translate cleanly into code.</p>
+
+<p>It felt like there was a missing layer. Something between "what the product should do" and "how the code does it."</p>
+
+<p>I started calling this the Logic Layer Problem.</p>
+
+<h3>What's Actually Missing</h3>
+
+<p>With simpler state management like Provider, state changes happen—but the "why" isn't explicit. You update a value, widgets rebuild, but the business logic is scattered. It works, but it doesn't <em>explain</em> itself.</p>
+
+<p>The logic layer is where business rules should live. Separate from UI. Separate from data. The translation between intent and execution.</p>
+
+<h3>Why BLoC Clicked</h3>
+
+<p>BLoC makes this layer explicit. Events describe what happened. States describe what to show. The bloc itself is the translator.</p>
+
+<p>It's more boilerplate upfront. But now when I look at code three months later, I can actually follow the reasoning...</p>
+
+<p><em>[Draft continues—edit and refine as needed]</em></p>`
+    };
+    
+    function selectOption(el) {
+      document.querySelectorAll('.transform-option').forEach(opt => {
+        opt.classList.remove('selected');
+      });
+      el.classList.add('selected');
+      selectedType = el.dataset.type;
+      
+      document.getElementById('generateBtn').disabled = false;
+      document.getElementById('generateBtn').textContent = 'Generate';
+      document.getElementById('outputSection').classList.remove('visible');
+    }
+    
+    function generate() {
+      const btn = document.getElementById('generateBtn');
+      btn.classList.add('loading');
+      btn.textContent = 'Generating...';
+      
+      setTimeout(() => {
+        btn.classList.remove('loading');
+        btn.textContent = 'Regenerate';
+        
+        const titles = {
+          insights: 'Key Insights',
+          profile: 'Context Profile',
+          summary: 'Strategy Doc',
+          blog: 'Blog Draft'
+        };
+        
+        document.getElementById('outputTitle').textContent = titles[selectedType];
+        document.getElementById('outputText').innerHTML = outputs[selectedType];
+        document.getElementById('outputSection').classList.add('visible');
+        
+        // Scroll to output
+        document.getElementById('outputSection').scrollIntoView({ behavior: 'smooth' });
+      }, 1500);
+    }
+    
+    function copyOutput() {
+      const text = document.getElementById('outputText').innerText;
+      navigator.clipboard.writeText(text);
+      
+      // Brief feedback
+      event.target.textContent = 'Copied!';
+      setTimeout(() => {
+        event.target.textContent = 'Copy';
+      }, 1500);
+    }
+    
+    function saveOutput() {
+      const toast = document.getElementById('savedToast');
+      toast.classList.add('visible');
+      setTimeout(() => {
+        toast.classList.remove('visible');
+      }, 2000);
+    }
+  </script>
+</body>
+</html>

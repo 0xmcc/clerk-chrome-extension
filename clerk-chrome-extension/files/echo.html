@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>echo — ask your history anything</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #09090b;
+      color: #fff;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+    
+    .content {
+      width: 100%;
+      max-width: 640px;
+    }
+    
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+    
+    .logo {
+      font-size: 2rem;
+      font-weight: 300;
+      letter-spacing: -0.025em;
+      margin-bottom: 0.5rem;
+    }
+    
+    .tagline {
+      color: #71717a;
+      font-size: 0.875rem;
+    }
+    
+    /* Search */
+    .search-container {
+      position: relative;
+      margin-bottom: 2rem;
+    }
+    
+    .search-input {
+      width: 100%;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 1rem;
+      padding: 1rem 3.5rem 1rem 1.5rem;
+      font-size: 1.125rem;
+      color: #fff;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    
+    .search-input::placeholder {
+      color: #52525b;
+    }
+    
+    .search-input:focus {
+      border-color: #52525b;
+    }
+    
+    .search-button {
+      position: absolute;
+      right: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      padding: 0.5rem;
+      cursor: pointer;
+      color: #71717a;
+      transition: color 0.2s;
+    }
+    
+    .search-button:hover {
+      color: #fff;
+    }
+    
+    .search-button:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    
+    .search-button svg {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+    
+    /* Suggestions */
+    .suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+      margin-bottom: 3rem;
+    }
+    
+    .suggestion {
+      padding: 0.5rem 1rem;
+      background: rgba(24, 24, 27, 0.5);
+      border: 1px solid #27272a;
+      border-radius: 2rem;
+      font-size: 0.875rem;
+      color: #a1a1aa;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .suggestion:hover {
+      color: #fff;
+      border-color: #52525b;
+    }
+    
+    /* Searching state */
+    .searching {
+      text-align: center;
+      padding: 3rem 0;
+      color: #71717a;
+    }
+    
+    .spinner {
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Results */
+    .results {
+      display: none;
+    }
+    
+    .results.visible {
+      display: block;
+    }
+    
+    .results-header {
+      font-size: 0.75rem;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+    
+    .result-card {
+      width: 100%;
+      text-align: left;
+      background: rgba(24, 24, 27, 0.5);
+      border: 1px solid #27272a;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .result-card:hover {
+      border-color: #52525b;
+      background: #18181b;
+    }
+    
+    .result-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    
+    .source-badge {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.625rem;
+      border-radius: 2rem;
+      border: 1px solid;
+    }
+    
+    .source-badge.claude {
+      background: rgba(249, 115, 22, 0.2);
+      color: #fdba74;
+      border-color: rgba(249, 115, 22, 0.3);
+    }
+    
+    .source-badge.gpt {
+      background: rgba(16, 185, 129, 0.2);
+      color: #6ee7b7;
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+    
+    .source-badge.gemini {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border-color: rgba(59, 130, 246, 0.3);
+    }
+    
+    .result-date {
+      font-size: 0.875rem;
+      color: #52525b;
+    }
+    
+    .result-relevance {
+      font-size: 0.875rem;
+      color: #3f3f46;
+      margin-left: auto;
+    }
+    
+    .result-insight {
+      color: #e4e4e7;
+      line-height: 1.6;
+      transition: color 0.2s;
+    }
+    
+    .result-card:hover .result-insight {
+      color: #fff;
+    }
+    
+    .result-source {
+      margin-top: 0.75rem;
+      font-size: 0.875rem;
+      color: #52525b;
+    }
+    
+    /* Stats footer */
+    .stats-footer {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    
+    .stats-container {
+      display: flex;
+      gap: 2rem;
+      padding: 0.75rem 1.5rem;
+      background: rgba(24, 24, 27, 0.8);
+      backdrop-filter: blur(8px);
+      border: 1px solid #27272a;
+      border-radius: 2rem;
+    }
+    
+    .stat {
+      text-align: center;
+    }
+    
+    .stat-number {
+      font-size: 1.25rem;
+      font-weight: 300;
+      color: #fff;
+    }
+    
+    .stat-label {
+      font-size: 0.75rem;
+      color: #71717a;
+      margin-top: 0.25rem;
+    }
+    
+    /* Detail view */
+    .detail-view {
+      display: none;
+      padding: 2rem;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+    
+    .detail-view.visible {
+      display: block;
+    }
+    
+    .back-button {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: none;
+      border: none;
+      color: #71717a;
+      cursor: pointer;
+      margin-bottom: 2rem;
+      font-size: 1rem;
+      transition: color 0.2s;
+    }
+    
+    .back-button:hover {
+      color: #fff;
+    }
+    
+    .back-button svg {
+      width: 1rem;
+      height: 1rem;
+    }
+    
+    .detail-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .detail-title {
+      font-size: 1.25rem;
+      font-weight: 500;
+      color: #a1a1aa;
+      margin-bottom: 2rem;
+    }
+    
+    .exchange-card {
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .exchange-card.user {
+      background: rgba(24, 24, 27, 0.5);
+      border: 1px solid #27272a;
+    }
+    
+    .exchange-card.assistant {
+      background: linear-gradient(to bottom right, #18181b, rgba(24, 24, 27, 0.5));
+      border: 1px solid #3f3f46;
+    }
+    
+    .exchange-label {
+      font-size: 0.75rem;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.75rem;
+    }
+    
+    .exchange-text {
+      color: #d4d4d8;
+      line-height: 1.6;
+    }
+    
+    .exchange-card.assistant .exchange-text {
+      color: #fff;
+    }
+    
+    .detail-actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 2rem;
+    }
+    
+    .action-button {
+      padding: 0.625rem 1rem;
+      background: #27272a;
+      border: none;
+      border-radius: 0.5rem;
+      color: #fff;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    .action-button:hover {
+      background: #3f3f46;
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- Main View -->
+  <div class="container" id="mainView">
+    <div class="content">
+      <div class="header">
+        <h1 class="logo">echo</h1>
+        <p class="tagline">ask your history anything</p>
+      </div>
+      
+      <div class="search-container">
+        <input 
+          type="text" 
+          class="search-input" 
+          id="searchInput"
+          placeholder="What did I figure out about..."
+          autofocus
+        >
+        <button class="search-button" id="searchButton">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        </button>
+      </div>
+      
+      <div class="suggestions" id="suggestions">
+        <button class="suggestion" data-query="architecture decisions">architecture decisions</button>
+        <button class="suggestion" data-query="what I believe about AI">what I believe about AI</button>
+        <button class="suggestion" data-query="unshipped ideas">unshipped ideas</button>
+      </div>
+      
+      <div class="searching hidden" id="searchingState">
+        <svg class="spinner" width="24" height="24" fill="none" viewBox="0 0 24 24" style="margin: 0 auto 1rem; display: block;">
+          <circle opacity="0.25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        Searching across 847 conversations...
+      </div>
+      
+      <div class="results" id="results">
+        <div class="results-header"><span id="resultsCount">3</span> relevant moments found</div>
+        <div id="resultsContainer"></div>
+      </div>
+      
+      <div class="stats-footer" id="statsFooter">
+        <div class="stats-container">
+          <div class="stat">
+            <div class="stat-number">847</div>
+            <div class="stat-label">conversations</div>
+          </div>
+          <div class="stat">
+            <div class="stat-number">3</div>
+            <div class="stat-label">sources</div>
+          </div>
+          <div class="stat">
+            <div class="stat-number">12.4k</div>
+            <div class="stat-label">insights</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Detail View -->
+  <div class="detail-view" id="detailView">
+    <button class="back-button" id="backButton">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      Back to results
+    </button>
+    
+    <div class="detail-meta" id="detailMeta"></div>
+    <h2 class="detail-title" id="detailTitle"></h2>
+    
+    <div class="exchange-card user">
+      <div class="exchange-label">You asked</div>
+      <p class="exchange-text" id="userText"></p>
+    </div>
+    
+    <div class="exchange-card assistant">
+      <div class="exchange-label">Insight</div>
+      <p class="exchange-text" id="assistantText"></p>
+    </div>
+    
+    <div class="detail-actions">
+      <button class="action-button" id="copyButton">Copy insight</button>
+      <button class="action-button" id="continueButton">Continue this thread</button>
+    </div>
+  </div>
+
+  <script>
+    // Mock data
+    const mockResults = [
+      {
+        id: 1,
+        insight: "BLoC architecture keeps business logic separate from UI. The 'Logic Layer Problem' is the gap between product requirements and technical implementation context.",
+        source: 'Claude',
+        date: 'Nov 12, 2024',
+        conversationTitle: 'Flutter architecture deep dive',
+        relevance: 0.94,
+        fullExchange: {
+          user: "I keep running into this issue where my product specs don't translate cleanly into code. Like there's a missing layer.",
+          assistant: "You're describing what I'd call the Logic Layer Problem—the gap between product requirements and technical implementation context. BLoC architecture addresses this by creating an explicit layer where business logic lives, separate from both UI and data. The bloc becomes the translation layer between 'what the product should do' and 'how the code does it.'"
+        }
+      },
+      {
+        id: 2,
+        insight: "For video-transcript sync, chunk by semantic meaning not fixed time intervals. Align to sentence boundaries, then map timestamps to text spans.",
+        source: 'GPT-4',
+        date: 'Nov 8, 2024',
+        conversationTitle: 'Building the workshop platform',
+        relevance: 0.89,
+        fullExchange: {
+          user: "How should I approach syncing video playback with transcript highlights?",
+          assistant: "Don't chunk by fixed time intervals—you'll cut mid-sentence and the UX feels broken. Instead, chunk by semantic meaning: sentence boundaries first, then map timestamp ranges to text spans. When user clicks text, seek to span.start. When video plays, highlight the span whose range contains currentTime."
+        }
+      },
+      {
+        id: 3,
+        insight: "Context profiles should be goal-specific. 'Draft replies' needs different priming than 'code review'. Extract per-task, not universal.",
+        source: 'Claude',
+        date: 'Nov 15, 2024',
+        conversationTitle: 'Portable AI context',
+        relevance: 0.87,
+        fullExchange: {
+          user: "Should I try to create one master context profile or multiple?",
+          assistant: "Goal-specific. A context profile optimized for 'draft replies' needs to capture your tone, relationship dynamics, and communication style. One for 'code review' needs your stack preferences, quality bar, and common patterns. Trying to collapse these into one universal profile dilutes both. Extract per-task."
+        }
+      }
+    ];
+
+    // DOM elements
+    const mainView = document.getElementById('mainView');
+    const detailView = document.getElementById('detailView');
+    const searchInput = document.getElementById('searchInput');
+    const searchButton = document.getElementById('searchButton');
+    const suggestions = document.getElementById('suggestions');
+    const searchingState = document.getElementById('searchingState');
+    const results = document.getElementById('results');
+    const resultsContainer = document.getElementById('resultsContainer');
+    const statsFooter = document.getElementById('statsFooter');
+    const backButton = document.getElementById('backButton');
+    const copyButton = document.getElementById('copyButton');
+
+    // Get source badge class
+    function getSourceClass(source) {
+      if (source === 'Claude') return 'claude';
+      if (source === 'GPT-4') return 'gpt';
+      if (source === 'Gemini') return 'gemini';
+      return '';
+    }
+
+    // Render results
+    function renderResults(data) {
+      resultsContainer.innerHTML = data.map(result => `
+        <div class="result-card" data-id="${result.id}">
+          <div class="result-meta">
+            <span class="source-badge ${getSourceClass(result.source)}">${result.source}</span>
+            <span class="result-date">${result.date}</span>
+            <span class="result-relevance">${Math.round(result.relevance * 100)}% match</span>
+          </div>
+          <p class="result-insight">${result.insight}</p>
+          <p class="result-source">from "${result.conversationTitle}"</p>
+        </div>
+      `).join('');
+
+      // Add click handlers
+      document.querySelectorAll('.result-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const id = parseInt(card.dataset.id);
+          showDetail(mockResults.find(r => r.id === id));
+        });
+      });
+    }
+
+    // Show detail view
+    function showDetail(result) {
+      mainView.classList.add('hidden');
+      detailView.classList.add('visible');
+      
+      document.getElementById('detailMeta').innerHTML = `
+        <span class="source-badge ${getSourceClass(result.source)}">${result.source}</span>
+        <span class="result-date">${result.date}</span>
+      `;
+      document.getElementById('detailTitle').textContent = result.conversationTitle;
+      document.getElementById('userText').textContent = result.fullExchange.user;
+      document.getElementById('assistantText').textContent = result.fullExchange.assistant;
+      
+      // Store current result for copy
+      detailView.dataset.insight = result.fullExchange.assistant;
+    }
+
+    // Search function
+    function performSearch() {
+      const query = searchInput.value.trim();
+      if (!query) return;
+
+      suggestions.classList.add('hidden');
+      statsFooter.classList.add('hidden');
+      results.classList.remove('visible');
+      searchingState.classList.remove('hidden');
+
+      setTimeout(() => {
+        searchingState.classList.add('hidden');
+        results.classList.add('visible');
+        renderResults(mockResults);
+      }, 1200);
+    }
+
+    // Event listeners
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') performSearch();
+    });
+
+    searchButton.addEventListener('click', performSearch);
+
+    document.querySelectorAll('.suggestion').forEach(btn => {
+      btn.addEventListener('click', () => {
+        searchInput.value = btn.dataset.query;
+        performSearch();
+      });
+    });
+
+    backButton.addEventListener('click', () => {
+      detailView.classList.remove('visible');
+      mainView.classList.remove('hidden');
+    });
+
+    copyButton.addEventListener('click', () => {
+      navigator.clipboard.writeText(detailView.dataset.insight);
+      copyButton.textContent = 'Copied!';
+      setTimeout(() => {
+        copyButton.textContent = 'Copy insight';
+      }, 2000);
+    });
+  </script>
+</body>
+</html>

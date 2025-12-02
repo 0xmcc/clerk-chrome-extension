@@ -38,5 +38,7 @@ keys.json
 # typescript
 .tsbuildinfo
 
-..clerk-chrome-extension.zip
+# Ignore the generated ZIP archive for Clerk Chrome Extension
+../clerk-chrome-extension.zip
 repomix-output.xml
+../.DS_Store

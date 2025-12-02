@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>echo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #09090b;
+      color: #fff;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    
+    /* Onboarding */
+    .onboarding {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    
+    .onboarding-content {
+      max-width: 480px;
+      width: 100%;
+    }
+    
+    .onboarding-step {
+      display: none;
+      animation: fadeIn 0.4s ease;
+    }
+    
+    .onboarding-step.active {
+      display: block;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .step-logo {
+      font-size: 2.5rem;
+      font-weight: 300;
+      letter-spacing: -0.025em;
+      margin-bottom: 0.5rem;
+    }
+    
+    .step-tagline {
+      color: #71717a;
+      font-size: 1rem;
+      margin-bottom: 3rem;
+    }
+    
+    .step-title {
+      font-size: 1.25rem;
+      font-weight: 500;
+      margin-bottom: 1rem;
+      color: #e4e4e7;
+    }
+    
+    .step-text {
+      color: #a1a1aa;
+      line-height: 1.7;
+      margin-bottom: 2rem;
+    }
+    
+    /* Data sources display */
+    .sources {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    
+    .source {
+      flex: 1;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      text-align: center;
+    }
+    
+    .source-icon {
+      width: 32px;
+      height: 32px;
+      margin: 0 auto 0.5rem;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 0.75rem;
+    }
+    
+    .source-icon.claude { background: rgba(249, 115, 22, 0.2); color: #fdba74; }
+    .source-icon.gpt { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+    .source-icon.gemini { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+    
+    .source-name {
+      font-size: 0.8rem;
+      color: #a1a1aa;
+      margin-bottom: 0.25rem;
+    }
+    
+    .source-count {
+      font-size: 1.25rem;
+      font-weight: 300;
+      color: #fff;
+    }
+    
+    /* Example prompts */
+    .example-prompts {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+    }
+    
+    .example-prompt {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 0.75rem;
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .example-prompt:hover {
+      border-color: #3f3f46;
+      background: #1f1f23;
+    }
+    
+    .example-prompt-text {
+      flex: 1;
+      color: #d4d4d8;
+      font-size: 0.95rem;
+    }
+    
+    .example-prompt-arrow {
+      color: #52525b;
+      transition: transform 0.2s;
+    }
+    
+    .example-prompt:hover .example-prompt-arrow {
+      transform: translateX(4px);
+      color: #71717a;
+    }
+    
+    /* Preview cards */
+    .preview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+    }
+    
+    .preview-card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .preview-card:hover {
+      border-color: #3f3f46;
+    }
+    
+    .preview-icon {
+      width: 36px;
+      height: 36px;
+      background: #27272a;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 0.75rem;
+      color: #71717a;
+    }
+    
+    .preview-card:hover .preview-icon {
+      background: #3f3f46;
+      color: #a1a1aa;
+    }
+    
+    .preview-title {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #e4e4e7;
+      margin-bottom: 0.25rem;
+    }
+    
+    .preview-desc {
+      font-size: 0.75rem;
+      color: #71717a;
+    }
+    
+    /* Buttons */
+    .btn {
+      padding: 0.875rem 1.5rem;
+      border-radius: 0.75rem;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+    
+    .btn-primary {
+      background: #fff;
+      color: #09090b;
+      width: 100%;
+      font-weight: 500;
+    }
+    
+    .btn-primary:hover {
+      background: #e4e4e7;
+    }
+    
+    .btn-secondary {
+      background: transparent;
+      color: #71717a;
+      margin-top: 1rem;
+      width: 100%;
+    }
+    
+    .btn-secondary:hover {
+      color: #fff;
+    }
+    
+    /* Progress dots */
+    .progress-dots {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-top: 2rem;
+    }
+    
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #27272a;
+      transition: all 0.2s;
+    }
+    
+    .dot.active {
+      background: #fff;
+      width: 24px;
+      border-radius: 4px;
+    }
+    
+    /* Main App */
+    .app {
+      display: none;
+      min-height: 100vh;
+      flex-direction: column;
+    }
+    
+    .app.visible {
+      display: flex;
+    }
+    
+    .canvas {
+      flex: 1;
+      padding: 2rem;
+      padding-bottom: 120px;
+      overflow-y: auto;
+    }
+    
+    /* Ready state - replaces empty state */
+    .ready-state {
+      max-width: 640px;
+      margin: 0 auto;
+      padding-top: 3rem;
+    }
+    
+    .ready-greeting {
+      font-size: 1.5rem;
+      font-weight: 300;
+      color: #e4e4e7;
+      margin-bottom: 0.5rem;
+    }
+    
+    .ready-subtext {
+      color: #71717a;
+      margin-bottom: 2.5rem;
+    }
+    
+    .quick-actions-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #52525b;
+      margin-bottom: 0.75rem;
+    }
+    
+    .quick-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    .quick-action {
+      padding: 0.625rem 1rem;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 2rem;
+      font-size: 0.875rem;
+      color: #a1a1aa;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .quick-action:hover {
+      border-color: #3f3f46;
+      color: #fff;
+    }
+    
+    .recent-section {
+      margin-top: 3rem;
+    }
+    
+    .recent-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #52525b;
+      margin-bottom: 0.75rem;
+    }
+    
+    .recent-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.875rem 0;
+      border-bottom: 1px solid #1f1f23;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .recent-item:hover {
+      padding-left: 0.5rem;
+    }
+    
+    .recent-item:last-child {
+      border-bottom: none;
+    }
+    
+    .recent-icon {
+      width: 32px;
+      height: 32px;
+      background: #18181b;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #52525b;
+      flex-shrink: 0;
+    }
+    
+    .recent-text {
+      flex: 1;
+    }
+    
+    .recent-title {
+      font-size: 0.9rem;
+      color: #d4d4d8;
+      margin-bottom: 0.125rem;
+    }
+    
+    .recent-meta {
+      font-size: 0.75rem;
+      color: #52525b;
+    }
+    
+    /* Generated content */
+    .generated-content {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    /* Prompt bar */
+    .prompt-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 1.5rem 2rem;
+      background: linear-gradient(to top, #09090b 80%, transparent);
+    }
+    
+    .prompt-container {
+      max-width: 640px;
+      margin: 0 auto;
+      position: relative;
+    }
+    
+    .prompt-input {
+      width: 100%;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 1rem;
+      padding: 1rem 3rem 1rem 1.25rem;
+      font-size: 1rem;
+      color: #fff;
+      outline: none;
+      transition: all 0.2s;
+    }
+    
+    .prompt-input::placeholder {
+      color: #52525b;
+    }
+    
+    .prompt-input:focus {
+      border-color: #52525b;
+      box-shadow: 0 0 0 4px rgba(82, 82, 91, 0.1);
+    }
+    
+    .prompt-button {
+      position: absolute;
+      right: 0.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      padding: 0.5rem;
+      cursor: pointer;
+      color: #52525b;
+      transition: color 0.2s;
+    }
+    
+    .prompt-button:hover {
+      color: #fff;
+    }
+    
+    .prompt-button svg {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+    
+    /* Generating state */
+    .generating {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: #71717a;
+      font-size: 0.875rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .generating-dot {
+      width: 8px;
+      height: 8px;
+      background: #71717a;
+      border-radius: 50%;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+    
+    /* Generated view styles */
+    .view-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #52525b;
+      margin-bottom: 1.5rem;
+    }
+    
+    /* Timeline */
+    .timeline {
+      position: relative;
+      padding-left: 2rem;
+    }
+    
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #27272a;
+    }
+    
+    .timeline-item {
+      position: relative;
+      padding-bottom: 2rem;
+    }
+    
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -2rem;
+      top: 0.5rem;
+      width: 10px;
+      height: 10px;
+      background: #09090b;
+      border: 2px solid #52525b;
+      border-radius: 50%;
+      transform: translateX(-50%);
+    }
+    
+    .timeline-date {
+      font-size: 0.75rem;
+      color: #52525b;
+      margin-bottom: 0.5rem;
+    }
+    
+    .timeline-content {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 0.75rem;
+      padding: 1rem;
+    }
+    
+    .timeline-title {
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      color: #e4e4e7;
+    }
+    
+    .timeline-text {
+      font-size: 0.875rem;
+      color: #a1a1aa;
+      line-height: 1.6;
+    }
+    
+    .timeline-source {
+      margin-top: 0.75rem;
+      font-size: 0.75rem;
+      color: #52525b;
+    }
+    
+    /* Topic bars */
+    .topic-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    
+    .topic-bar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    
+    .topic-label {
+      width: 140px;
+      font-size: 0.875rem;
+      color: #a1a1aa;
+      flex-shrink: 0;
+    }
+    
+    .topic-track {
+      flex: 1;
+      height: 8px;
+      background: #27272a;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    
+    .topic-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+    }
+    
+    .topic-count {
+      width: 40px;
+      font-size: 0.875rem;
+      color: #71717a;
+      text-align: right;
+    }
+    
+    /* Report */
+    .report {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+    
+    .report-header {
+      padding: 1.5rem;
+      border-bottom: 1px solid #27272a;
+    }
+    
+    .report-title {
+      font-size: 1.25rem;
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+    
+    .report-subtitle {
+      font-size: 0.875rem;
+      color: #71717a;
+    }
+    
+    .report-section {
+      padding: 1.5rem;
+      border-bottom: 1px solid #27272a;
+    }
+    
+    .report-section:last-child {
+      border-bottom: none;
+    }
+    
+    .report-section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #71717a;
+      margin-bottom: 1rem;
+    }
+    
+    .report-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #1f1f23;
+    }
+    
+    .report-item:last-child {
+      border-bottom: none;
+    }
+    
+    .report-item-text {
+      font-size: 0.9rem;
+      color: #d4d4d8;
+      flex: 1;
+      line-height: 1.5;
+    }
+    
+    .report-item-meta {
+      font-size: 0.75rem;
+      color: #52525b;
+      margin-left: 1rem;
+      white-space: nowrap;
+    }
+    
+    /* Cards grid */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+    }
+    
+    .card-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #52525b;
+      margin-bottom: 0.5rem;
+    }
+    
+    .card-value {
+      font-size: 1.5rem;
+      font-weight: 300;
+      color: #fff;
+      margin-bottom: 0.25rem;
+    }
+    
+    .card-subtext {
+      font-size: 0.8rem;
+      color: #71717a;
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- Onboarding -->
+  <div class="onboarding" id="onboarding">
+    <div class="onboarding-content">
+      
+      <!-- Step 1: Welcome -->
+      <div class="onboarding-step active" data-step="1">
+        <h1 class="step-logo">echo</h1>
+        <p class="step-tagline">your AI conversations, searchable</p>
+        
+        <p class="step-text">
+          Every insight you've ever reached with AI—every decision, every breakthrough, every half-formed idea—is now in one place.
+        </p>
+        
+        <div class="sources">
+          <div class="source">
+            <div class="source-icon claude">C</div>
+            <div class="source-name">Claude</div>
+            <div class="source-count">523</div>
+          </div>
+          <div class="source">
+            <div class="source-icon gpt">G</div>
+            <div class="source-name">GPT-4</div>
+            <div class="source-count">284</div>
+          </div>
+          <div class="source">
+            <div class="source-icon gemini">G</div>
+            <div class="source-name">Gemini</div>
+            <div class="source-count">40</div>
+          </div>
+        </div>
+        
+        <button class="btn btn-primary" onclick="nextStep()">Continue</button>
+        
+        <div class="progress-dots">
+          <div class="dot active"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+      </div>
+      
+      <!-- Step 2: What you can ask -->
+      <div class="onboarding-step" data-step="2">
+        <h2 class="step-title">Ask anything about your history</h2>
+        <p class="step-text">
+          Echo understands what you're looking for and generates the right view.
+        </p>
+        
+        <div class="example-prompts">
+          <div class="example-prompt">
+            <span class="example-prompt-text">"What did I decide about state management?"</span>
+            <svg class="example-prompt-arrow" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+          <div class="example-prompt">
+            <span class="example-prompt-text">"Show me topics I've explored most"</span>
+            <svg class="example-prompt-arrow" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+          <div class="example-prompt">
+            <span class="example-prompt-text">"What questions am I stuck on?"</span>
+            <svg class="example-prompt-arrow" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </div>
+        
+        <button class="btn btn-primary" onclick="nextStep()">Continue</button>
+        <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+        
+        <div class="progress-dots">
+          <div class="dot"></div>
+          <div class="dot active"></div>
+          <div class="dot"></div>
+        </div>
+      </div>
+      
+      <!-- Step 3: What you get -->
+      <div class="onboarding-step" data-step="3">
+        <h2 class="step-title">Views generated on demand</h2>
+        <p class="step-text">
+          No fixed dashboards. The interface adapts to what you need.
+        </p>
+        
+        <div class="preview-grid">
+          <div class="preview-card">
+            <div class="preview-icon">
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div class="preview-title">Timelines</div>
+            <div class="preview-desc">Decisions over time</div>
+          </div>
+          <div class="preview-card">
+            <div class="preview-icon">
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <div class="preview-title">Charts</div>
+            <div class="preview-desc">Patterns & trends</div>
+          </div>
+          <div class="preview-card">
+            <div class="preview-icon">
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div class="preview-title">Reports</div>
+            <div class="preview-desc">Insights summarized</div>
+          </div>
+          <div class="preview-card">
+            <div class="preview-icon">
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <div class="preview-title">Search</div>
+            <div class="preview-desc">Find any moment</div>
+          </div>
+        </div>
+        
+        <button class="btn btn-primary" onclick="startApp()">Start exploring</button>
+        <button class="btn btn-secondary" onclick="prevStep()">Back</button>
+        
+        <div class="progress-dots">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot active"></div>
+        </div>
+      </div>
+      
+    </div>
+  </div>
+  
+  <!-- Main App -->
+  <div class="app" id="app">
+    <div class="canvas" id="canvas">
+      
+      <!-- Ready state -->
+      <div class="ready-state" id="readyState">
+        <h1 class="ready-greeting">Good evening, Marko</h1>
+        <p class="ready-subtext">847 conversations ready to explore</p>
+        
+        <div class="quick-actions-label">Try asking</div>
+        <div class="quick-actions">
+          <button class="quick-action" data-query="timeline of architecture decisions">architecture decisions</button>
+          <button class="quick-action" data-query="what topics have I explored most">topics I've explored</button>
+          <button class="quick-action" data-query="what am I stuck on">unresolved questions</button>
+          <button class="quick-action" data-query="give me an overview">overview</button>
+        </div>
+        
+        <div class="recent-section">
+          <div class="recent-label">Recent insights</div>
+          <div class="recent-item">
+            <div class="recent-icon">
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <div class="recent-text">
+              <div class="recent-title">Context profiles should be goal-specific</div>
+              <div class="recent-meta">Claude · 2 hours ago</div>
+            </div>
+          </div>
+          <div class="recent-item">
+            <div class="recent-icon">
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <div class="recent-text">
+              <div class="recent-title">Video-transcript sync: chunk by semantic meaning</div>
+              <div class="recent-meta">GPT-4 · Yesterday</div>
+            </div>
+          </div>
+          <div class="recent-item">
+            <div class="recent-icon">
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <div class="recent-text">
+              <div class="recent-title">BLoC over Provider for complex state</div>
+              <div class="recent-meta">Claude · Nov 12</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Generated content -->
+      <div class="generated-content hidden" id="generatedContent"></div>
+      
+    </div>
+    
+    <div class="prompt-bar">
+      <div class="prompt-container">
+        <input 
+          type="text" 
+          class="prompt-input" 
+          id="promptInput"
+          placeholder="What do you want to see?"
+        >
+        <button class="prompt-button" id="promptButton">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentStep = 1;
+    
+    function nextStep() {
+      document.querySelector(`[data-step="${currentStep}"]`).classList.remove('active');
+      currentStep++;
+      document.querySelector(`[data-step="${currentStep}"]`).classList.add('active');
+    }
+    
+    function prevStep() {
+      document.querySelector(`[data-step="${currentStep}"]`).classList.remove('active');
+      currentStep--;
+      document.querySelector(`[data-step="${currentStep}"]`).classList.add('active');
+    }
+    
+    function startApp() {
+      document.getElementById('onboarding').classList.add('hidden');
+      document.getElementById('app').classList.add('visible');
+      document.getElementById('promptInput').focus();
+    }
+    
+    // Views
+    const views = {
+      'timeline': `
+        <div class="view-title">Timeline: Architecture Decisions</div>
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="timeline-date">Nov 15, 2024</div>
+            <div class="timeline-content">
+              <div class="timeline-title">Chose BLoC over Provider</div>
+              <div class="timeline-text">Decided BLoC provides clearer separation for the logic layer problem. Provider felt too implicit for complex state management.</div>
+              <div class="timeline-source">Claude · "Flutter architecture deep dive"</div>
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-date">Nov 8, 2024</div>
+            <div class="timeline-content">
+              <div class="timeline-title">Video-transcript sync approach</div>
+              <div class="timeline-text">Semantic chunking at sentence boundaries, not fixed time intervals. Map timestamp ranges to text spans for bi-directional sync.</div>
+              <div class="timeline-source">GPT-4 · "Building the workshop platform"</div>
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-date">Oct 22, 2024</div>
+            <div class="timeline-content">
+              <div class="timeline-title">Local-first for personal data</div>
+              <div class="timeline-text">Cloud for sync, but local SQLite as source of truth. User should own their data, not just access it.</div>
+              <div class="timeline-source">Claude · "Personal data architecture"</div>
+            </div>
+          </div>
+        </div>
+      `,
+      
+      'topics': `
+        <div class="view-title">Topics You've Explored Most</div>
+        <div class="topic-bars">
+          <div class="topic-bar">
+            <div class="topic-label">Flutter / Dart</div>
+            <div class="topic-track"><div class="topic-fill" style="width: 85%"></div></div>
+            <div class="topic-count">127</div>
+          </div>
+          <div class="topic-bar">
+            <div class="topic-label">AI workflows</div>
+            <div class="topic-track"><div class="topic-fill" style="width: 72%"></div></div>
+            <div class="topic-count">108</div>
+          </div>
+          <div class="topic-bar">
+            <div class="topic-label">Architecture</div>
+            <div class="topic-track"><div class="topic-fill" style="width: 58%"></div></div>
+            <div class="topic-count">86</div>
+          </div>
+          <div class="topic-bar">
+            <div class="topic-label">Communication</div>
+            <div class="topic-track"><div class="topic-fill" style="width: 45%"></div></div>
+            <div class="topic-count">67</div>
+          </div>
+          <div class="topic-bar">
+            <div class="topic-label">Business strategy</div>
+            <div class="topic-track"><div class="topic-fill" style="width: 38%"></div></div>
+            <div class="topic-count">57</div>
+          </div>
+          <div class="topic-bar">
+            <div class="topic-label">Workshop design</div>
+            <div class="topic-track"><div class="topic-fill" style="width: 31%"></div></div>
+            <div class="topic-count">46</div>
+          </div>
+        </div>
+      `,
+      
+      'unresolved': `
+        <div class="report">
+          <div class="report-header">
+            <div class="report-title">Unresolved Questions</div>
+            <div class="report-subtitle">Things you've circled back to without resolution</div>
+          </div>
+          <div class="report-section">
+            <div class="report-section-title">Revisited 3+ times</div>
+            <div class="report-item">
+              <div class="report-item-text">How to price the three-session intensive course. Explored $500, $800, $1200 price points without deciding.</div>
+              <div class="report-item-meta">5 convos</div>
+            </div>
+            <div class="report-item">
+              <div class="report-item-text">Whether to build custom video player or use off-the-shelf. Concerns about transcript sync integration.</div>
+              <div class="report-item-meta">4 convos</div>
+            </div>
+            <div class="report-item">
+              <div class="report-item-text">Scaling strategy disagreement with Ray and Jhillika. You want faster growth, they prefer organic.</div>
+              <div class="report-item-meta">3 convos</div>
+            </div>
+          </div>
+          <div class="report-section">
+            <div class="report-section-title">Explored but not concluded</div>
+            <div class="report-item">
+              <div class="report-item-text">Invitation system UX for events. Multiple approaches discussed, none implemented.</div>
+              <div class="report-item-meta">Nov 12</div>
+            </div>
+            <div class="report-item">
+              <div class="report-item-text">How to handle auth in the workshop platform. Firebase vs custom vs Supabase auth.</div>
+              <div class="report-item-meta">Nov 3</div>
+            </div>
+          </div>
+        </div>
+      `,
+      
+      'stats': `
+        <div class="view-title">Your Data at a Glance</div>
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-label">Total Conversations</div>
+            <div class="card-value">847</div>
+            <div class="card-subtext">Since Nov 2023</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Most Active Source</div>
+            <div class="card-value">Claude</div>
+            <div class="card-subtext">62% of conversations</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Avg. Length</div>
+            <div class="card-value">23</div>
+            <div class="card-subtext">messages per thread</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Peak Day</div>
+            <div class="card-value">Nov 15</div>
+            <div class="card-subtext">14 conversations</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Insights</div>
+            <div class="card-value">12.4k</div>
+            <div class="card-subtext">searchable moments</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Topics</div>
+            <div class="card-value">89</div>
+            <div class="card-subtext">auto-categorized</div>
+          </div>
+        </div>
+      `
+    };
+    
+    function getViewForQuery(query) {
+      const q = query.toLowerCase();
+      if (q.includes('timeline') || q.includes('decision') || q.includes('architecture')) return 'timeline';
+      if (q.includes('topic') || q.includes('most') || q.includes('explore')) return 'topics';
+      if (q.includes('unresolved') || q.includes('stuck') || q.includes('circle') || q.includes('question')) return 'unresolved';
+      return 'stats';
+    }
+    
+    function generate(query) {
+      if (!query.trim()) return;
+      
+      const readyState = document.getElementById('readyState');
+      const generatedContent = document.getElementById('generatedContent');
+      
+      readyState.classList.add('hidden');
+      generatedContent.classList.remove('hidden');
+      generatedContent.innerHTML = `
+        <div class="generating">
+          <div class="generating-dot"></div>
+          Generating view...
+        </div>
+      `;
+      
+      setTimeout(() => {
+        const viewKey = getViewForQuery(query);
+        generatedContent.innerHTML = views[viewKey];
+      }, 1000);
+      
+      document.getElementById('promptInput').value = '';
+    }
+    
+    // Event listeners
+    document.getElementById('promptInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') generate(e.target.value);
+    });
+    
+    document.getElementById('promptButton').addEventListener('click', () => {
+      generate(document.getElementById('promptInput').value);
+    });
+    
+    document.querySelectorAll('.quick-action').forEach(btn => {
+      btn.addEventListener('click', () => {
+        generate(btn.dataset.query);
+      });
+    });
+  </script>
+</body>
+</html>

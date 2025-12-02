@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Echo — Your AI conversations, captured</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #09090b;
+      color: #fff;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    
+    /* Nav */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 1.25rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+      background: rgba(9, 9, 11, 0.8);
+      backdrop-filter: blur(12px);
+    }
+    
+    .nav-logo {
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+    }
+    
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+    }
+    
+    .nav-link {
+      font-size: 0.9rem;
+      color: #a1a1aa;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    
+    .nav-link:hover {
+      color: #fff;
+    }
+    
+    .nav-cta {
+      padding: 0.625rem 1.25rem;
+      background: #fff;
+      color: #09090b;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    
+    .nav-cta:hover {
+      background: #e4e4e7;
+    }
+    
+    /* Hero */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 6rem 2rem 4rem;
+      position: relative;
+    }
+    
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 2rem;
+      font-size: 0.8rem;
+      color: #60a5fa;
+      margin-bottom: 2rem;
+    }
+    
+    .hero-badge-dot {
+      width: 6px;
+      height: 6px;
+      background: #60a5fa;
+      border-radius: 50%;
+    }
+    
+    .hero-title {
+      font-size: clamp(2.5rem, 8vw, 4.5rem);
+      font-weight: 600;
+      letter-spacing: -0.035em;
+      line-height: 1.1;
+      max-width: 800px;
+      margin-bottom: 1.5rem;
+    }
+    
+    .hero-title-gradient {
+      background: linear-gradient(135deg, #fff 0%, #a1a1aa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .hero-subtitle {
+      font-size: 1.25rem;
+      color: #71717a;
+      max-width: 540px;
+      line-height: 1.6;
+      margin-bottom: 2.5rem;
+    }
+    
+    .hero-ctas {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 4rem;
+    }
+    
+    .btn-primary {
+      padding: 0.875rem 2rem;
+      background: #fff;
+      color: #09090b;
+      border: none;
+      border-radius: 0.625rem;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    
+    .btn-primary:hover {
+      background: #e4e4e7;
+      transform: translateY(-1px);
+    }
+    
+    .btn-secondary {
+      padding: 0.875rem 2rem;
+      background: transparent;
+      color: #a1a1aa;
+      border: 1px solid #27272a;
+      border-radius: 0.625rem;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    
+    .btn-secondary:hover {
+      border-color: #3f3f46;
+      color: #fff;
+    }
+    
+    /* Product preview */
+    .hero-preview {
+      position: relative;
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    .preview-window {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 1rem;
+      overflow: hidden;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    
+    .preview-header {
+      padding: 1rem 1.25rem;
+      background: #0d0d0d;
+      border-bottom: 1px solid #27272a;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .preview-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #27272a;
+    }
+    
+    .preview-dot.red { background: #ef4444; }
+    .preview-dot.yellow { background: #eab308; }
+    .preview-dot.green { background: #22c55e; }
+    
+    .preview-content {
+      display: flex;
+      min-height: 400px;
+    }
+    
+    .preview-chat {
+      flex: 1;
+      padding: 1.5rem;
+      border-right: 1px solid #27272a;
+      opacity: 0.5;
+    }
+    
+    .preview-chat-msg {
+      margin-bottom: 1rem;
+    }
+    
+    .preview-chat-label {
+      font-size: 0.7rem;
+      color: #52525b;
+      margin-bottom: 0.375rem;
+    }
+    
+    .preview-chat-text {
+      font-size: 0.85rem;
+      color: #71717a;
+      line-height: 1.5;
+    }
+    
+    .preview-sidebar {
+      width: 320px;
+      padding: 1.25rem;
+      background: #0d0d0d;
+    }
+    
+    .preview-sidebar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid #1f1f23;
+    }
+    
+    .preview-logo {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    
+    .preview-status {
+      font-size: 0.7rem;
+      color: #4ade80;
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+    
+    .preview-status-dot {
+      width: 6px;
+      height: 6px;
+      background: #4ade80;
+      border-radius: 50%;
+    }
+    
+    .preview-card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 0.625rem;
+      padding: 0.875rem;
+      margin-bottom: 1rem;
+    }
+    
+    .preview-card-label {
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #52525b;
+      margin-bottom: 0.375rem;
+    }
+    
+    .preview-card-title {
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+    
+    .preview-card-meta {
+      font-size: 0.75rem;
+      color: #52525b;
+    }
+    
+    .preview-section-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.075em;
+      color: #52525b;
+      margin-bottom: 0.625rem;
+    }
+    
+    .preview-transform {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      background: #18181b;
+      border: 1px solid #3b82f6;
+      border-radius: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    .preview-transform-icon {
+      width: 28px;
+      height: 28px;
+      background: rgba(59, 130, 246, 0.2);
+      border-radius: 0.375rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #60a5fa;
+    }
+    
+    .preview-transform-text {
+      font-size: 0.8rem;
+      color: #e4e4e7;
+    }
+    
+    /* Features */
+    .features {
+      padding: 6rem 2rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    
+    .features-header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+    
+    .features-title {
+      font-size: 2rem;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      margin-bottom: 1rem;
+    }
+    
+    .features-subtitle {
+      color: #71717a;
+      font-size: 1.1rem;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+    }
+    
+    @media (max-width: 768px) {
+      .features-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    .feature-card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 1rem;
+      padding: 2rem;
+      transition: all 0.2s;
+    }
+    
+    .feature-card:hover {
+      border-color: #3f3f46;
+      transform: translateY(-2px);
+    }
+    
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      background: #27272a;
+      border-radius: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+      color: #a1a1aa;
+    }
+    
+    .feature-title {
+      font-size: 1.1rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+    
+    .feature-desc {
+      font-size: 0.9rem;
+      color: #71717a;
+      line-height: 1.6;
+    }
+    
+    /* How it works */
+    .how-it-works {
+      padding: 6rem 2rem;
+      background: #0d0d0d;
+    }
+    
+    .how-it-works-inner {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    .section-title {
+      font-size: 2rem;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+    
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 3rem;
+    }
+    
+    .step {
+      display: flex;
+      align-items: start;
+      gap: 2rem;
+    }
+    
+    .step-number {
+      width: 48px;
+      height: 48px;
+      background: #27272a;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    
+    .step-content {
+      padding-top: 0.25rem;
+    }
+    
+    .step-title {
+      font-size: 1.25rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+    
+    .step-desc {
+      color: #71717a;
+      line-height: 1.6;
+    }
+    
+    /* Pricing */
+    .pricing {
+      padding: 6rem 2rem;
+      max-width: 500px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    
+    .pricing-card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 1.5rem;
+      padding: 3rem 2.5rem;
+    }
+    
+    .pricing-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #71717a;
+      margin-bottom: 0.5rem;
+    }
+    
+    .pricing-amount {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 0.25rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    .pricing-currency {
+      font-size: 1.5rem;
+      color: #a1a1aa;
+    }
+    
+    .pricing-value {
+      font-size: 4rem;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+    }
+    
+    .pricing-period {
+      color: #71717a;
+      margin-bottom: 2rem;
+    }
+    
+    .pricing-features {
+      text-align: left;
+      margin-bottom: 2rem;
+    }
+    
+    .pricing-feature {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #27272a;
+      color: #d4d4d8;
+      font-size: 0.95rem;
+    }
+    
+    .pricing-feature:last-child {
+      border-bottom: none;
+    }
+    
+    .pricing-feature svg {
+      color: #4ade80;
+      flex-shrink: 0;
+    }
+    
+    .pricing-cta {
+      width: 100%;
+      padding: 1rem;
+      background: #fff;
+      color: #09090b;
+      border: none;
+      border-radius: 0.75rem;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .pricing-cta:hover {
+      background: #e4e4e7;
+    }
+    
+    /* Footer */
+    footer {
+      padding: 3rem 2rem;
+      border-top: 1px solid #1f1f23;
+      text-align: center;
+    }
+    
+    .footer-text {
+      font-size: 0.875rem;
+      color: #52525b;
+    }
+    
+    .footer-links {
+      margin-top: 1rem;
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+    }
+    
+    .footer-link {
+      font-size: 0.875rem;
+      color: #71717a;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    
+    .footer-link:hover {
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  
+  <nav>
+    <div class="nav-logo">echo</div>
+    <div class="nav-links">
+      <a href="#features" class="nav-link">Features</a>
+      <a href="#how-it-works" class="nav-link">How it works</a>
+      <a href="#pricing" class="nav-link">Pricing</a>
+      <a href="#" class="nav-cta">Get started</a>
+    </div>
+  </nav>
+  
+  <section class="hero">
+    <div class="hero-badge">
+      <div class="hero-badge-dot"></div>
+      Now in beta
+    </div>
+    
+    <h1 class="hero-title">
+      <span class="hero-title-gradient">Stop losing your best AI conversations</span>
+    </h1>
+    
+    <p class="hero-subtitle">
+      Echo captures every conversation across Claude, ChatGPT, and Gemini—then transforms them into insights, docs, and reusable context.
+    </p>
+    
+    <div class="hero-ctas">
+      <a href="#pricing" class="btn-primary">Start free trial</a>
+      <a href="#how-it-works" class="btn-secondary">See how it works</a>
+    </div>
+    
+    <div class="hero-preview">
+      <div class="preview-window">
+        <div class="preview-header">
+          <div class="preview-dot red"></div>
+          <div class="preview-dot yellow"></div>
+          <div class="preview-dot green"></div>
+        </div>
+        <div class="preview-content">
+          <div class="preview-chat">
+            <div class="preview-chat-msg">
+              <div class="preview-chat-label">You</div>
+              <div class="preview-chat-text">I keep running into this issue where my product specs don't translate cleanly into code...</div>
+            </div>
+            <div class="preview-chat-msg">
+              <div class="preview-chat-label">Claude</div>
+              <div class="preview-chat-text">You're describing what I'd call the Logic Layer Problem—the gap between product requirements and technical implementation...</div>
+            </div>
+            <div class="preview-chat-msg">
+              <div class="preview-chat-label">You</div>
+              <div class="preview-chat-text">That makes sense. So with BLoC, where exactly does that translation happen?</div>
+            </div>
+          </div>
+          <div class="preview-sidebar">
+            <div class="preview-sidebar-header">
+              <div class="preview-logo">echo</div>
+              <div class="preview-status">
+                <div class="preview-status-dot"></div>
+                Syncing
+              </div>
+            </div>
+            <div class="preview-card">
+              <div class="preview-card-label">This conversation</div>
+              <div class="preview-card-title">Flutter architecture deep dive</div>
+              <div class="preview-card-meta">47 messages · Claude</div>
+            </div>
+            <div class="preview-section-label">Transform into</div>
+            <div class="preview-transform">
+              <div class="preview-transform-icon">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+              <div class="preview-transform-text">Key Insights</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  
+  <section class="features" id="features">
+    <div class="features-header">
+      <h2 class="features-title">Your conversations, working for you</h2>
+      <p class="features-subtitle">Every insight you've ever reached with AI—searchable, transformable, portable.</p>
+    </div>
+    
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16m-7 6h7" />
+          </svg>
+        </div>
+        <h3 class="feature-title">All sources, one place</h3>
+        <p class="feature-desc">Claude, ChatGPT, Gemini—it doesn't matter where the conversation happened. Echo captures everything.</p>
+      </div>
+      
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
+        </div>
+        <h3 class="feature-title">Transform, don't just store</h3>
+        <p class="feature-desc">Turn conversations into key insights, strategy docs, blog drafts, or portable context profiles—one click.</p>
+      </div>
+      
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+          </svg>
+        </div>
+        <h3 class="feature-title">Context that travels</h3>
+        <p class="feature-desc">Extract your AI's primed state as JSON. Start fresh conversations that pick up exactly where you left off.</p>
+      </div>
+    </div>
+  </section>
+  
+  <section class="how-it-works" id="how-it-works">
+    <div class="how-it-works-inner">
+      <h2 class="section-title">How it works</h2>
+      
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h3 class="step-title">Install the extension</h3>
+            <p class="step-desc">Echo runs silently in the background while you chat. No copy-paste, no exports, no extra steps.</p>
+          </div>
+        </div>
+        
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h3 class="step-title">Keep using AI normally</h3>
+            <p class="step-desc">Chat with Claude, GPT, or Gemini like you always do. Echo captures your conversations automatically.</p>
+          </div>
+        </div>
+        
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h3 class="step-title">Transform when you need it</h3>
+            <p class="step-desc">Open the sidebar, pick a format, and transform any conversation into an artifact you can use.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  
+  <section class="pricing" id="pricing">
+    <div class="pricing-card">
+      <div class="pricing-label">Early access</div>
+      <div class="pricing-amount">
+        <span class="pricing-currency">$</span>
+        <span class="pricing-value">12</span>
+      </div>
+      <div class="pricing-period">per month</div>
+      
+      <div class="pricing-features">
+        <div class="pricing-feature">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          Unlimited conversation capture
+        </div>
+        <div class="pricing-feature">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          Claude, ChatGPT, and Gemini
+        </div>
+        <div class="pricing-feature">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          All transform types
+        </div>
+        <div class="pricing-feature">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          Custom prompts
+        </div>
+        <div class="pricing-feature">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          Export anytime
+        </div>
+      </div>
+      
+      <button class="pricing-cta" onclick="alert('→ Stripe Checkout')">Start 7-day free trial</button>
+    </div>
+  </section>
+  
+  <footer>
+    <p class="footer-text">© 2024 Echo. All rights reserved.</p>
+    <div class="footer-links">
+      <a href="#" class="footer-link">Privacy</a>
+      <a href="#" class="footer-link">Terms</a>
+      <a href="#" class="footer-link">Contact</a>
+    </div>
+  </footer>
+
+</body>
+</html>

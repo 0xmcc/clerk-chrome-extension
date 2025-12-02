@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>echo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #09090b;
+      color: #fff;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    
+    .app {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* Canvas - where generated UI appears */
+    .canvas {
+      flex: 1;
+      padding: 2rem;
+      padding-bottom: 120px;
+      overflow-y: auto;
+    }
+    
+    .canvas-empty {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #3f3f46;
+    }
+    
+    .canvas-empty-icon {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+    
+    .canvas-empty-text {
+      font-size: 0.875rem;
+    }
+    
+    .data-hint {
+      margin-top: 2rem;
+      padding: 1rem 1.5rem;
+      background: #18181b;
+      border-radius: 0.75rem;
+      font-size: 0.8rem;
+      color: #52525b;
+      text-align: center;
+      line-height: 1.6;
+    }
+    
+    .data-hint strong {
+      color: #71717a;
+    }
+    
+    /* Generated content area */
+    .generated-content {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    /* Prompt bar - fixed at bottom */
+    .prompt-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 1.5rem 2rem;
+      background: linear-gradient(to top, #09090b 80%, transparent);
+    }
+    
+    .prompt-container {
+      max-width: 640px;
+      margin: 0 auto;
+      position: relative;
+    }
+    
+    .prompt-input {
+      width: 100%;
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 1rem;
+      padding: 1rem 3rem 1rem 1.25rem;
+      font-size: 1rem;
+      color: #fff;
+      outline: none;
+      transition: all 0.2s;
+    }
+    
+    .prompt-input::placeholder {
+      color: #52525b;
+    }
+    
+    .prompt-input:focus {
+      border-color: #52525b;
+      box-shadow: 0 0 0 4px rgba(82, 82, 91, 0.1);
+    }
+    
+    .prompt-button {
+      position: absolute;
+      right: 0.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      padding: 0.5rem;
+      cursor: pointer;
+      color: #52525b;
+      transition: color 0.2s;
+    }
+    
+    .prompt-button:hover {
+      color: #fff;
+    }
+    
+    .prompt-button svg {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+    
+    /* Generating state */
+    .generating {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: #71717a;
+      font-size: 0.875rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .generating-dot {
+      width: 8px;
+      height: 8px;
+      background: #71717a;
+      border-radius: 50%;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+    
+    /* Generated views - examples of what AI might create */
+    
+    /* Timeline view */
+    .timeline {
+      position: relative;
+      padding-left: 2rem;
+    }
+    
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #27272a;
+    }
+    
+    .timeline-item {
+      position: relative;
+      padding-bottom: 2rem;
+    }
+    
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -2rem;
+      top: 0.5rem;
+      width: 10px;
+      height: 10px;
+      background: #09090b;
+      border: 2px solid #52525b;
+      border-radius: 50%;
+      transform: translateX(-50%);
+    }
+    
+    .timeline-date {
+      font-size: 0.75rem;
+      color: #52525b;
+      margin-bottom: 0.5rem;
+    }
+    
+    .timeline-content {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 0.75rem;
+      padding: 1rem;
+    }
+    
+    .timeline-title {
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      color: #e4e4e7;
+    }
+    
+    .timeline-text {
+      font-size: 0.875rem;
+      color: #a1a1aa;
+      line-height: 1.6;
+    }
+    
+    .timeline-source {
+      margin-top: 0.75rem;
+      font-size: 0.75rem;
+      color: #52525b;
+    }
+    
+    /* Cards grid view */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      transition: all 0.2s;
+    }
+    
+    .card:hover {
+      border-color: #3f3f46;
+    }
+    
+    .card-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #52525b;
+      margin-bottom: 0.5rem;
+    }
+    
+    .card-value {
+      font-size: 1.5rem;
+      font-weight: 300;
+      color: #fff;
+      margin-bottom: 0.25rem;
+    }
+    
+    .card-subtext {
+      font-size: 0.8rem;
+      color: #71717a;
+    }
+    
+    /* Report view */
+    .report {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+    
+    .report-header {
+      padding: 1.5rem;
+      border-bottom: 1px solid #27272a;
+    }
+    
+    .report-title {
+      font-size: 1.25rem;
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+    
+    .report-subtitle {
+      font-size: 0.875rem;
+      color: #71717a;
+    }
+    
+    .report-section {
+      padding: 1.5rem;
+      border-bottom: 1px solid #27272a;
+    }
+    
+    .report-section:last-child {
+      border-bottom: none;
+    }
+    
+    .report-section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #71717a;
+      margin-bottom: 1rem;
+    }
+    
+    .report-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #1f1f23;
+    }
+    
+    .report-item:last-child {
+      border-bottom: none;
+    }
+    
+    .report-item-text {
+      font-size: 0.9rem;
+      color: #d4d4d8;
+      flex: 1;
+      line-height: 1.5;
+    }
+    
+    .report-item-meta {
+      font-size: 0.75rem;
+      color: #52525b;
+      margin-left: 1rem;
+      white-space: nowrap;
+    }
+    
+    /* Topic bars */
+    .topic-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    
+    .topic-bar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    
+    .topic-label {
+      width: 140px;
+      font-size: 0.875rem;
+      color: #a1a1aa;
+      flex-shrink: 0;
+    }
+    
+    .topic-track {
+      flex: 1;
+      height: 8px;
+      background: #27272a;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    
+    .topic-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+    }
+    
+    .topic-count {
+      width: 40px;
+      font-size: 0.875rem;
+      color: #71717a;
+      text-align: right;
+    }
+    
+    /* View title */
+    .view-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #52525b;
+      margin-bottom: 1.5rem;
+    }
+    
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="canvas" id="canvas">
+      <!-- Empty state -->
+      <div class="canvas-empty" id="emptyState">
+        <svg class="canvas-empty-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        </svg>
+        <p class="canvas-empty-text">Ask anything about your data</p>
+        <div class="data-hint">
+          <strong>847 conversations</strong> from Claude, GPT-4, Gemini<br>
+          spanning Nov 2023 – Dec 2024
+        </div>
+      </div>
+      
+      <!-- Generated content appears here -->
+      <div class="generated-content hidden" id="generatedContent"></div>
+    </div>
+    
+    <div class="prompt-bar">
+      <div class="prompt-container">
+        <input 
+          type="text" 
+          class="prompt-input" 
+          id="promptInput"
+          placeholder="What do you want to see?"
+          autofocus
+        >
+        <button class="prompt-button" id="promptButton">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const emptyState = document.getElementById('emptyState');
+    const generatedContent = document.getElementById('generatedContent');
+    const promptInput = document.getElementById('promptInput');
+    const promptButton = document.getElementById('promptButton');
+    
+    // Example generated views
+    const views = {
+      'timeline': `
+        <div class="view-title">Timeline: Architecture Decisions</div>
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="timeline-date">Nov 15, 2024</div>
+            <div class="timeline-content">
+              <div class="timeline-title">Chose BLoC over Provider</div>
+              <div class="timeline-text">Decided BLoC provides clearer separation for the logic layer problem. Provider felt too implicit for complex state management.</div>
+              <div class="timeline-source">Claude · "Flutter architecture deep dive"</div>
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-date">Nov 8, 2024</div>
+            <div class="timeline-content">
+              <div class="timeline-title">Video-transcript sync approach</div>
+              <div class="timeline-text">Semantic chunking at sentence boundaries, not fixed time intervals. Map timestamp ranges to text spans for bi-directional sync.</div>
+              <div class="timeline-source">GPT-4 · "Building the workshop platform"</div>
+            </div>
+          </div>
+          <div class="timeline-item">
+            <div class="timeline-date">Oct 22, 2024</div>
+            <div class="timeline-content">
+              <div class="timeline-title">Local-first for personal data</div>
+              <div class="timeline-text">Cloud for sync, but local SQLite as source of truth. User should own their data, not just access it.</div>
+              <div class="timeline-source">Claude · "Personal data architecture"</div>
+            </div>
+          </div>
+        </div>
+      `,
+      
+      'topics': `
+        <div class="view-title">Topics You've Explored Most</div>
+        <div class="topic-bars">
+          <div class="topic-bar">
+            <div class="topic-label">Flutter / Dart</div>
+            <div class="topic-track"><div class="topic-fill" style="width: 85%"></div></div>
+            <div class="topic-count">127</div>
+          </div>
+          <div class="topic-bar">
+            <div class="topic-label">AI workflows</div>
+            <div class="topic-track"><div class="topic-fill" style="width: 72%"></div></div>
+            <div class="topic-count">108</div>
+          </div>
+          <div class="topic-bar">
+            <div class="topic-label">Architecture</div>
+            <div class="topic-track"><div class="topic-fill" style="width: 58%"></div></div>
+            <div class="topic-count">86</div>
+          </div>
+          <div class="topic-bar">
+            <div class="topic-label">Communication</div>
+            <div class="topic-track"><div class="topic-fill" style="width: 45%"></div></div>
+            <div class="topic-count">67</div>
+          </div>
+          <div class="topic-bar">
+            <div class="topic-label">Business strategy</div>
+            <div class="topic-track"><div class="topic-fill" style="width: 38%"></div></div>
+            <div class="topic-count">57</div>
+          </div>
+          <div class="topic-bar">
+            <div class="topic-label">Workshop design</div>
+            <div class="topic-track"><div class="topic-fill" style="width: 31%"></div></div>
+            <div class="topic-count">46</div>
+          </div>
+        </div>
+      `,
+      
+      'unresolved': `
+        <div class="report">
+          <div class="report-header">
+            <div class="report-title">Unresolved Questions</div>
+            <div class="report-subtitle">Things you've circled back to without resolution</div>
+          </div>
+          <div class="report-section">
+            <div class="report-section-title">Revisited 3+ times</div>
+            <div class="report-item">
+              <div class="report-item-text">How to price the three-session intensive course. Explored $500, $800, $1200 price points without deciding.</div>
+              <div class="report-item-meta">5 convos</div>
+            </div>
+            <div class="report-item">
+              <div class="report-item-text">Whether to build custom video player or use off-the-shelf. Concerns about transcript sync integration.</div>
+              <div class="report-item-meta">4 convos</div>
+            </div>
+            <div class="report-item">
+              <div class="report-item-text">Scaling strategy disagreement with Ray and Jhillika. You want faster growth, they prefer organic.</div>
+              <div class="report-item-meta">3 convos</div>
+            </div>
+          </div>
+          <div class="report-section">
+            <div class="report-section-title">Explored but not concluded</div>
+            <div class="report-item">
+              <div class="report-item-text">Invitation system UX for events. Multiple approaches discussed, none implemented.</div>
+              <div class="report-item-meta">Nov 12</div>
+            </div>
+            <div class="report-item">
+              <div class="report-item-text">How to handle auth in the workshop platform. Firebase vs custom vs Supabase auth.</div>
+              <div class="report-item-meta">Nov 3</div>
+            </div>
+          </div>
+        </div>
+      `,
+      
+      'stats': `
+        <div class="view-title">Your Data at a Glance</div>
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-label">Total Conversations</div>
+            <div class="card-value">847</div>
+            <div class="card-subtext">Since Nov 2023</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Most Active Source</div>
+            <div class="card-value">Claude</div>
+            <div class="card-subtext">62% of conversations</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Avg. Conversation Length</div>
+            <div class="card-value">23</div>
+            <div class="card-subtext">messages per thread</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Peak Day</div>
+            <div class="card-value">Nov 15</div>
+            <div class="card-subtext">14 conversations</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Extracted Insights</div>
+            <div class="card-value">12.4k</div>
+            <div class="card-subtext">searchable moments</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Unique Topics</div>
+            <div class="card-value">89</div>
+            <div class="card-subtext">auto-categorized</div>
+          </div>
+        </div>
+      `
+    };
+    
+    // Match query to view
+    function getViewForQuery(query) {
+      const q = query.toLowerCase();
+      if (q.includes('timeline') || q.includes('decision') || q.includes('architecture')) return 'timeline';
+      if (q.includes('topic') || q.includes('most') || q.includes('explore')) return 'topics';
+      if (q.includes('unresolved') || q.includes('stuck') || q.includes('circle') || q.includes('question')) return 'unresolved';
+      if (q.includes('stat') || q.includes('overview') || q.includes('summary') || q.includes('glance')) return 'stats';
+      return 'stats'; // default
+    }
+    
+    function generate() {
+      const query = promptInput.value.trim();
+      if (!query) return;
+      
+      emptyState.classList.add('hidden');
+      generatedContent.classList.remove('hidden');
+      generatedContent.innerHTML = `
+        <div class="generating">
+          <div class="generating-dot"></div>
+          Generating view...
+        </div>
+      `;
+      
+      setTimeout(() => {
+        const viewKey = getViewForQuery(query);
+        generatedContent.innerHTML = views[viewKey];
+      }, 1000);
+      
+      promptInput.value = '';
+    }
+    
+    promptInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') generate();
+    });
+    
+    promptButton.addEventListener('click', generate);
+  </script>
+</body>
+</html>

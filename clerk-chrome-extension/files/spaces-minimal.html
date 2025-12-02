@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spaces</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    
+    .logo {
+      font-size: 1.125rem;
+      font-weight: 600;
+    }
+    
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    
+    .sync-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: #4ade80;
+    }
+    
+    .sync-dot {
+      width: 6px;
+      height: 6px;
+      background: #4ade80;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #c2410c, #ea580c);
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    
+    /* Main */
+    .main {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 3rem 2rem;
+    }
+    
+    .page-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    
+    .page-subtitle {
+      color: #52525b;
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+    
+    /* Filter tabs */
+    .filters {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    
+    .filter-tab {
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      color: #52525b;
+      background: none;
+      border: none;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.15s;
+    }
+    
+    .filter-tab:hover {
+      color: #a1a1aa;
+    }
+    
+    .filter-tab.active {
+      color: #fff;
+    }
+    
+    .filter-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #fff;
+    }
+    
+    .filter-count {
+      color: #3f3f46;
+      margin-left: 0.375rem;
+    }
+    
+    /* Conversation list */
+    .convo-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    
+    .convo-item {
+      display: flex;
+      align-items: start;
+      gap: 1rem;
+      padding: 1rem;
+      background: #111;
+      border: 1px solid #1a1a1a;
+      border-radius: 0.75rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    
+    .convo-item:hover {
+      border-color: #252525;
+      background: #141414;
+    }
+    
+    .convo-source {
+      width: 36px;
+      height: 36px;
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    
+    .convo-source.claude { background: rgba(249, 115, 22, 0.15); color: #fb923c; }
+    .convo-source.gpt { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .convo-source.gemini { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    
+    .convo-content {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .convo-title {
+      font-size: 0.95rem;
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .convo-preview {
+      font-size: 0.85rem;
+      color: #52525b;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    
+    .convo-meta {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-top: 0.5rem;
+      font-size: 0.75rem;
+      color: #3f3f46;
+    }
+    
+    .convo-actions {
+      display: flex;
+      gap: 0.375rem;
+      flex-shrink: 0;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    
+    .convo-item:hover .convo-actions {
+      opacity: 1;
+    }
+    
+    .convo-action {
+      padding: 0.5rem 0.75rem;
+      background: #1f1f1f;
+      border: 1px solid #2a2a2a;
+      border-radius: 0.375rem;
+      color: #a1a1aa;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    
+    .convo-action:hover {
+      background: #252525;
+      color: #fff;
+    }
+    
+    .convo-action.primary {
+      background: #fff;
+      border-color: #fff;
+      color: #0a0a0a;
+    }
+    
+    .convo-action.primary:hover {
+      background: #e4e4e7;
+    }
+    
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+    }
+    
+    .empty-icon {
+      width: 64px;
+      height: 64px;
+      background: #1a1a1a;
+      border-radius: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem;
+      color: #3f3f46;
+    }
+    
+    .empty-title {
+      font-size: 1.125rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+    
+    .empty-text {
+      color: #52525b;
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .empty-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.25rem;
+      background: #fff;
+      color: #0a0a0a;
+      border: none;
+      border-radius: 0.5rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    
+    .empty-cta:hover {
+      background: #e4e4e7;
+    }
+    
+    /* Extension prompt banner */
+    .extension-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.25rem;
+      background: linear-gradient(135deg, #1a1a1a, #141414);
+      border: 1px solid #252525;
+      border-radius: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .extension-banner-text {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    
+    .extension-banner-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .extension-banner-title {
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    
+    .extension-banner-subtitle {
+      font-size: 0.8rem;
+      color: #52525b;
+    }
+    
+    .extension-banner-cta {
+      padding: 0.5rem 1rem;
+      background: #fff;
+      color: #0a0a0a;
+      border: none;
+      border-radius: 0.375rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    
+    .extension-banner-cta:hover {
+      background: #e4e4e7;
+    }
+    
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  
+  <header class="header">
+    <div class="logo">spaces</div>
+    <div class="header-right">
+      <div class="sync-status">
+        <div class="sync-dot"></div>
+        Extension active
+      </div>
+      <div class="user-avatar">M</div>
+    </div>
+  </header>
+  
+  <main class="main">
+    <h1 class="page-title">Conversations</h1>
+    <p class="page-subtitle">847 captured across 3 sources</p>
+    
+    <!-- Show this if extension not installed -->
+    <div class="extension-banner hidden">
+      <div class="extension-banner-text">
+        <div class="extension-banner-icon">
+          <svg width="18" height="18" fill="none" stroke="#fff" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </div>
+        <div>
+          <div class="extension-banner-title">Install the Chrome extension</div>
+          <div class="extension-banner-subtitle">Automatically capture conversations as you chat</div>
+        </div>
+      </div>
+      <button class="extension-banner-cta">Install</button>
+    </div>
+    
+    <div class="filters">
+      <button class="filter-tab active">All<span class="filter-count">847</span></button>
+      <button class="filter-tab">Claude<span class="filter-count">523</span></button>
+      <button class="filter-tab">ChatGPT<span class="filter-count">284</span></button>
+      <button class="filter-tab">Gemini<span class="filter-count">40</span></button>
+    </div>
+    
+    <div class="convo-list">
+      <div class="convo-item">
+        <div class="convo-source claude">C</div>
+        <div class="convo-content">
+          <div class="convo-title">Personal data lake product spec</div>
+          <div class="convo-preview">Discussion about Chrome extension architecture and transformation workflows</div>
+          <div class="convo-meta">
+            <span>39 messages</span>
+            <span>2 hours ago</span>
+          </div>
+        </div>
+        <div class="convo-actions">
+          <button class="convo-action">View</button>
+          <button class="convo-action primary">Transform</button>
+        </div>
+      </div>
+      
+      <div class="convo-item">
+        <div class="convo-source claude">C</div>
+        <div class="convo-content">
+          <div class="convo-title">Flutter BLoC architecture deep dive</div>
+          <div class="convo-preview">Explored the Logic Layer Problem and state management approaches</div>
+          <div class="convo-meta">
+            <span>47 messages</span>
+            <span>Yesterday</span>
+          </div>
+        </div>
+        <div class="convo-actions">
+          <button class="convo-action">View</button>
+          <button class="convo-action primary">Transform</button>
+        </div>
+      </div>
+      
+      <div class="convo-item">
+        <div class="convo-source gpt">G</div>
+        <div class="convo-content">
+          <div class="convo-title">Video transcript sync approach</div>
+          <div class="convo-preview">Semantic chunking at sentence boundaries for bi-directional sync</div>
+          <div class="convo-meta">
+            <span>28 messages</span>
+            <span>2 days ago</span>
+          </div>
+        </div>
+        <div class="convo-actions">
+          <button class="convo-action">View</button>
+          <button class="convo-action primary">Transform</button>
+        </div>
+      </div>
+      
+      <div class="convo-item">
+        <div class="convo-source claude">C</div>
+        <div class="convo-content">
+          <div class="convo-title">Pricing strategy for intensives</div>
+          <div class="convo-preview">Explored price points for three-session intensive course format</div>
+          <div class="convo-meta">
+            <span>31 messages</span>
+            <span>3 days ago</span>
+          </div>
+        </div>
+        <div class="convo-actions">
+          <button class="convo-action">View</button>
+          <button class="convo-action primary">Transform</button>
+        </div>
+      </div>
+      
+      <div class="convo-item">
+        <div class="convo-source gemini">G</div>
+        <div class="convo-content">
+          <div class="convo-title">React vs Flutter for web dashboard</div>
+          <div class="convo-preview">Comparing frameworks for the analytics dashboard component</div>
+          <div class="convo-meta">
+            <span>19 messages</span>
+            <span>4 days ago</span>
+          </div>
+        </div>
+        <div class="convo-actions">
+          <button class="convo-action">View</button>
+          <button class="convo-action primary">Transform</button>
+        </div>
+      </div>
+      
+      <div class="convo-item">
+        <div class="convo-source claude">C</div>
+        <div class="convo-content">
+          <div class="convo-title">Workshop curriculum structure</div>
+          <div class="convo-preview">Designing the 3-hour vibecoding workshop flow</div>
+          <div class="convo-meta">
+            <span>52 messages</span>
+            <span>5 days ago</span>
+          </div>
+        </div>
+        <div class="convo-actions">
+          <button class="convo-action">View</button>
+          <button class="convo-action primary">Transform</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+</body>
+</html>

@@ -27,6 +27,24 @@ type ChatEntry = {
   text: string
 }
 
+const DARK_THEME = {
+  background: "#0a0d14",
+  surface: "#0f141e",
+  panel: "#111827",
+  border: "#1f2532",
+  text: "#e5e7eb",
+  muted: "#94a3b8",
+  accent: "#cbd5e1",
+  accentAlt: "linear-gradient(135deg, #283040 0%, #151924 100%)",
+  panelShadow: "-4px 0 30px rgba(0, 0, 0, 0.4)",
+  input: "#0c101b",
+  chip: "#1f2937",
+  code: "#0f172a",
+  danger: "#f87171",
+  success: "#34d399",
+  glow: "0 8px 22px rgba(0, 0, 0, 0.45)"
+}
+
 marked.setOptions({
   gfm: true,
   breaks: true
@@ -707,8 +725,9 @@ Please provide your analysis in markdown format with clear section headings.`
         right: 0,
         bottom: 0,
         width: "400px",
-        backgroundColor: "#ffffff",
-        boxShadow: "-4px 0 24px rgba(0, 0, 0, 0.15)",
+        backgroundColor: DARK_THEME.background,
+        color: DARK_THEME.text,
+        boxShadow: DARK_THEME.panelShadow,
         zIndex: 9999,
         display: "flex",
         flexDirection: "column",
@@ -718,11 +737,11 @@ Please provide your analysis in markdown format with clear section headings.`
       <div
         style={{
           padding: "16px 20px",
-          borderBottom: "1px solid #e5e7eb",
-          backgroundColor: "#f9fafb"
+          borderBottom: `1px solid ${DARK_THEME.border}`,
+          backgroundColor: DARK_THEME.surface
         }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#111827" }}>
+          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: DARK_THEME.text }}>
             {platformLabelRef.current} Export
           </h2>
           <button
@@ -732,14 +751,14 @@ Please provide your analysis in markdown format with clear section headings.`
               border: "none",
               fontSize: "24px",
               cursor: "pointer",
-              color: "#6b7280",
+              color: DARK_THEME.muted,
               padding: "0 4px",
               lineHeight: 1
             }}>
             ×
           </button>
         </div>
-        <div style={{ marginTop: "8px", fontSize: "12px", color: "#6b7280" }}>
+        <div style={{ marginTop: "8px", fontSize: "12px", color: DARK_THEME.muted }}>
           {selectedIds.size} of {messages.length} messages selected
         </div>
       </div>
@@ -752,8 +771,8 @@ Please provide your analysis in markdown format with clear section headings.`
             alignItems: "center",
             gap: "10px",
             padding: "12px 20px",
-            borderBottom: "1px solid #e5e7eb",
-            backgroundColor: "#f9fafb"
+            borderBottom: `1px solid ${DARK_THEME.border}`,
+            backgroundColor: DARK_THEME.surface
           }}>
           <button
             onClick={() => setAnalyzeMode(false)}
@@ -762,18 +781,18 @@ Please provide your analysis in markdown format with clear section headings.`
               background: "none",
               cursor: "pointer",
               fontSize: "18px",
-              color: "#4b5563"
+              color: DARK_THEME.muted
             }}>
             ←
           </button>
-          <div style={{ fontWeight: 700, color: "#111827" }}>AI Analysis</div>
+          <div style={{ fontWeight: 700, color: DARK_THEME.text }}>AI Analysis</div>
         </div>
       ) : (
         <div
           style={{
             display: "flex",
-            borderBottom: "1px solid #e5e7eb",
-            backgroundColor: "#f9fafb"
+            borderBottom: `1px solid ${DARK_THEME.border}`,
+            backgroundColor: DARK_THEME.surface
           }}>
           <button
             onClick={() => setPreviewTab("markdown")}
@@ -781,27 +800,27 @@ Please provide your analysis in markdown format with clear section headings.`
               flex: 1,
               padding: "12px",
               border: "none",
-              background: previewTab === "markdown" ? "#ffffff" : "transparent",
-              borderBottom: previewTab === "markdown" ? "2px solid #667eea" : "2px solid transparent",
+              background: previewTab === "markdown" ? DARK_THEME.panel : "transparent",
+              borderBottom: previewTab === "markdown" ? `2px solid ${DARK_THEME.accent}` : "2px solid transparent",
               cursor: "pointer",
               fontSize: "14px",
               fontWeight: 500,
-              color: previewTab === "markdown" ? "#667eea" : "#6b7280"
+              color: previewTab === "markdown" ? DARK_THEME.accent : DARK_THEME.muted
           }}>
           Conversation View
         </button>
         <button
           onClick={() => setPreviewTab("json")}
-          style={{
-            flex: 1,
-              padding: "12px",
-              border: "none",
-              background: previewTab === "json" ? "#ffffff" : "transparent",
-              borderBottom: previewTab === "json" ? "2px solid #667eea" : "2px solid transparent",
-              cursor: "pointer",
-            fontSize: "14px",
-            fontWeight: 500,
-            color: previewTab === "json" ? "#667eea" : "#6b7280"
+            style={{
+              flex: 1,
+                padding: "12px",
+                border: "none",
+                background: previewTab === "json" ? DARK_THEME.panel : "transparent",
+                borderBottom: previewTab === "json" ? `2px solid ${DARK_THEME.accent}` : "2px solid transparent",
+                cursor: "pointer",
+              fontSize: "14px",
+              fontWeight: 500,
+              color: previewTab === "json" ? DARK_THEME.accent : DARK_THEME.muted
           }}>
           Settings
         </button>
@@ -814,7 +833,7 @@ Please provide your analysis in markdown format with clear section headings.`
         flex: 1,
         overflow: "auto",
         padding: "20px",
-        backgroundColor: "#ffffff"
+        backgroundColor: DARK_THEME.panel
       }}>
         <style>{`
           .analysis-markdown h1 { font-size: 18px; margin: 10px 0 6px; font-weight: 700; }
@@ -826,7 +845,7 @@ Please provide your analysis in markdown format with clear section headings.`
           .analysis-markdown strong { font-weight: 700; }
         `}</style>
         {selectedIds.size === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px 20px", color: "#9ca3af" }}>
+          <div style={{ textAlign: "center", padding: "40px 20px", color: DARK_THEME.muted }}>
             <div style={{ fontSize: "48px", marginBottom: "16px" }}>📋</div>
             <p style={{ margin: 0, fontSize: "14px" }}>
               No messages selected yet.
@@ -835,7 +854,7 @@ Please provide your analysis in markdown format with clear section headings.`
             </p>
           </div>
         ) : (
-          <div style={{ fontSize: "14px", lineHeight: 1.6, color: "#374151" }}>
+          <div style={{ fontSize: "14px", lineHeight: 1.6, color: DARK_THEME.text }}>
             {analyzeMode ? (
               <div
                 style={{
@@ -857,13 +876,13 @@ Please provide your analysis in markdown format with clear section headings.`
                     position: "absolute",
                     top: "0",
                     right: "0",
-                    background: "transparent",
-                    border: "1px solid #e5e7eb",
+                    background: DARK_THEME.panel,
+                    border: `1px solid ${DARK_THEME.border}`,
                     borderRadius: "6px",
                     padding: "6px 10px",
                     cursor: "pointer",
                     fontSize: "11px",
-                    color: "#6b7280",
+                    color: DARK_THEME.muted,
                     display: "flex",
                     alignItems: "center",
                     gap: "4px",
@@ -871,14 +890,14 @@ Please provide your analysis in markdown format with clear section headings.`
                     zIndex: 10
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "#f9fafb"
-                    e.currentTarget.style.borderColor = "#d1d5db"
-                    e.currentTarget.style.color = "#374151"
+                    e.currentTarget.style.background = DARK_THEME.surface
+                    e.currentTarget.style.borderColor = DARK_THEME.accent
+                    e.currentTarget.style.color = DARK_THEME.text
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "transparent"
-                    e.currentTarget.style.borderColor = "#e5e7eb"
-                    e.currentTarget.style.color = "#6b7280"
+                    e.currentTarget.style.background = DARK_THEME.panel
+                    e.currentTarget.style.borderColor = DARK_THEME.border
+                    e.currentTarget.style.color = DARK_THEME.muted
                   }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="3" />
@@ -896,21 +915,21 @@ Please provide your analysis in markdown format with clear section headings.`
                     padding: "4px 2px"
                   }}>
                   {analysisMessages.length === 0 ? (
-                    <div style={{ color: "#9ca3af", fontSize: "13px" }}>Analyzing...</div>
+                    <div style={{ color: DARK_THEME.muted, fontSize: "13px" }}>Analyzing...</div>
                   ) : (
                     analysisMessages.map((m) => (
                       <div
                         key={m.id}
                         style={{
                           alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                          background: m.role === "user" ? "#eef2ff" : "transparent",
-                          color: "#1f2937",
-                          padding: m.role === "user" ? "10px 12px" : "2px",
-                          borderRadius: m.role === "user" ? "16px 16px 4px 16px" : "0",
+                          background: m.role === "user" ? DARK_THEME.accentAlt : DARK_THEME.surface,
+                          color: m.role === "user" ? "#f8fafc" : DARK_THEME.text,
+                          padding: "10px 12px",
+                          borderRadius: m.role === "user" ? "16px 16px 4px 16px" : "12px 12px 12px 4px",
                           maxWidth: "100%",
                           lineHeight: 1.5,
-                          border: m.role === "user" ? "1px solid #e5e7eb" : "none",
-                          boxShadow: m.role === "user" ? "0 4px 10px rgba(0,0,0,0.06)" : "none"
+                          border: `1px solid ${DARK_THEME.border}`,
+                          boxShadow: m.role === "user" ? "0 4px 12px rgba(0,0,0,0.25)" : "0 4px 12px rgba(0,0,0,0.15)"
                         }}>
                         {m.role === "assistant" ? (
                           <div
@@ -940,12 +959,12 @@ Please provide your analysis in markdown format with clear section headings.`
                     value={historyFormat}
                     onChange={(e) => handleHistoryMenuChange(e.target.value as any)}
                     style={{
-                      border: "1px solid #d1d5db",
+                      border: `1px solid ${DARK_THEME.border}`,
                       borderRadius: "10px",
                       padding: "6px 12px",
                       fontSize: "12px",
-                      background: "#f9fafb",
-                      color: "#374151",
+                      background: DARK_THEME.surface,
+                      color: DARK_THEME.text,
                       minWidth: "140px"
                     }}>
                     {historyMenuOptions.map((opt) => (
@@ -961,12 +980,12 @@ Please provide your analysis in markdown format with clear section headings.`
                     disabled={selectedIds.size === 0}
                     title="Copy to clipboard"
                     style={{
-                      border: "1px solid #d1d5db",
+                      border: `1px solid ${DARK_THEME.border}`,
                       borderRadius: "10px",
                       padding: "8px 12px",
                       fontSize: "12px",
-                      background: selectedIds.size === 0 ? "#f3f4f6" : "#f9fafb",
-                      color: selectedIds.size === 0 ? "#9ca3af" : "#374151",
+                      background: selectedIds.size === 0 ? DARK_THEME.surface : DARK_THEME.panel,
+                      color: selectedIds.size === 0 ? DARK_THEME.muted : DARK_THEME.text,
                       cursor: selectedIds.size === 0 ? "not-allowed" : "pointer",
                       display: "flex",
                       alignItems: "center",
@@ -975,14 +994,14 @@ Please provide your analysis in markdown format with clear section headings.`
                     }}
                     onMouseEnter={(e) => {
                       if (selectedIds.size > 0) {
-                        e.currentTarget.style.background = "#e5e7eb"
-                        e.currentTarget.style.borderColor = "#9ca3af"
+                        e.currentTarget.style.background = DARK_THEME.surface
+                        e.currentTarget.style.borderColor = DARK_THEME.accent
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (selectedIds.size > 0) {
-                        e.currentTarget.style.background = "#f9fafb"
-                        e.currentTarget.style.borderColor = "#d1d5db"
+                        e.currentTarget.style.background = DARK_THEME.panel
+                        e.currentTarget.style.borderColor = DARK_THEME.border
                       }
                     }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -998,12 +1017,12 @@ Please provide your analysis in markdown format with clear section headings.`
                     disabled={selectedIds.size === 0 || exportState === "loading"}
                     title="Export to PromptMarket"
                     style={{
-                      border: "1px solid #d1d5db",
+                      border: `1px solid ${DARK_THEME.border}`,
                       borderRadius: "10px",
                       padding: "8px 12px",
                       fontSize: "12px",
-                      background: selectedIds.size === 0 || exportState === "loading" ? "#f3f4f6" : "#f9fafb",
-                      color: selectedIds.size === 0 || exportState === "loading" ? "#9ca3af" : "#374151",
+                      background: selectedIds.size === 0 || exportState === "loading" ? DARK_THEME.surface : DARK_THEME.panel,
+                      color: selectedIds.size === 0 || exportState === "loading" ? DARK_THEME.muted : DARK_THEME.text,
                       cursor: selectedIds.size === 0 || exportState === "loading" ? "not-allowed" : "pointer",
                       display: "flex",
                       alignItems: "center",
@@ -1012,14 +1031,14 @@ Please provide your analysis in markdown format with clear section headings.`
                     }}
                     onMouseEnter={(e) => {
                       if (selectedIds.size > 0 && exportState !== "loading") {
-                        e.currentTarget.style.background = "#e5e7eb"
-                        e.currentTarget.style.borderColor = "#9ca3af"
+                        e.currentTarget.style.background = DARK_THEME.surface
+                        e.currentTarget.style.borderColor = DARK_THEME.accent
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (selectedIds.size > 0 && exportState !== "loading") {
-                        e.currentTarget.style.background = "#f9fafb"
-                        e.currentTarget.style.borderColor = "#d1d5db"
+                        e.currentTarget.style.background = DARK_THEME.panel
+                        e.currentTarget.style.borderColor = DARK_THEME.border
                       }
                     }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1036,21 +1055,23 @@ Please provide your analysis in markdown format with clear section headings.`
                       whiteSpace: "pre-wrap",
                       wordBreak: "break-word",
                       fontFamily: "inherit",
-                      margin: 0
+                      margin: 0,
+                      color: DARK_THEME.text
                     }}>
                     {generateHistory()}
                   </pre>
                 ) : (
                   <pre
                     style={{
-                      background: "#f3f4f6",
+                      background: DARK_THEME.code,
                       padding: "12px",
                       borderRadius: "8px",
-                      border: "1px solid #e5e7eb",
+                      border: `1px solid ${DARK_THEME.border}`,
                       overflow: "auto",
                       fontSize: "12px",
                       margin: 0,
-                      fontFamily: "monospace"
+                      fontFamily: "monospace",
+                      color: DARK_THEME.text
                     }}>
                     {generateHistory()}
                   </pre>
@@ -1066,7 +1087,7 @@ Please provide your analysis in markdown format with clear section headings.`
                         display: "block",
                         fontSize: "13px",
                         fontWeight: 600,
-                        color: "#374151"
+                        color: DARK_THEME.text
                       }}>
                       Analysis System Prompt
                     </label>
@@ -1079,10 +1100,10 @@ Please provide your analysis in markdown format with clear section headings.`
                         setAnalysisLocked((prev) => !prev)
                       }}
                       style={{
-                        border: "1px solid #d1d5db",
+                        border: `1px solid ${DARK_THEME.border}`,
                         borderRadius: "6px",
-                        background: analysisLocked ? "#f3f4f6" : "#ffffff",
-                        color: "#4b5563",
+                        background: analysisLocked ? DARK_THEME.surface : DARK_THEME.panel,
+                        color: DARK_THEME.text,
                         padding: "4px 8px",
                         fontSize: "12px",
                         cursor: "pointer"
@@ -1096,13 +1117,13 @@ Please provide your analysis in markdown format with clear section headings.`
                         style={{
                           position: "absolute",
                           inset: 0,
-                          background: "rgba(249, 250, 251, 0.6)",
+                          background: "rgba(15, 23, 42, 0.7)",
                           borderRadius: "6px",
-                          border: "1px solid #e5e7eb",
+                          border: `1px solid ${DARK_THEME.border}`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          color: "#6b7280",
+                          color: DARK_THEME.muted,
                           fontSize: "12px",
                           pointerEvents: "none"
                         }}>
@@ -1119,15 +1140,16 @@ Please provide your analysis in markdown format with clear section headings.`
                       disabled={analysisLocked}
                       style={{
                         width: "100%",
-                        background: analysisLocked ? "#f9fafb" : "#ffffff",
+                        background: analysisLocked ? DARK_THEME.surface : DARK_THEME.input,
                         padding: "12px",
                         borderRadius: "6px",
-                        border: "1px solid #d1d5db",
+                        border: `1px solid ${DARK_THEME.border}`,
                         fontSize: "13px",
                         fontFamily: "system-ui, -apple-system, sans-serif",
                         resize: "vertical",
                         minHeight: "150px",
-                        lineHeight: "1.5"
+                        lineHeight: "1.5",
+                        color: DARK_THEME.text
                       }}
                     />
                   </div>
@@ -1141,7 +1163,7 @@ Please provide your analysis in markdown format with clear section headings.`
                         display: "block",
                         fontSize: "13px",
                         fontWeight: 600,
-                        color: "#374151"
+                        color: DARK_THEME.text
                       }}>
                       Follow-up System Prompt
                     </label>
@@ -1154,10 +1176,10 @@ Please provide your analysis in markdown format with clear section headings.`
                         setFollowupLocked((prev) => !prev)
                       }}
                       style={{
-                        border: "1px solid #d1d5db",
+                        border: `1px solid ${DARK_THEME.border}`,
                         borderRadius: "6px",
-                        background: followupLocked ? "#f3f4f6" : "#ffffff",
-                        color: "#4b5563",
+                        background: followupLocked ? DARK_THEME.surface : DARK_THEME.panel,
+                        color: DARK_THEME.text,
                         padding: "4px 8px",
                         fontSize: "12px",
                         cursor: "pointer"
@@ -1171,13 +1193,13 @@ Please provide your analysis in markdown format with clear section headings.`
                         style={{
                           position: "absolute",
                           inset: 0,
-                          background: "rgba(249, 250, 251, 0.6)",
+                          background: "rgba(15, 23, 42, 0.7)",
                           borderRadius: "6px",
-                          border: "1px solid #e5e7eb",
+                          border: `1px solid ${DARK_THEME.border}`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          color: "#6b7280",
+                          color: DARK_THEME.muted,
                           fontSize: "12px",
                           pointerEvents: "none"
                         }}>
@@ -1194,15 +1216,16 @@ Please provide your analysis in markdown format with clear section headings.`
                       disabled={followupLocked}
                       style={{
                         width: "100%",
-                        background: followupLocked ? "#f9fafb" : "#ffffff",
+                        background: followupLocked ? DARK_THEME.surface : DARK_THEME.input,
                         padding: "12px",
                         borderRadius: "6px",
-                        border: "1px solid #d1d5db",
+                        border: `1px solid ${DARK_THEME.border}`,
                         fontSize: "13px",
                         fontFamily: "system-ui, -apple-system, sans-serif",
                         resize: "vertical",
                         minHeight: "100px",
-                        lineHeight: "1.5"
+                        lineHeight: "1.5",
+                        color: DARK_THEME.text
                       }}
                     />
                   </div>
@@ -1215,7 +1238,7 @@ Please provide your analysis in markdown format with clear section headings.`
                       display: "block",
                       fontSize: "13px",
                       fontWeight: 600,
-                      color: "#374151",
+                      color: DARK_THEME.text,
                       marginBottom: "8px"
                     }}>
                     Personal Context (JSON)
@@ -1229,18 +1252,19 @@ Please provide your analysis in markdown format with clear section headings.`
                     placeholder='{"business_goals": ["..."], "communication_style": "...", "expertise": ["..."]}'
                     style={{
                       width: "100%",
-                      background: "#ffffff",
+                      background: DARK_THEME.input,
                       padding: "12px",
                       borderRadius: "6px",
-                      border: "1px solid #d1d5db",
+                      border: `1px solid ${DARK_THEME.border}`,
                       fontSize: "12px",
                       fontFamily: "monospace",
                       resize: "vertical",
                       minHeight: "120px",
-                      lineHeight: "1.5"
+                      lineHeight: "1.5",
+                      color: DARK_THEME.text
                     }}
                   />
-                  <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "6px" }}>
+                  <div style={{ fontSize: "11px", color: DARK_THEME.muted, marginTop: "6px" }}>
                     Add JSON context about yourself that will be included in analysis prompts
                   </div>
                 </div>
@@ -1387,8 +1411,8 @@ Please provide your analysis in markdown format with clear section headings.`
       <div
         style={{
           padding: "16px 20px",
-          borderTop: "1px solid #e5e7eb",
-          backgroundColor: "#f9fafb",
+          borderTop: `1px solid ${DARK_THEME.border}`,
+          backgroundColor: DARK_THEME.surface,
           display: "flex",
           gap: "12px",
           flexDirection: analyzeMode ? "column" : "row"
@@ -1411,10 +1435,11 @@ Please provide your analysis in markdown format with clear section headings.`
                   flex: 1,
                   padding: "10px",
                   borderRadius: "10px",
-                  border: "1px solid #d1d5db",
+                  border: `1px solid ${DARK_THEME.border}`,
                   fontSize: "13px",
                   resize: "vertical",
-                  background: "#ffffff"
+                  background: DARK_THEME.input,
+                  color: DARK_THEME.text
                 }}
               />
               <button
@@ -1422,12 +1447,12 @@ Please provide your analysis in markdown format with clear section headings.`
                 style={{
                   padding: "10px 12px",
                   borderRadius: "10px",
-                  border: "1px solid #d1d5db",
-                  background: "#ffffff",
+                  border: `1px solid ${DARK_THEME.border}`,
+                  background: DARK_THEME.panel,
                   cursor: "pointer",
                   fontSize: "13px",
                   fontWeight: 600,
-                  color: "#374151",
+                  color: DARK_THEME.text,
                   minWidth: "48px",
                   display: "flex",
                   alignItems: "center",
@@ -1439,7 +1464,7 @@ Please provide your analysis in markdown format with clear section headings.`
                   height="16"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="#4b5563"
+                  stroke={DARK_THEME.text}
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round">
@@ -1448,20 +1473,20 @@ Please provide your analysis in markdown format with clear section headings.`
                 </svg>
               </button>
             </div>
-            <button
-              onClick={() => setAnalyzeMode(false)}
-              style={{
-                flex: 1,
-                padding: "12px",
-                borderRadius: "8px",
-                border: "1px solid #d1d5db",
-                background: "#ffffff",
-                color: "#374151",
-                cursor: "pointer",
-                fontSize: "14px",
-                fontWeight: 600
-              }}>
-              Back to export tools
+              <button
+                onClick={() => setAnalyzeMode(false)}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: "8px",
+                  border: `1px solid ${DARK_THEME.border}`,
+                  background: DARK_THEME.panel,
+                  color: DARK_THEME.text,
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: 600
+                }}>
+                Back to export tools
             </button>
           </>
         ) : (
@@ -1475,13 +1500,13 @@ Please provide your analysis in markdown format with clear section headings.`
               border: "none",
               background:
                 selectedIds.size === 0
-                  ? "#9ca3af"
-                  : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  ? DARK_THEME.border
+                  : DARK_THEME.accentAlt,
               color: "#ffffff",
               cursor: selectedIds.size === 0 ? "not-allowed" : "pointer",
               fontSize: "15px",
               fontWeight: 600,
-              boxShadow: "0 8px 20px rgba(103, 126, 234, 0.35)",
+              boxShadow: DARK_THEME.glow,
               opacity: selectedIds.size === 0 ? 0.7 : 1
             }}>
             Analyze this conversation
@@ -1493,7 +1518,7 @@ Please provide your analysis in markdown format with clear section headings.`
           style={{
             padding: "0 20px 16px",
             fontSize: "12px",
-            color: exportState === "error" ? "#b91c1c" : "#065f46"
+            color: exportState === "error" ? DARK_THEME.danger : DARK_THEME.success
           }}>
           {statusMessage}
         </div>
