@@ -87,7 +87,7 @@ export const FloatingButton = ({ onOpenExporter }: FloatingButtonProps) => {
           fontSize: "20px",
           color: "white",
           cursor: "pointer",
-          zIndex: 10000,
+          zIndex: 9998,
           boxShadow: "0 4px 20px rgba(0, 0, 0, 0.15)",
           transition: "all 0.3s ease",
           opacity: 0.7,

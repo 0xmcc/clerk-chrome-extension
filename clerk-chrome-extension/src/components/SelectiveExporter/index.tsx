@@ -4,6 +4,8 @@ import { marked } from "marked"
 import { useMessageScanner } from "~hooks/useMessageScanner"
 import { detectPlatform, getPlatformLabel } from "~utils/platform"
 
+const API_BASE_URL = process.env.PLASMO_PUBLIC_API_BASE_URL || "http://localhost:3000"
+
 interface SelectiveExporterProps {
   isOpen: boolean
   onClose: () => void
@@ -27,9 +29,7 @@ type ChatEntry = {
 
 marked.setOptions({
   gfm: true,
-  breaks: true,
-  headerIds: false,
-  mangle: false
+  breaks: true
 })
 
 const requestClerkToken = async () => {
@@ -76,15 +76,18 @@ const deriveConversationId = () => {
 export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [previewTab, setPreviewTab] = useState<"markdown" | "json">("markdown")
-  const [jsonView, setJsonView] = useState<"messages" | "system">("messages")
   const [historyFormat, setHistoryFormat] = useState<"markdown" | "json">("markdown")
   const [chatEntries, setChatEntries] = useState<ChatEntry[]>([])
   const [replyNote, setReplyNote] = useState("")
-  const [systemJsonText, setSystemJsonText] = useState("")
   const [systemContextIds, setSystemContextIds] = useState<Set<string>>(new Set())
+  const [analysisSystemPrompt, setAnalysisSystemPrompt] = useState("")
+  const [followupSystemPrompt, setFollowupSystemPrompt] = useState("")
+  const [personalContext, setPersonalContext] = useState("")
   const [analyzeMode, setAnalyzeMode] = useState(false)
   const [analysisMessages, setAnalysisMessages] = useState<ChatEntry[]>([])
   const [analysisInput, setAnalysisInput] = useState("")
+  const [analysisLocked, setAnalysisLocked] = useState(true)
+  const [followupLocked, setFollowupLocked] = useState(true)
   const [exportState, setExportState] = useState<"idle" | "loading" | "success" | "error">("idle")
   const [statusMessage, setStatusMessage] = useState("")
   const hasInitializedRef = useRef(false)
@@ -147,7 +150,6 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     hasInitializedRef.current = false
     setChatEntries([])
     setReplyNote("")
-    setSystemJsonText("")
     setSystemContextIds(new Set())
     setAnalyzeMode(false)
     setAnalysisMessages([])
@@ -258,14 +260,17 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     }
   }
 
-  // Keep system JSON text in sync when switching views or data updates (reset on conversation change above)
+  // Load custom prompts from chrome.storage on mount
   useEffect(() => {
-    if (!(previewTab === "json" && jsonView === "system")) return
-    const generated = JSON.stringify(generateSystemJSON(), null, 2)
-    if (!systemJsonText) {
-      setSystemJsonText(generated)
-    }
-  }, [previewTab, jsonView, messages, selectedMessages, systemContextIds, promptContainers, systemJsonText])
+    chrome.storage.local.get(['analysisSystemPrompt', 'followupSystemPrompt', 'personalContext'], (result) => {
+      if (result.analysisSystemPrompt) setAnalysisSystemPrompt(result.analysisSystemPrompt)
+      if (result.followupSystemPrompt) setFollowupSystemPrompt(result.followupSystemPrompt)
+      if (result.personalContext) setPersonalContext(result.personalContext)
+    })
+    // Default to locked
+    setAnalysisLocked(true)
+    setFollowupLocked(true)
+  }, [])
 
   const handleClose = () => {
     onClose()
@@ -398,10 +403,10 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
 
   const selectedPromptId = promptContainers[0]?.id
   const historyMenuOptions: { label: string; value: "markdown" | "json" | "copy" | "export" }[] = [
-    { label: "Markdown", value: "markdown" },
-    { label: "JSON", value: "json" },
-    { label: "— Copy —", value: "copy" },
-    { label: "— Export —", value: "export" }
+    { label: "Readable view", value: "markdown" },
+    { label: "Structured (JSON)", value: "json" },
+    { label: "Copy", value: "copy" },
+    { label: "Export", value: "export" }
   ]
 
   const handleExport = async () => {
@@ -436,7 +441,7 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
         }
       }
 
-      const response = await fetch("http://localhost:3000/v1/conversations/export", {
+      const response = await fetch(`${API_BASE_URL}/v1/conversations/export`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -461,20 +466,12 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     }
   }
 
-  const handleHistoryMenuChange = (value: "markdown" | "json" | "copy" | "export") => {
-    if (value === "copy") {
-      if (selectedIds.size > 0) handleCopy()
-      return
-    }
-    if (value === "export") {
-      if (selectedIds.size > 0 && exportState !== "loading") handleExport()
-      return
-    }
+  const handleHistoryMenuChange = (value: "markdown" | "json") => {
     setHistoryFormat(value)
   }
 
   const buildAnalysisSystemPrompt = () => {
-    return `You are an expert conversation analyst. Analyze the following conversation and provide a comprehensive analysis with these sections:
+    const defaultPrompt = `You are an expert conversation analyst. Analyze the following conversation and provide a comprehensive analysis with these sections:
 
 ## Summary
 Provide a concise 2-3 sentence summary of what the conversation is about.
@@ -494,6 +491,23 @@ Identify the most important insights, decisions, or conclusions (bullet points).
 Suggest 2-3 actionable next steps or areas for follow-up.
 
 Please provide your analysis in markdown format with clear section headings.`
+
+    // Use custom prompt if available, otherwise use default
+    let prompt = analysisSystemPrompt || defaultPrompt
+
+    // Inject personal context if available
+    if (personalContext && personalContext.trim() !== '{}' && personalContext.trim() !== '') {
+      try {
+        // Validate JSON
+        JSON.parse(personalContext)
+        prompt += `\n\n## Personal Context\nUse this context about the user when providing analysis:\n${personalContext}`
+      } catch (e) {
+        // Invalid JSON, skip injection
+        console.warn('[SelectiveExporter] Invalid personal context JSON, skipping injection')
+      }
+    }
+
+    return prompt
   }
 
   const runAnalysis = async () => {
@@ -522,7 +536,7 @@ Please provide your analysis in markdown format with clear section headings.`
       }
 
       // Call backend OpenRouter endpoint
-      const response = await fetch("http://localhost:3000/v1/openrouter/chat/completions", {
+      const response = await fetch(`${API_BASE_URL}/v1/openrouter/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -578,7 +592,7 @@ Please provide your analysis in markdown format with clear section headings.`
       setAnalysisMessages([{
         id: `analysis-error-${Date.now()}`,
         role: "assistant",
-        text: `❌ Analysis failed: ${error.message}\n\nPlease make sure:\n- You're signed in to PromptMarket\n- The backend server is running on http://localhost:3000\n- You have selected at least one message`
+        text: `❌ Analysis failed: ${error.message}\n\nPlease make sure:\n- You're signed in to PromptMarket\n- The backend server is running at ${API_BASE_URL}\n- You have selected at least one message`
       }])
     }
   }
@@ -603,12 +617,25 @@ Please provide your analysis in markdown format with clear section headings.`
       const token = await requestClerkToken()
 
       // Build conversation context with entire analysis history + new question
+      const defaultFollowupPrompt = "You are a helpful conversation analyst. Answer follow-up questions about the conversation analysis concisely and clearly."
+      let systemPrompt = followupSystemPrompt || defaultFollowupPrompt
+
+      // Inject personal context if available
+      if (personalContext && personalContext.trim() !== '{}' && personalContext.trim() !== '') {
+        try {
+          JSON.parse(personalContext)
+          systemPrompt += `\n\nPersonal Context:\n${personalContext}`
+        } catch (e) {
+          console.warn('[SelectiveExporter] Invalid personal context JSON in follow-up, skipping injection')
+        }
+      }
+
       const payload = {
         model: "openai/gpt-4o-mini",
         messages: [
           {
             role: "system",
-            content: "You are a helpful conversation analyst. Answer follow-up questions about the conversation analysis concisely and clearly."
+            content: systemPrompt
           },
           ...analysisMessages.map(msg => ({
             role: msg.role,
@@ -623,7 +650,7 @@ Please provide your analysis in markdown format with clear section headings.`
         max_tokens: 800
       }
 
-      const response = await fetch("http://localhost:3000/v1/openrouter/chat/completions", {
+      const response = await fetch(`${API_BASE_URL}/v1/openrouter/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -760,25 +787,25 @@ Please provide your analysis in markdown format with clear section headings.`
               fontSize: "14px",
               fontWeight: 500,
               color: previewTab === "markdown" ? "#667eea" : "#6b7280"
-            }}>
-            Markdown
-          </button>
-          <button
-            onClick={() => setPreviewTab("json")}
-            style={{
-              flex: 1,
+          }}>
+          Conversation View
+        </button>
+        <button
+          onClick={() => setPreviewTab("json")}
+          style={{
+            flex: 1,
               padding: "12px",
               border: "none",
               background: previewTab === "json" ? "#ffffff" : "transparent",
               borderBottom: previewTab === "json" ? "2px solid #667eea" : "2px solid transparent",
               cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: 500,
-              color: previewTab === "json" ? "#667eea" : "#6b7280"
-            }}>
-            JSON
-          </button>
-        </div>
+            fontSize: "14px",
+            fontWeight: 500,
+            color: previewTab === "json" ? "#667eea" : "#6b7280"
+          }}>
+          Settings
+        </button>
+      </div>
       )}
 
       {/* Preview Area */}
@@ -816,8 +843,49 @@ Please provide your analysis in markdown format with clear section headings.`
                   flexDirection: "column",
                   gap: "12px",
                   padding: "8px 0",
-                  height: "100%"
+                  height: "100%",
+                  position: "relative"
                 }}>
+                {/* Settings button to quickly access JSON tab */}
+                <button
+                  onClick={() => {
+                    setPreviewTab("json")
+                    setAnalyzeMode(false)
+                  }}
+                  title="Customize prompts"
+                  style={{
+                    position: "absolute",
+                    top: "0",
+                    right: "0",
+                    background: "transparent",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "6px",
+                    padding: "6px 10px",
+                    cursor: "pointer",
+                    fontSize: "11px",
+                    color: "#6b7280",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    transition: "all 0.2s",
+                    zIndex: 10
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "#f9fafb"
+                    e.currentTarget.style.borderColor = "#d1d5db"
+                    e.currentTarget.style.color = "#374151"
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent"
+                    e.currentTarget.style.borderColor = "#e5e7eb"
+                    e.currentTarget.style.color = "#6b7280"
+                  }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M12 1v6m0 6v6m9-9h-6m-6 0H3" />
+                  </svg>
+                  Prompts
+                </button>
                 <div
                   style={{
                     display: "flex",
@@ -886,6 +954,81 @@ Please provide your analysis in markdown format with clear section headings.`
                       </option>
                     ))}
                   </select>
+
+                  {/* Copy button */}
+                  <button
+                    onClick={handleCopy}
+                    disabled={selectedIds.size === 0}
+                    title="Copy to clipboard"
+                    style={{
+                      border: "1px solid #d1d5db",
+                      borderRadius: "10px",
+                      padding: "8px 12px",
+                      fontSize: "12px",
+                      background: selectedIds.size === 0 ? "#f3f4f6" : "#f9fafb",
+                      color: selectedIds.size === 0 ? "#9ca3af" : "#374151",
+                      cursor: selectedIds.size === 0 ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      transition: "all 0.2s"
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedIds.size > 0) {
+                        e.currentTarget.style.background = "#e5e7eb"
+                        e.currentTarget.style.borderColor = "#9ca3af"
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedIds.size > 0) {
+                        e.currentTarget.style.background = "#f9fafb"
+                        e.currentTarget.style.borderColor = "#d1d5db"
+                      }
+                    }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                    Copy
+                  </button>
+
+                  {/* Export button */}
+                  <button
+                    onClick={handleExport}
+                    disabled={selectedIds.size === 0 || exportState === "loading"}
+                    title="Export to PromptMarket"
+                    style={{
+                      border: "1px solid #d1d5db",
+                      borderRadius: "10px",
+                      padding: "8px 12px",
+                      fontSize: "12px",
+                      background: selectedIds.size === 0 || exportState === "loading" ? "#f3f4f6" : "#f9fafb",
+                      color: selectedIds.size === 0 || exportState === "loading" ? "#9ca3af" : "#374151",
+                      cursor: selectedIds.size === 0 || exportState === "loading" ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      transition: "all 0.2s"
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedIds.size > 0 && exportState !== "loading") {
+                        e.currentTarget.style.background = "#e5e7eb"
+                        e.currentTarget.style.borderColor = "#9ca3af"
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedIds.size > 0 && exportState !== "loading") {
+                        e.currentTarget.style.background = "#f9fafb"
+                        e.currentTarget.style.borderColor = "#d1d5db"
+                      }
+                    }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    {exportState === "loading" ? "Exporting..." : "Export"}
+                  </button>
                 </div>
                 {historyFormat === "markdown" ? (
                   <pre
@@ -914,124 +1057,193 @@ Please provide your analysis in markdown format with clear section headings.`
                 )}
               </div>
             ) : (
-              <div style={{ position: "relative" }}>
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "-8px",
-                    right: "0",
-                    display: "flex",
-                    gap: "6px",
-                    fontSize: "12px"
-                  }}>
-                  <button
-                    onClick={() => setJsonView("messages")}
-                    style={{
-                      padding: "6px 10px",
-                      borderRadius: "14px",
-                      border: jsonView === "messages" ? "1px solid #667eea" : "1px solid #d1d5db",
-                      background: jsonView === "messages" ? "rgba(102, 126, 234, 0.1)" : "#ffffff",
-                      color: jsonView === "messages" ? "#4c51bf" : "#374151",
-                      cursor: "pointer"
-                    }}>
-                    Messages
-                  </button>
-                  <button
-                    onClick={() => setJsonView("system")}
-                    style={{
-                      padding: "6px 10px",
-                      borderRadius: "14px",
-                      border: jsonView === "system" ? "1px solid #667eea" : "1px solid #d1d5db",
-                      background: jsonView === "system" ? "rgba(102, 126, 234, 0.1)" : "#ffffff",
-                      color: jsonView === "system" ? "#4c51bf" : "#374151",
-                      cursor: "pointer"
-                    }}>
-                    System
-                  </button>
+              <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                {/* Analysis System Prompt */}
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        color: "#374151"
+                      }}>
+                      Analysis System Prompt
+                    </label>
+                    <button
+                      onClick={() => {
+                        if (analysisLocked) {
+                          const ok = window.confirm("This prompt is sensitive. Edit only if you know what you're doing.")
+                          if (!ok) return
+                        }
+                        setAnalysisLocked((prev) => !prev)
+                      }}
+                      style={{
+                        border: "1px solid #d1d5db",
+                        borderRadius: "6px",
+                        background: analysisLocked ? "#f3f4f6" : "#ffffff",
+                        color: "#4b5563",
+                        padding: "4px 8px",
+                        fontSize: "12px",
+                        cursor: "pointer"
+                      }}>
+                      {analysisLocked ? "🔒 Locked" : "🔓 Unlock"}
+                    </button>
+                  </div>
+                  <div style={{ position: "relative" }}>
+                    {analysisLocked && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          background: "rgba(249, 250, 251, 0.6)",
+                          borderRadius: "6px",
+                          border: "1px solid #e5e7eb",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#6b7280",
+                          fontSize: "12px",
+                          pointerEvents: "none"
+                        }}>
+                        Locked. Click unlock to edit.
+                      </div>
+                    )}
+                    <textarea
+                      value={analysisSystemPrompt || buildAnalysisSystemPrompt()}
+                      onChange={(e) => {
+                        setAnalysisSystemPrompt(e.target.value)
+                        chrome.storage.local.set({ analysisSystemPrompt: e.target.value })
+                      }}
+                      placeholder="Enter the system prompt for initial conversation analysis..."
+                      disabled={analysisLocked}
+                      style={{
+                        width: "100%",
+                        background: analysisLocked ? "#f9fafb" : "#ffffff",
+                        padding: "12px",
+                        borderRadius: "6px",
+                        border: "1px solid #d1d5db",
+                        fontSize: "13px",
+                        fontFamily: "system-ui, -apple-system, sans-serif",
+                        resize: "vertical",
+                        minHeight: "150px",
+                        lineHeight: "1.5"
+                      }}
+                    />
+                  </div>
                 </div>
-                {jsonView === "messages" ? (
-                  <pre
+
+                {/* Follow-up System Prompt */}
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        color: "#374151"
+                      }}>
+                      Follow-up System Prompt
+                    </label>
+                    <button
+                      onClick={() => {
+                        if (followupLocked) {
+                          const ok = window.confirm("This prompt is sensitive. Edit only if you know what you're doing.")
+                          if (!ok) return
+                        }
+                        setFollowupLocked((prev) => !prev)
+                      }}
+                      style={{
+                        border: "1px solid #d1d5db",
+                        borderRadius: "6px",
+                        background: followupLocked ? "#f3f4f6" : "#ffffff",
+                        color: "#4b5563",
+                        padding: "4px 8px",
+                        fontSize: "12px",
+                        cursor: "pointer"
+                      }}>
+                      {followupLocked ? "🔒 Locked" : "🔓 Unlock"}
+                    </button>
+                  </div>
+                  <div style={{ position: "relative" }}>
+                    {followupLocked && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          background: "rgba(249, 250, 251, 0.6)",
+                          borderRadius: "6px",
+                          border: "1px solid #e5e7eb",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#6b7280",
+                          fontSize: "12px",
+                          pointerEvents: "none"
+                        }}>
+                        Locked. Click unlock to edit.
+                      </div>
+                    )}
+                    <textarea
+                      value={followupSystemPrompt || "You are a helpful conversation analyst. Answer follow-up questions about the conversation analysis concisely and clearly."}
+                      onChange={(e) => {
+                        setFollowupSystemPrompt(e.target.value)
+                        chrome.storage.local.set({ followupSystemPrompt: e.target.value })
+                      }}
+                      placeholder="Enter the system prompt for follow-up questions..."
+                      disabled={followupLocked}
+                      style={{
+                        width: "100%",
+                        background: followupLocked ? "#f9fafb" : "#ffffff",
+                        padding: "12px",
+                        borderRadius: "6px",
+                        border: "1px solid #d1d5db",
+                        fontSize: "13px",
+                        fontFamily: "system-ui, -apple-system, sans-serif",
+                        resize: "vertical",
+                        minHeight: "100px",
+                        lineHeight: "1.5"
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Personal Context JSON */}
+                <div>
+                  <label
                     style={{
-                      background: "#f3f4f6",
-                      padding: "12px",
-                      borderRadius: "6px",
-                      overflow: "auto",
-                      fontSize: "12px",
-                      margin: 0,
-                      marginTop: "14px"
+                      display: "block",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: "#374151",
+                      marginBottom: "8px"
                     }}>
-                    {JSON.stringify(generateJSON(), null, 2)}
-                  </pre>
-                ) : (
+                    Personal Context (JSON)
+                  </label>
                   <textarea
-                    value={systemJsonText || JSON.stringify(generateSystemJSON(), null, 2)}
-                    onChange={(e) => setSystemJsonText(e.target.value)}
-                    rows={10}
+                    value={personalContext || '{}'}
+                    onChange={(e) => {
+                      setPersonalContext(e.target.value)
+                      chrome.storage.local.set({ personalContext: e.target.value })
+                    }}
+                    placeholder='{"business_goals": ["..."], "communication_style": "...", "expertise": ["..."]}'
                     style={{
                       width: "100%",
                       background: "#ffffff",
                       padding: "12px",
                       borderRadius: "6px",
                       border: "1px solid #d1d5db",
-                      overflow: "auto",
                       fontSize: "12px",
-                      margin: 0,
-                      marginTop: "14px",
                       fontFamily: "monospace",
                       resize: "vertical",
-                      minHeight: "180px"
+                      minHeight: "120px",
+                      lineHeight: "1.5"
                     }}
                   />
-                )}
-                {jsonView === "system" && selectedMessages.length > 0 && (
-                  <div
-                    style={{
-                      marginTop: "12px",
-                      padding: "10px",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                      background: "#ffffff",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "8px"
-                    }}>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#111827" }}>
-                      Recent context to include
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "140px", overflowY: "auto" }}>
-                      {selectedMessages.slice(-8).map((m) => (
-                        <label
-                          key={m.id}
-                          style={{
-                            display: "flex",
-                            gap: "8px",
-                            alignItems: "flex-start",
-                            cursor: "pointer",
-                            fontSize: "12px",
-                            color: "#374151"
-                          }}>
-                          <input
-                            type="checkbox"
-                            checked={systemContextIds.has(m.id)}
-                            onChange={(e) => {
-                              setSystemContextIds((prev) => {
-                                const next = new Set(prev)
-                                if (e.target.checked) next.add(m.id)
-                                else next.delete(m.id)
-                                return next
-                              })
-                            }}
-                            style={{ marginTop: "2px" }}
-                          />
-                          <div>
-                            <div style={{ fontWeight: 600 }}>{m.authorName}</div>
-                            <div style={{ color: "#6b7280" }}>{m.text.slice(0, 140)}</div>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
+                  <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "6px" }}>
+                    Add JSON context about yourself that will be included in analysis prompts
                   </div>
-                )}
+                </div>
               </div>
             )}
           </div>
