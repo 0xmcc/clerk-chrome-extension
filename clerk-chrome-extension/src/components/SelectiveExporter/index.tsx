@@ -28,20 +28,29 @@ type ChatEntry = {
 }
 
 const DARK_THEME = {
-  background: "#0a0d14",
-  surface: "#0f141e",
-  panel: "#111827",
-  border: "#1f2532",
-  text: "#e5e7eb",
-  muted: "#94a3b8",
-  accent: "#cbd5e1",
-  accentAlt: "linear-gradient(135deg, #283040 0%, #151924 100%)",
-  panelShadow: "-4px 0 30px rgba(0, 0, 0, 0.4)",
-  input: "#0c101b",
-  chip: "#1f2937",
-  code: "#0f172a",
-  danger: "#f87171",
-  success: "#34d399",
+  // Echo brand-aligned dark theme
+  background: "#0a0a0a", // background.primary
+  surface: "#0f0f0f", // background.secondary
+  panel: "#111111", // background.tertiary
+  border: "#1f1f1f", // border.default
+  borderSubtle: "#1a1a1a", // border.subtle
+  borderStrong: "#252525", // border.strong
+  text: "#e4e4e7", // text.primary
+  textSecondary: "#a1a1aa", // text.secondary
+  muted: "#71717a", // text.muted
+  textFaint: "#52525b", // text.faint
+  accent: "#8b5cf6", // accent.primary
+  accentHover: "#7c3aed", // accent.primary_hover
+  accentBg: "rgba(139, 92, 246, 0.1)", // accent.primary_bg
+  accentAlt: "#1a1a1a",
+  panelShadow: "0 10px 40px rgba(0, 0, 0, 0.5)", // shadows.lg
+  input: "#111111", // input.background
+  chip: "#1a1a1a",
+  code: "#0a0a0a",
+  danger: "#ef4444", // status.error
+  success: "#4ade80", // status.success
+  warning: "#fbbf24",
+  info: "#3b82f6",
   glow: "0 8px 22px rgba(0, 0, 0, 0.45)"
 }
 
@@ -724,7 +733,7 @@ Please provide your analysis in markdown format with clear section headings.`
         top: 0,
         right: 0,
         bottom: 0,
-        width: "400px",
+        width: "420px", // layout.chat_panel_width
         backgroundColor: DARK_THEME.background,
         color: DARK_THEME.text,
         boxShadow: DARK_THEME.panelShadow,
@@ -747,13 +756,23 @@ Please provide your analysis in markdown format with clear section headings.`
           <button
             onClick={handleClose}
             style={{
-              background: "none",
+              background: "transparent",
               border: "none",
               fontSize: "24px",
               cursor: "pointer",
               color: DARK_THEME.muted,
               padding: "0 4px",
-              lineHeight: 1
+              lineHeight: 1,
+              borderRadius: "9999px",
+              transition: "background 0.15s ease, color 0.15s ease"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = DARK_THEME.borderSubtle
+              e.currentTarget.style.color = DARK_THEME.text
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent"
+              e.currentTarget.style.color = DARK_THEME.muted
             }}>
             ×
           </button>
@@ -778,7 +797,7 @@ Please provide your analysis in markdown format with clear section headings.`
             onClick={() => setAnalyzeMode(false)}
             style={{
               border: "none",
-              background: "none",
+              background: "transparent",
               cursor: "pointer",
               fontSize: "18px",
               color: DARK_THEME.muted
@@ -813,11 +832,11 @@ Please provide your analysis in markdown format with clear section headings.`
           onClick={() => setPreviewTab("json")}
             style={{
               flex: 1,
-                padding: "12px",
-                border: "none",
-                background: previewTab === "json" ? DARK_THEME.panel : "transparent",
-                borderBottom: previewTab === "json" ? `2px solid ${DARK_THEME.accent}` : "2px solid transparent",
-                cursor: "pointer",
+              padding: "12px",
+              border: "none",
+              background: previewTab === "json" ? DARK_THEME.panel : "transparent",
+              borderBottom: previewTab === "json" ? `2px solid ${DARK_THEME.accent}` : "2px solid transparent",
+              cursor: "pointer",
               fontSize: "14px",
               fontWeight: 500,
               color: previewTab === "json" ? DARK_THEME.accent : DARK_THEME.muted
@@ -922,13 +941,13 @@ Please provide your analysis in markdown format with clear section headings.`
                         key={m.id}
                         style={{
                           alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                          background: m.role === "user" ? DARK_THEME.accentAlt : DARK_THEME.surface,
-                          color: m.role === "user" ? "#f8fafc" : DARK_THEME.text,
+                          background: m.role === "user" ? DARK_THEME.accentBg : DARK_THEME.surface,
+                          color: DARK_THEME.text,
                           padding: "10px 12px",
                           borderRadius: m.role === "user" ? "16px 16px 4px 16px" : "12px 12px 12px 4px",
                           maxWidth: "100%",
                           lineHeight: 1.5,
-                          border: `1px solid ${DARK_THEME.border}`,
+                          border: `1px solid ${DARK_THEME.borderSubtle}`,
                           boxShadow: m.role === "user" ? "0 4px 12px rgba(0,0,0,0.25)" : "0 4px 12px rgba(0,0,0,0.15)"
                         }}>
                         {m.role === "assistant" ? (
@@ -1100,10 +1119,10 @@ Please provide your analysis in markdown format with clear section headings.`
                         setAnalysisLocked((prev) => !prev)
                       }}
                       style={{
-                        border: `1px solid ${DARK_THEME.border}`,
+                        border: `1px solid ${DARK_THEME.borderSubtle}`,
                         borderRadius: "6px",
                         background: analysisLocked ? DARK_THEME.surface : DARK_THEME.panel,
-                        color: DARK_THEME.text,
+                        color: DARK_THEME.textSecondary,
                         padding: "4px 8px",
                         fontSize: "12px",
                         cursor: "pointer"
@@ -1117,9 +1136,9 @@ Please provide your analysis in markdown format with clear section headings.`
                         style={{
                           position: "absolute",
                           inset: 0,
-                          background: "rgba(15, 23, 42, 0.7)",
+                          background: "rgba(0, 0, 0, 0.7)",
                           borderRadius: "6px",
-                          border: `1px solid ${DARK_THEME.border}`,
+                          border: `1px solid ${DARK_THEME.borderSubtle}`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -1143,7 +1162,7 @@ Please provide your analysis in markdown format with clear section headings.`
                         background: analysisLocked ? DARK_THEME.surface : DARK_THEME.input,
                         padding: "12px",
                         borderRadius: "6px",
-                        border: `1px solid ${DARK_THEME.border}`,
+                        border: `1px solid ${DARK_THEME.borderSubtle}`,
                         fontSize: "13px",
                         fontFamily: "system-ui, -apple-system, sans-serif",
                         resize: "vertical",
@@ -1176,10 +1195,10 @@ Please provide your analysis in markdown format with clear section headings.`
                         setFollowupLocked((prev) => !prev)
                       }}
                       style={{
-                        border: `1px solid ${DARK_THEME.border}`,
+                        border: `1px solid ${DARK_THEME.borderSubtle}`,
                         borderRadius: "6px",
                         background: followupLocked ? DARK_THEME.surface : DARK_THEME.panel,
-                        color: DARK_THEME.text,
+                        color: DARK_THEME.textSecondary,
                         padding: "4px 8px",
                         fontSize: "12px",
                         cursor: "pointer"
@@ -1193,9 +1212,9 @@ Please provide your analysis in markdown format with clear section headings.`
                         style={{
                           position: "absolute",
                           inset: 0,
-                          background: "rgba(15, 23, 42, 0.7)",
+                          background: "rgba(0, 0, 0, 0.7)",
                           borderRadius: "6px",
-                          border: `1px solid ${DARK_THEME.border}`,
+                          border: `1px solid ${DARK_THEME.borderSubtle}`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -1219,7 +1238,7 @@ Please provide your analysis in markdown format with clear section headings.`
                         background: followupLocked ? DARK_THEME.surface : DARK_THEME.input,
                         padding: "12px",
                         borderRadius: "6px",
-                        border: `1px solid ${DARK_THEME.border}`,
+                        border: `1px solid ${DARK_THEME.borderSubtle}`,
                         fontSize: "13px",
                         fontFamily: "system-ui, -apple-system, sans-serif",
                         resize: "vertical",
@@ -1255,7 +1274,7 @@ Please provide your analysis in markdown format with clear section headings.`
                       background: DARK_THEME.input,
                       padding: "12px",
                       borderRadius: "6px",
-                      border: `1px solid ${DARK_THEME.border}`,
+                      border: `1px solid ${DARK_THEME.borderSubtle}`,
                       fontSize: "12px",
                       fontFamily: "monospace",
                       resize: "vertical",
@@ -1435,7 +1454,7 @@ Please provide your analysis in markdown format with clear section headings.`
                   flex: 1,
                   padding: "10px",
                   borderRadius: "10px",
-                  border: `1px solid ${DARK_THEME.border}`,
+                  border: `1px solid ${DARK_THEME.borderSubtle}`,
                   fontSize: "13px",
                   resize: "vertical",
                   background: DARK_THEME.input,
@@ -1447,12 +1466,12 @@ Please provide your analysis in markdown format with clear section headings.`
                 style={{
                   padding: "10px 12px",
                   borderRadius: "10px",
-                  border: `1px solid ${DARK_THEME.border}`,
-                  background: DARK_THEME.panel,
+                  border: `1px solid ${DARK_THEME.borderStrong}`,
+                  background: DARK_THEME.accent,
                   cursor: "pointer",
                   fontSize: "13px",
                   fontWeight: 600,
-                  color: DARK_THEME.text,
+                  color: "#0a0a0a",
                   minWidth: "48px",
                   display: "flex",
                   alignItems: "center",
@@ -1498,11 +1517,8 @@ Please provide your analysis in markdown format with clear section headings.`
               padding: "12px",
               borderRadius: "8px",
               border: "none",
-              background:
-                selectedIds.size === 0
-                  ? DARK_THEME.border
-                  : DARK_THEME.accentAlt,
-              color: "#ffffff",
+              background: selectedIds.size === 0 ? DARK_THEME.border : "#ffffff",
+              color: selectedIds.size === 0 ? DARK_THEME.muted : "#0a0a0a",
               cursor: selectedIds.size === 0 ? "not-allowed" : "pointer",
               fontSize: "15px",
               fontWeight: 600,
