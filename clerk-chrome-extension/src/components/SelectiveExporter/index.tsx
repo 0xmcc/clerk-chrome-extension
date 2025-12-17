@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { marked } from "marked"
 
 import { useMessageScanner } from "~hooks/useMessageScanner"
@@ -101,7 +101,6 @@ const deriveConversationId = () => {
 }
 
 export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) => {
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [previewTab, setPreviewTab] = useState<"markdown" | "json">("markdown")
   const [historyFormat, setHistoryFormat] = useState<"markdown" | "json">("markdown")
   const [chatEntries, setChatEntries] = useState<ChatEntry[]>([])
@@ -149,31 +148,12 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     ]
   })
 
-  const handleToggleSelection = useCallback((id: string) => {
-    console.log("[SelectiveExporter] Toggle selection for:", id)
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        console.log("[SelectiveExporter] Removing:", id)
-        next.delete(id)
-      } else {
-        console.log("[SelectiveExporter] Adding:", id)
-        next.add(id)
-      }
-      console.log("[SelectiveExporter] New selectedIds size:", next.size)
-      return next
-    })
-  }, [])
-
   const { messages, conversationKey } = useMessageScanner({
-    selectedIds,
-    onToggleSelection: handleToggleSelection,
     isExporterOpen: isOpen
   })
 
   // Reset selection when conversation changes
   useEffect(() => {
-    setSelectedIds(new Set())
     hasInitializedRef.current = false
     setChatEntries([])
     setReplyNote("")
@@ -194,8 +174,7 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
   // Select all messages by default when first loaded
   useEffect(() => {
     if (isOpen && messages.length > 0 && !hasInitializedRef.current) {
-      console.log("[SelectiveExporter] Initializing - selecting all", messages.length, "messages")
-      setSelectedIds(new Set(messages.map((m) => m.id)))
+      console.log("[SelectiveExporter] Initializing exporter with", messages.length, "messages")
       setSystemContextIds(new Set(messages.slice(-5).map((m) => m.id)))
       hasInitializedRef.current = true
     }
@@ -206,15 +185,16 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
     }
   }, [isOpen, messages.length])
 
-  // Get selected messages in order (must be before early return to maintain hook order)
-  const selectedMessages = messages.filter((m) => selectedIds.has(m.id))
+  // Get messages in order (must be before early return to maintain hook order)
+  const selectedMessages = messages
+  const selectedCount = selectedMessages.length
 
-  // Debug log when selection changes
+  // Debug log when messages change
   useEffect(() => {
     if (isOpen) {
-      console.log("[SelectiveExporter] selectedMessages updated:", selectedMessages.length, "of", messages.length)
+      console.log("[SelectiveExporter] messages updated:", selectedMessages.length)
     }
-  }, [isOpen, selectedMessages.length, messages.length])
+  }, [isOpen, selectedMessages.length])
 
   // Generate Markdown preview
   const generateHistory = () => {
@@ -437,10 +417,10 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
   ]
 
   const handleExport = async () => {
-    if (selectedIds.size === 0 || exportState === "loading") return
+    if (selectedCount === 0 || exportState === "loading") return
 
     setExportState("loading")
-    setStatusMessage("Exporting selected messages...")
+    setStatusMessage("Exporting conversation...")
 
     try {
       const token = await requestClerkToken()
@@ -619,7 +599,7 @@ Please provide your analysis in markdown format with clear section headings.`
       setAnalysisMessages([{
         id: `analysis-error-${Date.now()}`,
         role: "assistant",
-        text: `❌ Analysis failed: ${error.message}\n\nPlease make sure:\n- You're signed in to PromptMarket\n- The backend server is running at ${API_BASE_URL}\n- You have selected at least one message`
+        text: `❌ Analysis failed: ${error.message}\n\nPlease make sure:\n- You're signed in to PromptMarket\n- The backend server is running at ${API_BASE_URL}\n- Messages have loaded in the exporter`
       }])
     }
   }
@@ -751,7 +731,7 @@ Please provide your analysis in markdown format with clear section headings.`
         }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: DARK_THEME.text }}>
-            {platformLabelRef.current} Export
+            {platformLabelRef.current} Export Pizza
           </h2>
           <button
             onClick={handleClose}
@@ -778,7 +758,7 @@ Please provide your analysis in markdown format with clear section headings.`
           </button>
         </div>
         <div style={{ marginTop: "8px", fontSize: "12px", color: DARK_THEME.muted }}>
-          {selectedIds.size} of {messages.length} messages selected
+          {selectedCount} messages detected
         </div>
       </div>
 
@@ -863,13 +843,13 @@ Please provide your analysis in markdown format with clear section headings.`
           .analysis-markdown li { list-style: disc; margin: 4px 0; }
           .analysis-markdown strong { font-weight: 700; }
         `}</style>
-        {selectedIds.size === 0 ? (
+        {selectedCount === 0 ? (
           <div style={{ textAlign: "center", padding: "40px 20px", color: DARK_THEME.muted }}>
             <div style={{ fontSize: "48px", marginBottom: "16px" }}>📋</div>
             <p style={{ margin: 0, fontSize: "14px" }}>
-              No messages selected yet.
+              No messages found yet.
               <br />
-              Select messages from the conversation to preview here.
+              Once messages load, they'll appear here automatically.
             </p>
           </div>
         ) : (
@@ -996,29 +976,29 @@ Please provide your analysis in markdown format with clear section headings.`
                   {/* Copy button */}
                   <button
                     onClick={handleCopy}
-                    disabled={selectedIds.size === 0}
+                    disabled={selectedCount === 0}
                     title="Copy to clipboard"
                     style={{
                       border: `1px solid ${DARK_THEME.border}`,
                       borderRadius: "10px",
                       padding: "8px 12px",
                       fontSize: "12px",
-                      background: selectedIds.size === 0 ? DARK_THEME.surface : DARK_THEME.panel,
-                      color: selectedIds.size === 0 ? DARK_THEME.muted : DARK_THEME.text,
-                      cursor: selectedIds.size === 0 ? "not-allowed" : "pointer",
+                      background: selectedCount === 0 ? DARK_THEME.surface : DARK_THEME.panel,
+                      color: selectedCount === 0 ? DARK_THEME.muted : DARK_THEME.text,
+                      cursor: selectedCount === 0 ? "not-allowed" : "pointer",
                       display: "flex",
                       alignItems: "center",
                       gap: "4px",
                       transition: "all 0.2s"
                     }}
                     onMouseEnter={(e) => {
-                      if (selectedIds.size > 0) {
+                      if (selectedCount > 0) {
                         e.currentTarget.style.background = DARK_THEME.surface
                         e.currentTarget.style.borderColor = DARK_THEME.accent
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (selectedIds.size > 0) {
+                      if (selectedCount > 0) {
                         e.currentTarget.style.background = DARK_THEME.panel
                         e.currentTarget.style.borderColor = DARK_THEME.border
                       }
@@ -1033,29 +1013,29 @@ Please provide your analysis in markdown format with clear section headings.`
                   {/* Export button */}
                   <button
                     onClick={handleExport}
-                    disabled={selectedIds.size === 0 || exportState === "loading"}
+                    disabled={selectedCount === 0 || exportState === "loading"}
                     title="Export to PromptMarket"
                     style={{
                       border: `1px solid ${DARK_THEME.border}`,
                       borderRadius: "10px",
                       padding: "8px 12px",
                       fontSize: "12px",
-                      background: selectedIds.size === 0 || exportState === "loading" ? DARK_THEME.surface : DARK_THEME.panel,
-                      color: selectedIds.size === 0 || exportState === "loading" ? DARK_THEME.muted : DARK_THEME.text,
-                      cursor: selectedIds.size === 0 || exportState === "loading" ? "not-allowed" : "pointer",
+                      background: selectedCount === 0 || exportState === "loading" ? DARK_THEME.surface : DARK_THEME.panel,
+                      color: selectedCount === 0 || exportState === "loading" ? DARK_THEME.muted : DARK_THEME.text,
+                      cursor: selectedCount === 0 || exportState === "loading" ? "not-allowed" : "pointer",
                       display: "flex",
                       alignItems: "center",
                       gap: "4px",
                       transition: "all 0.2s"
                     }}
                     onMouseEnter={(e) => {
-                      if (selectedIds.size > 0 && exportState !== "loading") {
+                      if (selectedCount > 0 && exportState !== "loading") {
                         e.currentTarget.style.background = DARK_THEME.surface
                         e.currentTarget.style.borderColor = DARK_THEME.accent
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (selectedIds.size > 0 && exportState !== "loading") {
+                      if (selectedCount > 0 && exportState !== "loading") {
                         e.currentTarget.style.background = DARK_THEME.panel
                         e.currentTarget.style.borderColor = DARK_THEME.border
                       }
@@ -1511,19 +1491,19 @@ Please provide your analysis in markdown format with clear section headings.`
         ) : (
           <button
             onClick={() => runAnalysis()}
-            disabled={selectedIds.size === 0}
+            disabled={selectedCount === 0}
             style={{
               flex: 1,
               padding: "12px",
               borderRadius: "8px",
               border: "none",
-              background: selectedIds.size === 0 ? DARK_THEME.border : "#ffffff",
-              color: selectedIds.size === 0 ? DARK_THEME.muted : "#0a0a0a",
-              cursor: selectedIds.size === 0 ? "not-allowed" : "pointer",
+              background: selectedCount === 0 ? DARK_THEME.border : "#ffffff",
+              color: selectedCount === 0 ? DARK_THEME.muted : "#0a0a0a",
+              cursor: selectedCount === 0 ? "not-allowed" : "pointer",
               fontSize: "15px",
               fontWeight: 600,
               boxShadow: DARK_THEME.glow,
-              opacity: selectedIds.size === 0 ? 0.7 : 1
+              opacity: selectedCount === 0 ? 0.7 : 1
             }}>
             Analyze this conversation
           </button>
