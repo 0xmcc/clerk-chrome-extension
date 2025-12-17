@@ -289,8 +289,17 @@ export const useMessageScanner = ({ selectedIds, onToggleSelection, isExporterOp
 
           const role = detectRole(node, platformRef.current)
           const text = getMessageText(node, platformRef.current)
-          const authorName =
-            platformRef.current === "linkedin" ? getLinkedInAuthor(node, role) : platformLabel
+
+          // Derive a clearer author label per platform so exports distinguish you vs the AI
+          let authorName: string
+          if (platformRef.current === "linkedin") {
+            authorName = getLinkedInAuthor(node, role)
+          } else if (platformRef.current === "chatgpt") {
+            // On ChatGPT both sides are visually "ChatGPT"; treat user as "You" for exports
+            authorName = role === "user" ? "You" : platformLabel
+          } else {
+            authorName = platformLabel
+          }
 
           if (text) {
             foundMessages.push({ id, role, text, authorName, node })
