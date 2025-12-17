@@ -8,3 +8,90 @@
   all: initial;
   box-sizing: border-box;
 }
+
+@layer base {
+  :root {
+    --spaces-bg: #09090b;
+    --spaces-surface: #0d0d0d;
+    --spaces-panel: #111111;
+    --spaces-border: #1a1a1a;
+    --spaces-muted: #a1a1aa;
+    --spaces-foreground: #ffffff;
+    --spaces-accent: #ffffff;
+  }
+}
+
+@layer components {
+  .spaces-app {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    @apply plasmo-bg-[var(--spaces-bg)] plasmo-text-[var(--spaces-foreground)] plasmo-min-h-screen plasmo-w-full plasmo-antialiased plasmo-text-base plasmo-tracking-tight;
+  }
+
+  .spaces-app * {
+    box-sizing: border-box;
+  }
+
+  .spaces-card {
+    @apply plasmo-rounded-xl plasmo-border plasmo-border-[var(--spaces-border)] plasmo-bg-[var(--spaces-surface)] plasmo-shadow-[0_25px_50px_-12px_rgba(0,0,0,0.4)];
+  }
+
+  .spaces-surface {
+    @apply plasmo-rounded-xl plasmo-border plasmo-border-[var(--spaces-border)] plasmo-bg-[var(--spaces-panel)];
+  }
+
+  .spaces-glow {
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  }
+
+  .spaces-subtle {
+    @apply plasmo-text-[var(--spaces-muted)];
+  }
+
+  .spaces-section-title {
+    @apply plasmo-text-[2rem] plasmo-font-semibold plasmo-leading-tight plasmo-text-white;
+  }
+
+  .spaces-pill {
+    @apply plasmo-inline-flex plasmo-items-center plasmo-gap-2 plasmo-rounded-full plasmo-border plasmo-border-[#27272a] plasmo-bg-[#111111] plasmo-px-4 plasmo-py-2 plasmo-text-xs plasmo-uppercase plasmo-tracking-[0.08em] plasmo-text-[var(--spaces-muted)];
+  }
+
+  .spaces-grid {
+    @apply plasmo-grid plasmo-grid-cols-1 md:plasmo-grid-cols-2 lg:plasmo-grid-cols-3 plasmo-gap-4;
+  }
+
+  .spaces-gradient-border {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .spaces-gradient-border::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.15));
+    filter: blur(8px);
+    opacity: 0.7;
+  }
+
+  .spaces-gradient-border > * {
+    position: relative;
+  }
+}
+
+@layer utilities {
+  @keyframes spaces-float {
+    0% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-6px);
+    }
+    100% {
+      transform: translateY(0px);
+    }
+  }
+
+  .spaces-animate-float {
+    animation: spaces-float 6s ease-in-out infinite;
+  }
+}

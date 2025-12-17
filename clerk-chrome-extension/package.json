@@ -1,16 +1,19 @@
 {
-  "name": "with-tailwindcss",
-  "displayName": "With tailwindcss",
+  "name": "Universal Basic Intelligence",
+  "displayName": "Universal Basic Intelligence",
   "version": "0.0.1",
-  "description": "A basic Plasmo extension.",
-  "author": "Plasmo Corp. <foss@plasmo.com>",
+  "description": "Export your personal data .",
+  "author": "Universal Basic Intelligence <markocalvocruz@gmail.com>",
   "contributors": [
-    "louisgv"
+    "Marko Calvo Cruz <markocalvocruz@gmail.com>"
   ],
   "scripts": {
     "dev": "plasmo dev",
     "build": "plasmo build",
-    "package": "plasmo package"
+    "package": "plasmo package",
+    "web:dev": "vite --config vite.web.config.ts",
+    "web:build": "vite build --config vite.web.config.ts",
+    "web:preview": "vite preview --config vite.web.config.ts"
   },
   "dependencies": {
     "@clerk/chrome-extension": "^2.8.4",
@@ -32,7 +35,9 @@
     "@types/react-dom": "18.2.18",
     "postcss": "8.4.33",
     "prettier": "3.2.4",
-    "typescript": "5.3.3"
+    "typescript": "5.3.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.2.0"
   },
   "manifest": {
     "key": "$CRX_PUBLIC_KEY",
