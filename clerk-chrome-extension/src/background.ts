@@ -12,6 +12,8 @@ if (!syncHost) {
 }
 
 let clerkClientPromise: ReturnType<typeof createClerkClient> | null = null
+const CLERK_STORAGE_KEY_FRAGMENT = "__clerk_client_jwt"
+let refreshPromise: Promise<void> | null = null
 
 const getClerkClient = async () => {
   if (!clerkClientPromise) {
@@ -22,6 +24,28 @@ const getClerkClient = async () => {
   }
 
   return clerkClientPromise
+}
+
+const refreshClerkClient = async (reason: string) => {
+  if (refreshPromise) {
+    return refreshPromise
+  }
+
+  refreshPromise = (async () => {
+    try {
+      const clerkClient = await getClerkClient()
+      await clerkClient.load({ standardBrowser: false })
+      console.log("[Background] Clerk refreshed", { reason, hasSession: !!clerkClient.session })
+    } catch (error) {
+      console.error("[Background] Failed to refresh Clerk:", error)
+    }
+  })()
+
+  try {
+    await refreshPromise
+  } finally {
+    refreshPromise = null
+  }
 }
 
 async function initializeClerk() {
@@ -43,6 +67,16 @@ async function initializeClerk() {
 
 initializeClerk()
 
+chrome.storage?.onChanged?.addListener((changes, areaName) => {
+  if (areaName !== "local") return
+  const updatedKeys = Object.keys(changes)
+  if (!updatedKeys.some((key) => key.includes(CLERK_STORAGE_KEY_FRAGMENT))) {
+    return
+  }
+
+  void refreshClerkClient("storage-change")
+})
+
 // Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "openOptionsPage") {
@@ -54,6 +88,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "getClerkToken") {
     getClerkClient()
       .then(async (clerkClient) => {
+        if (!clerkClient.session) {
+          await refreshClerkClient("token-request")
+        }
         const token = await clerkClient.session?.getToken()
         sendResponse({
           success: !!token,
