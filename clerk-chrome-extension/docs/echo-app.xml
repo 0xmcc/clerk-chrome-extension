@@ -1,0 +1,2719 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+src/
+  components/
+    Chat/
+      ChatPanel.tsx
+      Message.tsx
+      OutputBlock.tsx
+      ToolCall.tsx
+    Editor/
+      Editor.tsx
+      LineNumbers.tsx
+    Sidebar/
+      ConversationItem.tsx
+      FileItem.tsx
+      Sidebar.tsx
+    Header.tsx
+  hooks/
+    useAutoSave.ts
+    useChat.ts
+    useFiles.ts
+  stores/
+    chatStore.ts
+    fileStore.ts
+  types/
+    index.ts
+  App.tsx
+  index.css
+  main.tsx
+echo-studio-app.html
+index.html
+package.json
+tsconfig.json
+tsconfig.node.json
+vite.config.ts
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="src/components/Chat/ChatPanel.tsx">
+import { useEffect, useRef, useState } from 'react';
+import Header from '../Header';
+import Message from './Message';
+import type { Message as MessageType } from '../../types';
+
+type ChatPanelProps = {
+  title: string;
+  messages: MessageType[];
+  isLoading: boolean;
+  onSend: (text: string) => void;
+  onClear: () => void;
+};
+
+const ChatPanel = ({ title, messages, isLoading, onSend, onClear }: ChatPanelProps) => {
+  const [input, setInput] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!textareaRef.current) return;
+    textareaRef.current.style.height = 'auto';
+    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
+  }, [input]);
+
+  useEffect(() => {
+    if (messagesRef.current) {
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+    }
+  }, [messages, isLoading]);
+
+  const handleSend = () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    onSend(trimmed);
+    setInput('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      handleSend();
+    }
+  };
+
+  return (
+    <div className="chat-container fade">
+      <Header
+        icon="💬"
+        title={title}
+        actions={
+          <button className="main-action-btn" onClick={onClear}>
+            Clear
+          </button>
+        }
+      />
+
+      <div className="messages" ref={messagesRef}>
+        {messages.length === 0 ? (
+          <div className="welcome-state" id="welcomeState">
+            <div className="welcome-icon">✨</div>
+            <h2 className="welcome-title">Welcome to Echo</h2>
+            <p className="welcome-text">
+              Upload your content files, then ask me to help you write in your voice, organize your
+              notes, or work with your files.
+            </p>
+          </div>
+        ) : (
+          messages.map((message) => <Message key={message.id} message={message} />)
+        )}
+
+        {isLoading ? (
+          <div className="thinking">
+            <div className="thinking-dots">
+              <div className="thinking-dot" />
+              <div className="thinking-dot" />
+              <div className="thinking-dot" />
+            </div>
+            Working...
+          </div>
+        ) : null}
+      </div>
+
+      <div className="input-area">
+        <div className="input-row">
+          <div className="input-wrapper">
+            <textarea
+              ref={textareaRef}
+              className="chat-input"
+              placeholder="Ask Echo to work with your files..."
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={1}
+            />
+          </div>
+          <button className="send-btn" onClick={handleSend} disabled={!input.trim() || isLoading}>
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ChatPanel;
+</file>
+
+<file path="src/components/Chat/Message.tsx">
+import ToolCall from './ToolCall';
+import OutputBlock from './OutputBlock';
+import type { Message } from '../../types';
+
+type MessageProps = {
+  message: Message;
+};
+
+const renderContent = (content: string) => {
+  const paragraphs = content.split(/\n{2,}/).filter(Boolean);
+
+  if (!paragraphs.length) {
+    return <p>{content}</p>;
+  }
+
+  return paragraphs.map((paragraph, idx) => <p key={idx}>{paragraph}</p>);
+};
+
+const Message = ({ message }: MessageProps) => (
+  <div className="message">
+    <div className={`message-role ${message.role}`}>{message.role === 'user' ? 'You' : 'Echo'}</div>
+    <div className="message-content">
+      {message.toolCalls?.map((toolCall, idx) => (
+        <ToolCall key={`${toolCall.name}-${idx}`} toolCall={toolCall} />
+      ))}
+      {renderContent(message.content)}
+      {message.output ? (
+        <OutputBlock filename={message.output.filename} body={message.output.body} />
+      ) : null}
+    </div>
+  </div>
+);
+
+export default Message;
+</file>
+
+<file path="src/components/Chat/OutputBlock.tsx">
+import { useState } from 'react';
+
+type OutputBlockProps = {
+  filename: string;
+  body: string;
+  onRegenerate?: () => void;
+};
+
+const OutputBlock = ({ filename, body, onRegenerate }: OutputBlockProps) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(body);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className="output-block">
+      <div className="output-header">
+        <div className="output-file">
+          <span className="output-file-icon">✨</span>
+          {filename}
+        </div>
+        <div className="output-actions">
+          <button
+            className="output-btn"
+            onClick={() => {
+              if (onRegenerate) {
+                onRegenerate();
+              } else {
+                window.alert('Regenerating...');
+              }
+            }}
+          >
+            ↻
+          </button>
+          <button className="output-btn primary" onClick={handleCopy}>
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+      </div>
+      <div className="output-content">{body}</div>
+    </div>
+  );
+};
+
+export default OutputBlock;
+</file>
+
+<file path="src/components/Chat/ToolCall.tsx">
+import type { ToolCall } from '../../types';
+
+type ToolCallProps = {
+  toolCall: ToolCall;
+};
+
+const ToolCall = ({ toolCall }: ToolCallProps) => (
+  <div className="tool-call">
+    <span className="tool-call-icon">📁</span>
+    {toolCall.name}(
+    {Object.entries(toolCall.input)
+      .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+      .join(', ')}
+    )
+  </div>
+);
+
+export default ToolCall;
+</file>
+
+<file path="src/components/Editor/Editor.tsx">
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Header from '../Header';
+import LineNumbers from './LineNumbers';
+import { useAutoSave } from '../../hooks/useAutoSave';
+import type { File } from '../../types';
+
+type EditorProps = {
+  file: File;
+  onBack: () => void;
+  onChange: (id: string, content: string) => void;
+  onScroll: (id: string, scrollTop: number) => void;
+};
+
+const Editor = ({ file, onBack, onChange, onScroll }: EditorProps) => {
+  const [draft, setDraft] = useState(file.content);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    setDraft(file.content);
+    if (textareaRef.current) {
+      textareaRef.current.scrollTop = file.scrollPosition ?? 0;
+    }
+  }, [file.content, file.id, file.scrollPosition]);
+
+  useAutoSave(
+    draft,
+    (value) => {
+      onChange(file.id, value);
+    },
+    1000,
+  );
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        const target = event.currentTarget;
+        const start = target.selectionStart;
+        const end = target.selectionEnd;
+        const updated = `${draft.slice(0, start)}  ${draft.slice(end)}`;
+        setDraft(updated);
+        requestAnimationFrame(() => {
+          target.selectionStart = target.selectionEnd = start + 2;
+        });
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        onChange(file.id, draft);
+      }
+    },
+    [draft, file.id, onChange],
+  );
+
+  const handleScroll = (event: React.UIEvent<HTMLTextAreaElement>) => {
+    onScroll(file.id, event.currentTarget.scrollTop);
+  };
+
+  const lineCount = useMemo(() => draft.split(/\r?\n/).length, [draft]);
+
+  return (
+    <div className="file-viewer fade">
+      <Header
+        icon="📄"
+        title={file.name}
+        actions={
+          <button className="main-action-btn" onClick={onBack}>
+            ← Back to chat
+          </button>
+        }
+      />
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <LineNumbers lines={lineCount} />
+        <textarea
+          ref={textareaRef}
+          className="file-content"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={handleKeyDown}
+          onScroll={handleScroll}
+          spellCheck={false}
+        />
+      </div>
+    </div>
+  );
+};
+
+export default Editor;
+</file>
+
+<file path="src/components/Editor/LineNumbers.tsx">
+type LineNumbersProps = {
+  lines: number;
+};
+
+const LineNumbers = ({ lines }: LineNumbersProps) => {
+  const numbers = Array.from({ length: lines }, (_, idx) => idx + 1);
+  return (
+    <div className="line-numbers" aria-hidden="true">
+      {numbers.map((num) => (
+        <div key={num}>{num}</div>
+      ))}
+    </div>
+  );
+};
+
+export default LineNumbers;
+</file>
+
+<file path="src/components/Sidebar/ConversationItem.tsx">
+import type { Conversation } from '../../types';
+
+type ConversationItemProps = {
+  conversation: Conversation;
+  active?: boolean;
+  onClick: () => void;
+};
+
+const ConversationItem = ({ conversation, active, onClick }: ConversationItemProps) => (
+  <div className={`conv-item ${active ? 'active' : ''}`} onClick={onClick}>
+    <span className="conv-icon">💬</span>
+    <div className="conv-info">
+      <div className="conv-title">{conversation.title}</div>
+      <div className="conv-date">{conversation.date}</div>
+    </div>
+  </div>
+);
+
+export default ConversationItem;
+</file>
+
+<file path="src/components/Sidebar/FileItem.tsx">
+import type { File } from '../../types';
+
+type FileItemProps = {
+  file: File;
+  active?: boolean;
+  onClick: () => void;
+};
+
+const FileItem = ({ file, active, onClick }: FileItemProps) => (
+  <div className={`file-item ${active ? 'active' : ''}`} onClick={onClick}>
+    <span className="file-icon">📄</span>
+    <span className="file-name">{file.name}</span>
+    <span className="file-size">{file.sizeLabel ?? ''}</span>
+  </div>
+);
+
+export default FileItem;
+</file>
+
+<file path="src/components/Sidebar/Sidebar.tsx">
+import { useRef } from 'react';
+import ConversationItem from './ConversationItem';
+import FileItem from './FileItem';
+import type { Conversation, File } from '../../types';
+
+type SidebarProps = {
+  conversations: Conversation[];
+  activeConversationId: string | null;
+  files: File[];
+  activeFileId: string | null;
+  onNewChat: () => void;
+  onSelectConversation: (id: string) => void;
+  onSelectFile: (id: string) => void;
+  onUpload: (files: FileList | ArrayLike<globalThis.File>) => void;
+  isDragActive: boolean;
+  setIsDragActive: (value: boolean) => void;
+};
+
+const Sidebar = ({
+  conversations,
+  activeConversationId,
+  files,
+  activeFileId,
+  onNewChat,
+  onSelectConversation,
+  onSelectFile,
+  onUpload,
+  isDragActive,
+  setIsDragActive,
+}: SidebarProps) => {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleFiles = (fileList: FileList | ArrayLike<globalThis.File>) => {
+    onUpload(fileList);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragActive(false);
+    if (event.dataTransfer.files?.length) {
+      handleFiles(event.dataTransfer.files);
+    }
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragActive(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragActive(false);
+  };
+
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-header">
+        <div className="logo">Echo</div>
+        <button className="new-chat-btn" onClick={onNewChat}>
+          + New
+        </button>
+      </div>
+
+      <div className="sidebar-content">
+        <div className="sidebar-section">
+          <div className="section-header">
+            <span className="section-title">Conversations</span>
+          </div>
+          <div className="section-list" id="conversationList">
+            {conversations.length === 0 ? (
+              <div className="empty-section">No conversations yet</div>
+            ) : (
+              conversations.map((conv) => (
+                <ConversationItem
+                  key={conv.id}
+                  conversation={conv}
+                  active={conv.id === activeConversationId}
+                  onClick={() => onSelectConversation(conv.id)}
+                />
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="sidebar-section">
+          <div className="section-header">
+            <span className="section-title">Files</span>
+            <button className="section-action" onClick={() => inputRef.current?.click()}>
+              +
+            </button>
+          </div>
+          <div className="section-list" id="fileList">
+            {files.length === 0 ? (
+              <div className="empty-section">No files yet</div>
+            ) : (
+              files.map((file) => (
+                <FileItem
+                  key={file.id}
+                  file={file}
+                  active={file.id === activeFileId}
+                  onClick={() => onSelectFile(file.id)}
+                />
+              ))
+            )}
+          </div>
+
+          <div
+            className={`upload-area ${isDragActive ? 'dragover' : ''}`}
+            onClick={() => inputRef.current?.click()}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <div className="upload-text">Drop files or click to upload</div>
+          </div>
+
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(event) => {
+              if (event.target.files?.length) {
+                handleFiles(event.target.files);
+                event.target.value = '';
+              }
+            }}
+          />
+        </div>
+      </div>
+    </aside>
+  );
+};
+
+export default Sidebar;
+</file>
+
+<file path="src/components/Header.tsx">
+import type { ReactNode } from 'react';
+
+type HeaderProps = {
+  icon: ReactNode;
+  title: string;
+  actions?: ReactNode;
+};
+
+const Header = ({ icon, title, actions }: HeaderProps) => (
+  <header className="main-header">
+    <div className="main-title">
+      <span className="main-title-icon">{icon}</span>
+      <span>{title}</span>
+    </div>
+    {actions ? <div className="main-actions">{actions}</div> : null}
+  </header>
+);
+
+export default Header;
+</file>
+
+<file path="src/hooks/useAutoSave.ts">
+import { useEffect, useRef } from 'react';
+
+export function useAutoSave<T>(value: T, onSave: (value: T) => void, delay = 1000) {
+  const firstRun = useRef(true);
+
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
+
+    const handle = window.setTimeout(() => onSave(value), delay);
+    return () => window.clearTimeout(handle);
+  }, [value, onSave, delay]);
+}
+</file>
+
+<file path="src/hooks/useChat.ts">
+import { useCallback } from 'react';
+import { useChatStore } from '../stores/chatStore';
+import type { File, Message, ToolCall } from '../types';
+
+const shortenTitle = (text: string) => (text.length > 40 ? `${text.slice(0, 40)}...` : text);
+
+const buildToolCalls = (files: File[]): ToolCall[] | undefined => {
+  if (!files.length) return undefined;
+
+  return [
+    { name: 'list_files', input: {} },
+    { name: 'read_file', input: { name: files[0].name } },
+  ];
+};
+
+const defaultOutput = `this is where the AI-generated content would appear
+
+matching your writing style
+
+short lines, lowercase, direct`;
+
+const makeId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+
+export function useChat(files: File[]) {
+  const {
+    conversations,
+    activeConversationId,
+    messages,
+    isLoading,
+    startNew,
+    setActiveConversation,
+    upsertConversation,
+    addConversationMessage,
+    setLoading,
+  } = useChatStore();
+
+  const sendMessage = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+
+      const userMessage: Message = {
+        id: makeId(),
+        role: 'user',
+        content: trimmed,
+      };
+
+      let conversationId = activeConversationId;
+
+      if (!conversationId) {
+        conversationId = upsertConversation({
+          title: shortenTitle(trimmed),
+          firstMessage: userMessage,
+        });
+      } else {
+        addConversationMessage(userMessage, conversationId);
+      }
+
+      setLoading(true);
+
+      const toolCalls = buildToolCalls(files);
+
+      setTimeout(() => {
+        const assistantMessage: Message = {
+          id: makeId(),
+          role: 'assistant',
+          content: "Here's what I came up with based on your content:",
+          toolCalls,
+          output: {
+            filename: 'output.md',
+            body: defaultOutput,
+          },
+        };
+
+        addConversationMessage(assistantMessage, conversationId);
+        setLoading(false);
+      }, 2000);
+    },
+    [activeConversationId, addConversationMessage, files, setLoading, upsertConversation],
+  );
+
+  return {
+    conversations,
+    activeConversationId,
+    messages,
+    isLoading,
+    sendMessage,
+    startNew,
+    openConversation: setActiveConversation,
+  };
+}
+</file>
+
+<file path="src/hooks/useFiles.ts">
+import { useCallback, useMemo, useState } from 'react';
+import { useFileStore } from '../stores/fileStore';
+import type { File } from '../types';
+
+const formatSize = (bytes: number) => {
+  if (bytes > 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+};
+
+const readContent = (file: globalThis.File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = (err) => reject(err);
+    reader.readAsText(file);
+  });
+
+export function useFiles() {
+  const { files, activeFileId, addFiles, setActiveFile, updateFileContent, updateScrollPosition } =
+    useFileStore();
+  const [isDragActive, setIsDragActive] = useState(false);
+
+  const activeFile = useMemo<File | null>(
+    () => files.find((file) => file.id === activeFileId) ?? null,
+    [files, activeFileId],
+  );
+
+  const handleUpload = useCallback(
+    async (fileList: FileList | ArrayLike<globalThis.File>) => {
+      const items = Array.from(fileList ?? []);
+      if (!items.length) return;
+
+      const resolved = await Promise.all(
+        items.map(async (item) => ({
+          name: item.name,
+          content: await readContent(item),
+          sizeLabel: formatSize(item.size),
+          type: item.type,
+        })),
+      );
+
+      addFiles(resolved);
+    },
+    [addFiles],
+  );
+
+  const closeFile = useCallback(() => setActiveFile(null), [setActiveFile]);
+
+  return {
+    files,
+    activeFile,
+    activeFileId,
+    isDragActive,
+    setIsDragActive,
+    handleUpload,
+    selectFile: setActiveFile,
+    closeFile,
+    updateFileContent,
+    updateScrollPosition,
+  };
+}
+</file>
+
+<file path="src/stores/chatStore.ts">
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { Conversation, Message } from '../types';
+
+const makeId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+
+type ChatState = {
+  conversations: Conversation[];
+  activeConversationId: string | null;
+  messages: Message[];
+  isOpen: boolean;
+  isLoading: boolean;
+  startNew: () => void;
+  setActiveConversation: (id: string | null) => void;
+  setMessages: (messages: Message[]) => void;
+  upsertConversation: (data: { title: string; firstMessage: Message }) => string;
+  addConversationMessage: (message: Message, conversationId?: string) => void;
+  setLoading: (value: boolean) => void;
+};
+
+export const useChatStore = create<ChatState>()(
+  persist(
+    (set, get) => ({
+      conversations: [],
+      activeConversationId: null,
+      messages: [],
+      isOpen: true,
+      isLoading: false,
+      startNew: () =>
+        set({
+          activeConversationId: null,
+          messages: [],
+          isLoading: false,
+          isOpen: true,
+        }),
+      setActiveConversation: (id) => {
+        const found = get().conversations.find((conv) => conv.id === id);
+        set({
+          activeConversationId: id,
+          messages: found?.messages ?? [],
+          isOpen: true,
+        });
+      },
+      setMessages: (messages) =>
+        set((state) => {
+          if (!state.activeConversationId) {
+            return { messages };
+          }
+
+          return {
+            messages,
+            conversations: state.conversations.map((conv) =>
+              conv.id === state.activeConversationId
+                ? { ...conv, messages, updatedAt: Date.now() }
+                : conv,
+            ),
+          };
+        }),
+      upsertConversation: ({ title, firstMessage }) => {
+        const id = makeId();
+        const now = Date.now();
+        const newConversation: Conversation = {
+          id,
+          title,
+          date: 'Just now',
+          messages: [firstMessage],
+          updatedAt: now,
+        };
+
+        set((state) => ({
+          conversations: [newConversation, ...state.conversations],
+          activeConversationId: id,
+          messages: [firstMessage],
+          isOpen: true,
+        }));
+
+        return id;
+      },
+      addConversationMessage: (message, conversationId) =>
+        set((state) => {
+          const targetId = conversationId ?? state.activeConversationId;
+          if (!targetId) return state;
+
+          const targetConversation = state.conversations.find((conv) => conv.id === targetId);
+          const baseMessages = targetConversation?.messages ?? (targetId === state.activeConversationId ? state.messages : []);
+          const updatedMessages = [...baseMessages, message];
+
+          const updatedConversations = state.conversations
+            .map((conv) =>
+              conv.id === targetId
+                ? {
+                    ...conv,
+                    messages: updatedMessages,
+                    date: 'Just now',
+                    updatedAt: Date.now(),
+                  }
+                : conv,
+            )
+            .sort((a, b) => b.updatedAt - a.updatedAt);
+
+          return {
+            messages: targetId === state.activeConversationId ? updatedMessages : state.messages,
+            conversations: updatedConversations,
+          };
+        }),
+      setLoading: (value) => set({ isLoading: value }),
+    }),
+    {
+      name: 'echo-chat',
+    },
+  ),
+);
+</file>
+
+<file path="src/stores/fileStore.ts">
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { File } from '../types';
+
+const makeId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+
+type FileState = {
+  files: File[];
+  activeFileId: string | null;
+  addFiles: (
+    items: Array<{
+      name: string;
+      content: string;
+      sizeLabel?: string;
+      type?: string;
+    }>,
+  ) => void;
+  setActiveFile: (id: string | null) => void;
+  updateFileContent: (id: string, content: string) => void;
+  updateScrollPosition: (id: string, position: number) => void;
+};
+
+export const useFileStore = create<FileState>()(
+  persist(
+    (set, get) => ({
+      files: [],
+      activeFileId: null,
+      addFiles: (items) => {
+        const nextFiles: File[] = [
+          ...items.map((item) => ({
+            id: makeId(),
+            name: item.name,
+            content: item.content,
+            sizeLabel: item.sizeLabel,
+            type: item.type,
+            updatedAt: Date.now(),
+          })),
+          ...get().files,
+        ];
+
+        set({ files: nextFiles, activeFileId: nextFiles[0]?.id ?? null });
+      },
+      setActiveFile: (id) => set({ activeFileId: id }),
+      updateFileContent: (id, content) =>
+        set((state) => ({
+          files: state.files.map((file) =>
+            file.id === id ? { ...file, content, updatedAt: Date.now() } : file,
+          ),
+        })),
+      updateScrollPosition: (id, position) =>
+        set((state) => ({
+          files: state.files.map((file) =>
+            file.id === id ? { ...file, scrollPosition: position } : file,
+          ),
+        })),
+    }),
+    {
+      name: 'echo-files',
+    },
+  ),
+);
+</file>
+
+<file path="src/types/index.ts">
+export interface ToolCall {
+  name: string;
+  input: Record<string, any>;
+  result?: any;
+}
+
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  toolCalls?: ToolCall[];
+  output?: {
+    filename: string;
+    body: string;
+  };
+}
+
+export interface File {
+  id: string;
+  name: string;
+  content: string;
+  scrollPosition?: number;
+  updatedAt: number;
+  sizeLabel?: string;
+  type?: string;
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  date: string;
+  messages: Message[];
+  updatedAt: number;
+}
+</file>
+
+<file path="src/App.tsx">
+import { useEffect } from 'react';
+import Sidebar from './components/Sidebar/Sidebar';
+import Editor from './components/Editor/Editor';
+import ChatPanel from './components/Chat/ChatPanel';
+import { useFiles } from './hooks/useFiles';
+import { useChat } from './hooks/useChat';
+
+const App = () => {
+  const {
+    files,
+    activeFile,
+    activeFileId,
+    selectFile,
+    closeFile,
+    handleUpload,
+    isDragActive,
+    setIsDragActive,
+    updateFileContent,
+    updateScrollPosition,
+  } = useFiles();
+
+  const { conversations, activeConversationId, messages, isLoading, sendMessage, startNew, openConversation } =
+    useChat(files);
+
+  const activeConversation = conversations.find((conv) => conv.id === activeConversationId);
+  const chatTitle = activeConversation ? activeConversation.title : 'New conversation';
+
+  useEffect(() => {
+    const handleDragOver = (event: DragEvent) => {
+      event.preventDefault();
+      setIsDragActive(true);
+    };
+
+    const handleDragLeave = (event: DragEvent) => {
+      if (!event.relatedTarget) {
+        setIsDragActive(false);
+      }
+    };
+
+    const handleDrop = (event: DragEvent) => {
+      event.preventDefault();
+      setIsDragActive(false);
+      if (event.dataTransfer?.files?.length) {
+        handleUpload(event.dataTransfer.files);
+      }
+    };
+
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('drop', handleDrop);
+
+    return () => {
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, [handleUpload, setIsDragActive]);
+
+  return (
+    <div className="app">
+      <Sidebar
+        conversations={conversations}
+        activeConversationId={activeConversationId}
+        files={files}
+        activeFileId={activeFileId}
+        onNewChat={() => {
+          closeFile();
+          startNew();
+        }}
+        onSelectConversation={(id) => {
+          closeFile();
+          openConversation(id);
+        }}
+        onSelectFile={(id) => selectFile(id)}
+        onUpload={handleUpload}
+        isDragActive={isDragActive}
+        setIsDragActive={setIsDragActive}
+      />
+
+      <main className="main">
+        {activeFile ? (
+          <Editor
+            file={activeFile}
+            onBack={closeFile}
+            onChange={updateFileContent}
+            onScroll={updateScrollPosition}
+          />
+        ) : (
+          <ChatPanel
+            title={chatTitle}
+            messages={messages}
+            isLoading={isLoading}
+            onSend={sendMessage}
+            onClear={() => {
+              startNew();
+            }}
+          />
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default App;
+</file>
+
+<file path="src/index.css">
+:root {
+  --bg: #0a0a0a;
+  --panel: #0f0f0f;
+  --border: #1f1f1f;
+  --hover: #1a1a1a;
+  --active: #1f1f1f;
+  --text: #e4e4e7;
+  --muted: #52525b;
+  --muted-strong: #71717a;
+  --accent: #3b82f6;
+  --success: #4ade80;
+  --card: #111;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+}
+
+.app {
+  display: flex;
+  height: 100vh;
+}
+
+.sidebar {
+  width: 260px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.new-chat-btn {
+  padding: 0.375rem 0.75rem;
+  background: #1a1a1a;
+  border: 1px solid #252525;
+  border-radius: 0.375rem;
+  color: #a1a1aa;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.new-chat-btn:hover {
+  background: #252525;
+  color: #fff;
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sidebar-section {
+  padding: 0.75rem;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.5rem;
+}
+
+.section-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.section-action {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: 0.25rem;
+}
+
+.section-action:hover {
+  background: #252525;
+  color: #fff;
+}
+
+.section-list {
+  margin-top: 0.25rem;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.file-item:hover {
+  background: var(--hover);
+}
+
+.file-item.active {
+  background: var(--active);
+}
+
+.file-icon {
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.file-name {
+  flex: 1;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-size {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.conv-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.conv-item:hover {
+  background: var(--hover);
+}
+
+.conv-item.active {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.conv-icon {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.conv-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.conv-title {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conv-date {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.empty-section {
+  padding: 1rem 0.5rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #3f3f46;
+}
+
+.upload-area {
+  margin: 0.5rem;
+  padding: 1rem;
+  border: 2px dashed #252525;
+  border-radius: 0.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.upload-area:hover {
+  border-color: #3f3f46;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.upload-area.dragover {
+  border-color: var(--accent);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.upload-text {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.main-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.main-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.main-title-icon {
+  opacity: 0.7;
+}
+
+.main-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.main-action-btn {
+  padding: 0.375rem 0.75rem;
+  background: #1a1a1a;
+  border: 1px solid #252525;
+  border-radius: 0.375rem;
+  color: #71717a;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.main-action-btn:hover {
+  background: #252525;
+  color: #a1a1aa;
+}
+
+.file-viewer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.file-content {
+  flex: 1;
+  padding: 1rem;
+  overflow: auto;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background: var(--bg);
+  border: none;
+  color: var(--text);
+  resize: none;
+}
+
+.chat-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.message {
+  margin-bottom: 1.25rem;
+  max-width: 720px;
+}
+
+.message-role {
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 0.375rem;
+}
+
+.message-role.user {
+  color: #60a5fa;
+}
+
+.message-role.assistant {
+  color: #f97316;
+}
+
+.message-content {
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: #d4d4d8;
+}
+
+.message-content p {
+  margin-bottom: 0.625rem;
+}
+
+.tool-call {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  background: var(--hover);
+  border: 1px solid #252525;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--muted-strong);
+  margin: 0.375rem 0.375rem 0.375rem 0;
+}
+
+.tool-call-icon {
+  color: var(--success);
+}
+
+.output-block {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  margin: 0.625rem 0;
+  overflow: hidden;
+}
+
+.output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  background: #0d0d0d;
+  border-bottom: 1px solid var(--border);
+}
+
+.output-file {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8rem;
+  color: var(--muted-strong);
+}
+
+.output-file-icon {
+  color: var(--success);
+}
+
+.output-actions {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.output-btn {
+  padding: 0.25rem 0.5rem;
+  background: transparent;
+  border: 1px solid #252525;
+  border-radius: 0.25rem;
+  color: var(--muted-strong);
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.output-btn:hover {
+  background: var(--hover);
+  color: #a1a1aa;
+}
+
+.output-btn.primary {
+  background: var(--success);
+  border-color: var(--success);
+  color: var(--bg);
+}
+
+.output-content {
+  padding: 0.875rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.input-area {
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.input-row {
+  display: flex;
+  gap: 0.625rem;
+}
+
+.input-wrapper {
+  flex: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+}
+
+.input-wrapper:focus-within {
+  border-color: var(--accent);
+}
+
+.chat-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 0.95rem;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+}
+
+.chat-input::placeholder {
+  color: #3f3f46;
+}
+
+.send-btn {
+  padding: 0 1.25rem;
+  background: #fff;
+  border: none;
+  border-radius: 0.625rem;
+  color: var(--bg);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.send-btn:hover {
+  background: #e4e4e7;
+}
+
+.send-btn:disabled {
+  background: var(--active);
+  color: #3f3f46;
+  cursor: not-allowed;
+}
+
+.thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  background: var(--card);
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted-strong);
+}
+
+.thinking-dots {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.thinking-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--muted);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.thinking-dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.thinking-dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+  0%,
+  80%,
+  100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+.welcome-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+.welcome-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.welcome-title {
+  font-size: 1.25rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.welcome-text {
+  font-size: 0.95rem;
+  color: var(--muted);
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+.fade {
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.line-numbers {
+  display: none;
+}
+</file>
+
+<file path="src/main.tsx">
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
+</file>
+
+<file path="echo-studio-app.html">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Echo Studio</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e4e4e7;
+      height: 100vh;
+      overflow: hidden;
+    }
+    
+    .app {
+      display: flex;
+      height: 100vh;
+    }
+    
+    /* Sidebar */
+    .sidebar {
+      width: 260px;
+      background: #0f0f0f;
+      border-right: 1px solid #1f1f1f;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .sidebar-header {
+      padding: 1rem;
+      border-bottom: 1px solid #1f1f1f;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .logo {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    
+    .new-chat-btn {
+      padding: 0.375rem 0.75rem;
+      background: #1a1a1a;
+      border: 1px solid #252525;
+      border-radius: 0.375rem;
+      color: #a1a1aa;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    
+    .new-chat-btn:hover {
+      background: #252525;
+      color: #fff;
+    }
+    
+    .sidebar-content {
+      flex: 1;
+      overflow-y: auto;
+    }
+    
+    /* Sidebar sections */
+    .sidebar-section {
+      padding: 0.75rem;
+    }
+    
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 0.5rem;
+    }
+    
+    .section-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #52525b;
+      font-weight: 500;
+    }
+    
+    .section-action {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      color: #52525b;
+      font-size: 1rem;
+      cursor: pointer;
+      border-radius: 0.25rem;
+    }
+    
+    .section-action:hover {
+      background: #252525;
+      color: #fff;
+    }
+    
+    .section-list {
+      margin-top: 0.25rem;
+    }
+    
+    /* File item */
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      border-radius: 0.375rem;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    
+    .file-item:hover {
+      background: #1a1a1a;
+    }
+    
+    .file-item.active {
+      background: #1f1f1f;
+    }
+    
+    .file-icon {
+      font-size: 0.9rem;
+      opacity: 0.7;
+    }
+    
+    .file-name {
+      flex: 1;
+      font-size: 0.85rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .file-size {
+      font-size: 0.7rem;
+      color: #52525b;
+    }
+    
+    /* Conversation item */
+    .conv-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      border-radius: 0.375rem;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    
+    .conv-item:hover {
+      background: #1a1a1a;
+    }
+    
+    .conv-item.active {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+    
+    .conv-icon {
+      font-size: 0.85rem;
+      opacity: 0.7;
+    }
+    
+    .conv-info {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .conv-title {
+      font-size: 0.85rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .conv-date {
+      font-size: 0.7rem;
+      color: #52525b;
+    }
+    
+    /* Empty state */
+    .empty-section {
+      padding: 1rem 0.5rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #3f3f46;
+    }
+    
+    /* Upload area */
+    .upload-area {
+      margin: 0.5rem;
+      padding: 1rem;
+      border: 2px dashed #252525;
+      border-radius: 0.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    
+    .upload-area:hover {
+      border-color: #3f3f46;
+      background: rgba(255, 255, 255, 0.01);
+    }
+    
+    .upload-area.dragover {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.05);
+    }
+    
+    .upload-text {
+      font-size: 0.8rem;
+      color: #52525b;
+    }
+    
+    /* Main area */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #0a0a0a;
+    }
+    
+    /* Main header */
+    .main-header {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #1f1f1f;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .main-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+    }
+    
+    .main-title-icon {
+      opacity: 0.7;
+    }
+    
+    .main-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+    
+    .main-action-btn {
+      padding: 0.375rem 0.75rem;
+      background: #1a1a1a;
+      border: 1px solid #252525;
+      border-radius: 0.375rem;
+      color: #71717a;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    
+    .main-action-btn:hover {
+      background: #252525;
+      color: #a1a1aa;
+    }
+    
+    /* File viewer */
+    .file-viewer {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    .file-viewer.hidden {
+      display: none;
+    }
+    
+    .file-content {
+      flex: 1;
+      padding: 1rem;
+      overflow: auto;
+      font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      background: #0a0a0a;
+    }
+    
+    .file-content:focus {
+      outline: none;
+    }
+    
+    /* Chat container */
+    .chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .chat-container.hidden {
+      display: none;
+    }
+    
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+    }
+    
+    .message {
+      margin-bottom: 1.25rem;
+      max-width: 720px;
+    }
+    
+    .message-role {
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-bottom: 0.375rem;
+    }
+    
+    .message-role.user { color: #60a5fa; }
+    .message-role.assistant { color: #f97316; }
+    
+    .message-content {
+      font-size: 0.95rem;
+      line-height: 1.7;
+      color: #d4d4d8;
+    }
+    
+    .message-content p {
+      margin-bottom: 0.625rem;
+    }
+    
+    /* Tool call indicator */
+    .tool-call {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.25rem 0.625rem;
+      background: #1a1a1a;
+      border: 1px solid #252525;
+      border-radius: 0.375rem;
+      font-size: 0.75rem;
+      color: #71717a;
+      margin: 0.375rem 0.375rem 0.375rem 0;
+    }
+    
+    .tool-call-icon {
+      color: #4ade80;
+    }
+    
+    /* Output block */
+    .output-block {
+      background: #111;
+      border: 1px solid #1f1f1f;
+      border-radius: 0.625rem;
+      margin: 0.625rem 0;
+      overflow: hidden;
+    }
+    
+    .output-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 0.75rem;
+      background: #0d0d0d;
+      border-bottom: 1px solid #1f1f1f;
+    }
+    
+    .output-file {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      font-size: 0.8rem;
+      color: #71717a;
+    }
+    
+    .output-file-icon {
+      color: #4ade80;
+    }
+    
+    .output-actions {
+      display: flex;
+      gap: 0.375rem;
+    }
+    
+    .output-btn {
+      padding: 0.25rem 0.5rem;
+      background: transparent;
+      border: 1px solid #252525;
+      border-radius: 0.25rem;
+      color: #71717a;
+      font-size: 0.7rem;
+      cursor: pointer;
+    }
+    
+    .output-btn:hover {
+      background: #1a1a1a;
+      color: #a1a1aa;
+    }
+    
+    .output-btn.primary {
+      background: #4ade80;
+      border-color: #4ade80;
+      color: #0a0a0a;
+    }
+    
+    .output-content {
+      padding: 0.875rem;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+    
+    /* Input area */
+    .input-area {
+      padding: 0.75rem 1rem 1rem;
+      border-top: 1px solid #1f1f1f;
+    }
+    
+    .input-row {
+      display: flex;
+      gap: 0.625rem;
+    }
+    
+    .input-wrapper {
+      flex: 1;
+      background: #111;
+      border: 1px solid #1f1f1f;
+      border-radius: 0.625rem;
+    }
+    
+    .input-wrapper:focus-within {
+      border-color: #3b82f6;
+    }
+    
+    .chat-input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 0.95rem;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+    }
+    
+    .chat-input::placeholder {
+      color: #3f3f46;
+    }
+    
+    .send-btn {
+      padding: 0 1.25rem;
+      background: #fff;
+      border: none;
+      border-radius: 0.625rem;
+      color: #0a0a0a;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    
+    .send-btn:hover {
+      background: #e4e4e7;
+    }
+    
+    .send-btn:disabled {
+      background: #1f1f1f;
+      color: #3f3f46;
+      cursor: not-allowed;
+    }
+    
+    /* Thinking indicator */
+    .thinking {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.875rem;
+      background: #111;
+      border-radius: 0.5rem;
+      font-size: 0.85rem;
+      color: #71717a;
+    }
+    
+    .thinking-dots {
+      display: flex;
+      gap: 0.2rem;
+    }
+    
+    .thinking-dot {
+      width: 5px;
+      height: 5px;
+      background: #52525b;
+      border-radius: 50%;
+      animation: bounce 1.4s infinite ease-in-out both;
+    }
+    
+    .thinking-dot:nth-child(1) { animation-delay: -0.32s; }
+    .thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+    
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+    
+    /* Welcome state */
+    .welcome-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      text-align: center;
+    }
+    
+    .welcome-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+    
+    .welcome-title {
+      font-size: 1.25rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+    
+    .welcome-text {
+      font-size: 0.95rem;
+      color: #52525b;
+      max-width: 400px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">Echo</div>
+        <button class="new-chat-btn" onclick="newChat()">+ New</button>
+      </div>
+      
+      <div class="sidebar-content">
+        <!-- Conversations section -->
+        <div class="sidebar-section">
+          <div class="section-header">
+            <span class="section-title">Conversations</span>
+          </div>
+          <div class="section-list" id="conversationList"></div>
+        </div>
+        
+        <!-- Files section -->
+        <div class="sidebar-section">
+          <div class="section-header">
+            <span class="section-title">Files</span>
+            <button class="section-action" onclick="document.getElementById('fileInput').click()">+</button>
+          </div>
+          <div class="section-list" id="fileList"></div>
+          
+          <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-text">Drop files or click to upload</div>
+          </div>
+          <input type="file" id="fileInput" multiple style="display: none" onchange="handleFileUpload(this.files)">
+        </div>
+      </div>
+    </aside>
+    
+    <!-- Main area -->
+    <main class="main">
+      <!-- File viewer -->
+      <div class="file-viewer hidden" id="fileViewer">
+        <header class="main-header">
+          <div class="main-title">
+            <span class="main-title-icon">📄</span>
+            <span id="fileViewerTitle">filename.txt</span>
+          </div>
+          <div class="main-actions">
+            <button class="main-action-btn" onclick="closeFileViewer()">← Back to chat</button>
+          </div>
+        </header>
+        <div class="file-content" id="fileContent" contenteditable="true"></div>
+      </div>
+      
+      <!-- Chat container -->
+      <div class="chat-container" id="chatContainer">
+        <header class="main-header">
+          <div class="main-title">
+            <span class="main-title-icon">💬</span>
+            <span id="chatTitle">New conversation</span>
+          </div>
+          <div class="main-actions">
+            <button class="main-action-btn" onclick="clearChat()">Clear</button>
+          </div>
+        </header>
+        
+        <div class="messages" id="messages">
+          <div class="welcome-state" id="welcomeState">
+            <div class="welcome-icon">✨</div>
+            <h2 class="welcome-title">Welcome to Echo</h2>
+            <p class="welcome-text">
+              Upload your content files, then ask me to help you write in your voice, 
+              organize your notes, or work with your files.
+            </p>
+          </div>
+        </div>
+        
+        <div class="input-area">
+          <div class="input-row">
+            <div class="input-wrapper">
+              <textarea 
+                class="chat-input" 
+                id="chatInput"
+                placeholder="Ask Echo to work with your files..."
+                rows="1"
+                onkeydown="handleKeydown(event)"
+              ></textarea>
+            </div>
+            <button class="send-btn" onclick="sendMessage()" id="sendBtn">Send</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // State
+    let files = [];
+    let conversations = [];
+    let currentConversation = null;
+    let currentFile = null;
+    let messages = [];
+    
+    // Initialize
+    renderConversations();
+    renderFiles();
+    
+    // Textarea auto-resize
+    const textarea = document.getElementById('chatInput');
+    textarea.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+    });
+    
+    function handleKeydown(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+    
+    // Drag and drop
+    const uploadArea = document.getElementById('uploadArea');
+    
+    document.body.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+    
+    document.body.addEventListener('dragleave', (e) => {
+      if (!e.relatedTarget) {
+        uploadArea.classList.remove('dragover');
+      }
+    });
+    
+    document.body.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      if (e.dataTransfer.files.length) {
+        handleFileUpload(e.dataTransfer.files);
+      }
+    });
+    
+    // File handling
+    function handleFileUpload(fileList) {
+      for (const file of fileList) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const content = e.target.result;
+          const size = file.size > 1024 * 1024 
+            ? (file.size / (1024 * 1024)).toFixed(1) + ' MB'
+            : Math.round(file.size / 1024) + ' KB';
+          
+          files.push({
+            id: Date.now().toString() + Math.random(),
+            name: file.name,
+            content: content,
+            size: size,
+            type: file.type
+          });
+          
+          renderFiles();
+        };
+        reader.readAsText(file);
+      }
+    }
+    
+    function renderFiles() {
+      const list = document.getElementById('fileList');
+      
+      if (files.length === 0) {
+        list.innerHTML = '<div class="empty-section">No files yet</div>';
+        return;
+      }
+      
+      list.innerHTML = files.map(f => `
+        <div class="file-item ${currentFile?.id === f.id ? 'active' : ''}" onclick="openFile('${f.id}')">
+          <span class="file-icon">📄</span>
+          <span class="file-name">${f.name}</span>
+          <span class="file-size">${f.size}</span>
+        </div>
+      `).join('');
+    }
+    
+    function openFile(fileId) {
+      const file = files.find(f => f.id === fileId);
+      if (!file) return;
+      
+      currentFile = file;
+      renderFiles();
+      
+      // Show file viewer
+      document.getElementById('fileViewer').classList.remove('hidden');
+      document.getElementById('chatContainer').classList.add('hidden');
+      document.getElementById('fileViewerTitle').textContent = file.name;
+      document.getElementById('fileContent').textContent = file.content;
+    }
+    
+    function closeFileViewer() {
+      currentFile = null;
+      renderFiles();
+      document.getElementById('fileViewer').classList.add('hidden');
+      document.getElementById('chatContainer').classList.remove('hidden');
+    }
+    
+    // Conversations
+    function renderConversations() {
+      const list = document.getElementById('conversationList');
+      
+      if (conversations.length === 0) {
+        list.innerHTML = '<div class="empty-section">No conversations yet</div>';
+        return;
+      }
+      
+      list.innerHTML = conversations.map(c => `
+        <div class="conv-item ${currentConversation?.id === c.id ? 'active' : ''}" onclick="openConversation('${c.id}')">
+          <span class="conv-icon">💬</span>
+          <div class="conv-info">
+            <div class="conv-title">${c.title}</div>
+            <div class="conv-date">${c.date}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    function openConversation(convId) {
+      const conv = conversations.find(c => c.id === convId);
+      if (!conv) return;
+      
+      currentConversation = conv;
+      renderConversations();
+      
+      // Show chat, hide file viewer
+      document.getElementById('fileViewer').classList.add('hidden');
+      document.getElementById('chatContainer').classList.remove('hidden');
+      document.getElementById('chatTitle').textContent = conv.title;
+      document.getElementById('welcomeState').style.display = 'none';
+      
+      // Restore messages
+      const messagesEl = document.getElementById('messages');
+      messagesEl.innerHTML = conv.messages.map(m => `
+        <div class="message">
+          <div class="message-role ${m.role}">${m.role === 'user' ? 'You' : 'Echo'}</div>
+          <div class="message-content">${m.content}</div>
+        </div>
+      `).join('');
+    }
+    
+    function newChat() {
+      currentConversation = null;
+      currentFile = null;
+      messages = [];
+      
+      renderConversations();
+      renderFiles();
+      
+      document.getElementById('fileViewer').classList.add('hidden');
+      document.getElementById('chatContainer').classList.remove('hidden');
+      document.getElementById('chatTitle').textContent = 'New conversation';
+      document.getElementById('welcomeState').style.display = 'flex';
+      document.getElementById('messages').innerHTML = `
+        <div class="welcome-state" id="welcomeState">
+          <div class="welcome-icon">✨</div>
+          <h2 class="welcome-title">Welcome to Echo</h2>
+          <p class="welcome-text">
+            Upload your content files, then ask me to help you write in your voice, 
+            organize your notes, or work with your files.
+          </p>
+        </div>
+      `;
+    }
+    
+    function clearChat() {
+      newChat();
+    }
+    
+    function sendMessage() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+      
+      // Hide welcome state
+      const welcomeState = document.getElementById('welcomeState');
+      if (welcomeState) welcomeState.style.display = 'none';
+      
+      const messagesEl = document.getElementById('messages');
+      
+      // Create conversation if needed
+      if (!currentConversation) {
+        const newConv = {
+          id: Date.now().toString(),
+          title: text.slice(0, 40) + (text.length > 40 ? '...' : ''),
+          date: 'Just now',
+          messages: []
+        };
+        conversations.unshift(newConv);
+        currentConversation = newConv;
+        renderConversations();
+        document.getElementById('chatTitle').textContent = newConv.title;
+      }
+      
+      // Add user message
+      const userMsg = { role: 'user', content: `<p>${text}</p>` };
+      currentConversation.messages.push(userMsg);
+      
+      messagesEl.innerHTML += `
+        <div class="message">
+          <div class="message-role user">You</div>
+          <div class="message-content"><p>${text}</p></div>
+        </div>
+      `;
+      
+      // Add thinking indicator
+      messagesEl.innerHTML += `
+        <div class="thinking" id="thinking">
+          <div class="thinking-dots">
+            <div class="thinking-dot"></div>
+            <div class="thinking-dot"></div>
+            <div class="thinking-dot"></div>
+          </div>
+          Working...
+        </div>
+      `;
+      
+      input.value = '';
+      input.style.height = 'auto';
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      
+      // Simulate response
+      setTimeout(() => {
+        document.getElementById('thinking')?.remove();
+        
+        const toolCalls = files.length > 0 ? `
+          <div class="tool-call">
+            <span class="tool-call-icon">📁</span>
+            list_files()
+          </div>
+          <div class="tool-call">
+            <span class="tool-call-icon">📁</span>
+            read_file("${files[0].name}")
+          </div>
+        ` : '';
+        
+        const responseContent = `
+          ${toolCalls}
+          <p>Here's what I came up with based on your content:</p>
+          <div class="output-block">
+            <div class="output-header">
+              <div class="output-file">
+                <span class="output-file-icon">✨</span>
+                output.md
+              </div>
+              <div class="output-actions">
+                <button class="output-btn" onclick="regenerate()">↻</button>
+                <button class="output-btn primary" onclick="copyOutput(this)">Copy</button>
+              </div>
+            </div>
+            <div class="output-content">this is where the AI-generated content would appear
+
+matching your writing style
+
+short lines, lowercase, direct</div>
+          </div>
+          <p>Want me to adjust anything?</p>
+        `;
+        
+        const assistantMsg = { role: 'assistant', content: responseContent };
+        currentConversation.messages.push(assistantMsg);
+        
+        messagesEl.innerHTML += `
+          <div class="message">
+            <div class="message-role assistant">Echo</div>
+            <div class="message-content">${responseContent}</div>
+          </div>
+        `;
+        
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }, 2000);
+    }
+    
+    function copyOutput(btn) {
+      const text = btn.closest('.output-block').querySelector('.output-content').textContent;
+      navigator.clipboard.writeText(text);
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 1500);
+    }
+    
+    function regenerate() {
+      alert('Regenerating...');
+    }
+  </script>
+</body>
+</html>
+</file>
+
+<file path="index.html">
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Echo Studio</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+</file>
+
+<file path="package.json">
+{
+  "name": "echo-studio",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.21",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.2.0",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.0"
+  }
+}
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
+</file>
+
+<file path="tsconfig.node.json">
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["vite.config.ts"]
+}
+</file>
+
+<file path="vite.config.ts">
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+});
+</file>
+
+</files>
