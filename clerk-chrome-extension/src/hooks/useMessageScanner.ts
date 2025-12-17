@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from "react"
 
 import { detectRole, generateMessageId, getLinkedInAuthor, getMessageText } from "~scrapers/domUtils"
-import { checkboxOverlay } from "~ui/CheckboxOverlay"
 import { detectPlatform, getPlatformLabel, type Platform } from "~utils/platform"
+
+const CHECKBOX_CONTAINER_CLASS = "exporter-checkbox-container"
+const CHECKBOX_CLASS = "exporter-checkbox"
 
 export interface Message {
   id: string
@@ -58,6 +60,10 @@ export const useMessageScanner = ({ selectedIds, onToggleSelection, isExporterOp
   const selectedIdsRef = useRef(selectedIds)
   const platformRef = useRef<Platform>(detectPlatform())
   const conversationKeyRef = useRef<string>(`${window.location.hostname}${window.location.pathname}${window.location.search}`)
+  
+  // Checkbox state tracking
+  const nodeToContainerRef = useRef(new Map<Element, HTMLDivElement>())
+  const idToCheckboxRef = useRef(new Map<string, HTMLInputElement>())
 
   // Keep latest selection without re-creating callbacks
   useEffect(() => {
