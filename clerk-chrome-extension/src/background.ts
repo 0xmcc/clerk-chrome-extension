@@ -100,12 +100,9 @@ const injectInterceptor = (tabId: number) => {
             console.log("[Interceptor] shouldCapture: MATCH (ChatGPT)", { url: urlStr, pathname: p })
             return true
           }
-          // Match Claude list: /api/organizations/{orgId}/conversations or /chat_conversations
-          // Match Claude detail: /api/organizations/{orgId}/conversations/{uuid} or /chat_conversations/{uuid}
-          // Does NOT match sub-paths like /conversations/{uuid}/wiggle/list-files (due to $ anchor)
-
-          if (/^\/api\/organizations\/[^/]+\/(chat_)?conversations(\/[^/]+)?$/.test(p)) {
-            console.log("[Interceptor] shouldCapture: MATCH (Claude)", { url: urlStr, pathname: p })
+          // Capture ALL Claude organization URLs - handler extracts orgId and filters conversation endpoints
+          if (p.startsWith("/api/organizations/")) {
+            console.log("[Interceptor] shouldCapture: MATCH (Claude org URL)", { url: urlStr, pathname: p })
             return true
           }
           return false

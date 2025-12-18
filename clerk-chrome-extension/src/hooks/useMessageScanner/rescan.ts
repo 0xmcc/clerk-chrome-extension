@@ -164,29 +164,55 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
         }
 
         console.log("[rescan] STEP 9: Claude orgId resolved", { orgId, activeId })
-        const url = `/api/organizations/${orgId}/conversations/${activeId}`
-        console.log("[rescan] STEP 10: Claude fetch", { url })
-        
-        const resp = await fetch(url, {
-          credentials: "include",
-          headers: { accept: "application/json" }
-        })
-        
-        console.log("[rescan] STEP 11: Claude response", { 
-          status: resp.status, 
-          ok: resp.ok,
-          contentType: resp.headers.get("content-type")
-        })
-        
-        if (!resp.ok) {
-          console.log("[rescan] STEP 12: EXIT - Claude fetch failed", { 
-            status: resp.status, 
-            statusText: resp.statusText,
-            url
+
+        // Try both endpoint formats (Claude uses both)
+        const endpoints = [
+          `/api/organizations/${orgId}/conversations/${activeId}`,
+          `/api/organizations/${orgId}/chat_conversations/${activeId}`
+        ]
+
+        let resp: Response | null = null
+        let lastError: string | null = null
+
+        for (const url of endpoints) {
+          console.log("[rescan] STEP 10: Claude fetch attempt", { url })
+          
+          try {
+            resp = await fetch(url, {
+              credentials: "include",
+              headers: { accept: "application/json" }
+            })
+            
+            console.log("[rescan] STEP 11: Claude response", { 
+              url,
+              status: resp.status, 
+              ok: resp.ok,
+              contentType: resp.headers.get("content-type")
+            })
+            
+            if (resp.ok) {
+              console.log("[rescan] STEP 11a: Success with endpoint", url)
+              break // Found working endpoint
+            } else {
+              lastError = `${url} returned ${resp.status}`
+              console.log("[rescan] STEP 11b: Endpoint failed, trying next", { url, status: resp.status })
+            }
+          } catch (error) {
+            lastError = `${url} threw ${error}`
+            console.log("[rescan] STEP 11c: Endpoint error, trying next", { url, error })
+            continue
+          }
+        }
+
+        if (!resp || !resp.ok) {
+          console.log("[rescan] STEP 12: EXIT - All Claude endpoints failed", { 
+            endpoints,
+            lastError
           })
           return
         }
-        
+
+        // Continue with existing logic using the successful resp
         console.log("[rescan] STEP 13: Claude parsing JSON")
         const json = await resp.json().catch((e) => {
           console.log("[rescan] STEP 13: EXIT - Claude JSON parse failed", e)
@@ -205,7 +231,7 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
         })
         handleInterceptorEvent({
           source: INTERCEPTOR_SOURCE,
-          url: new URL(url, window.location.origin).href,
+          url: new URL(resp.url, window.location.origin).href, // Use resp.url for the final URL
           method: "GET",
           status: resp.status,
           ok: resp.ok,
