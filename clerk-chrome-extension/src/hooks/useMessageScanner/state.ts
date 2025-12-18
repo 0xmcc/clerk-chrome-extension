@@ -44,12 +44,6 @@ export const useConversationStore = () => {
       })
     }
 
-    // Only force React updates when scanning is enabled (reduces rerenders while still capturing in store)
-    if (!isScanningRef.current) {
-      console.log("[useMessageScanner] upsertMany: skipping React update (not scanning)")
-      return
-    }
-
     const next = Array.from(store.values()).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
     setConversations(next)
     const newStats = computeStats(next)
