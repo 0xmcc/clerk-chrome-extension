@@ -846,13 +846,14 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
 
     // Claude
     if (inferred === "claude") {
-      const orgId = extractPathSegment(url.pathname, 1) // /api/organizations/{orgId}/...
-      if (!orgId) {
-        console.log("[useMessageScanner] Claude: failed to extract orgId from", url.pathname)
-        return
-      }
-
       if (matchClaudeList(url)) {
+        // List: /api/organizations/{orgId}/conversations → orgId is index 1 from end
+        const orgId = extractPathSegment(url.pathname, 1)
+        if (!orgId) {
+          console.log("[useMessageScanner] Claude list: failed to extract orgId from", url.pathname)
+          return
+        }
+
         console.log("[useMessageScanner] Claude list endpoint detected, orgId:", orgId)
         const metas = parseClaudeList(orgId, evt.data)
         console.log("[useMessageScanner] Parsed Claude list:", metas.length, "conversations")
@@ -872,9 +873,11 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
       }
 
       if (matchClaudeDetail(url)) {
+        // Detail: /api/organizations/{orgId}/conversations/{uuid} → uuid is index 0, orgId is index 2
         const uuid = extractPathSegment(url.pathname, 0)
-        if (!uuid) {
-          console.log("[useMessageScanner] Claude detail: failed to extract UUID from", url.pathname)
+        const orgId = extractPathSegment(url.pathname, 2)
+        if (!uuid || !orgId) {
+          console.log("[useMessageScanner] Claude detail: failed to extract UUID or orgId from", url.pathname)
           return
         }
 
