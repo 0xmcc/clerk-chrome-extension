@@ -271,7 +271,8 @@ const matchChatGPTList = (u: URL) => u.pathname === "/backend-api/conversations"
 const matchChatGPTDetail = (u: URL) => u.pathname.startsWith("/backend-api/conversation/")
 
 const matchClaudeList = (u: URL) =>
-  /^\/api\/organizations\/[^/]+\/chat_conversations$/.test(u.pathname)
+  /^\/api\/organizations\/[^/]+\/chat_conversations$/.test(u.pathname) ||
+  /^\/api\/organizations\/[^/]+\/conversations$/.test(u.pathname)
 
 const matchClaudeDetail = (u: URL) =>
   /^\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+$/.test(u.pathname) ||
