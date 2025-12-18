@@ -104,10 +104,35 @@ export const parseClaudeDetail = (orgId: string, uuid: string, json: unknown): P
 
   const platformLabel = getPlatformLabel("claude")
 
+  // ADD THIS: Log the structure of the first message to understand the format
+  if (arr.length > 0) {
+    console.log("[parseClaudeDetail] First message structure:", {
+      message: arr[0],
+      keys: Object.keys(arr[0] as Record<string, unknown> || {}),
+      hasText: typeof (arr[0] as Record<string, unknown>)?.text === "string",
+      hasContent: typeof (arr[0] as Record<string, unknown>)?.content === "string",
+      hasMessage: typeof (arr[0] as Record<string, unknown>)?.message === "string",
+      contentType: typeof (arr[0] as Record<string, unknown>)?.content,
+      contentIsArray: Array.isArray((arr[0] as Record<string, unknown>)?.content)
+    })
+  }
+
   const messages: Message[] = arr
     .map((m: unknown, idx: number) => {
       const msg = m as Record<string, unknown>
       const text = extractClaudeText(m)
+      
+      // ADD THIS: Log when text extraction fails
+      if (!text && idx < 3) { // Only log first 3 to avoid spam
+        console.log(`[parseClaudeDetail] Failed to extract text from message ${idx}:`, {
+          message: m,
+          keys: Object.keys(msg),
+          textField: msg?.text,
+          contentField: msg?.content,
+          messageField: msg?.message
+        })
+      }
+      
       if (!text) return null
       const role = roleFromClaudeMessage(m)
       const id =

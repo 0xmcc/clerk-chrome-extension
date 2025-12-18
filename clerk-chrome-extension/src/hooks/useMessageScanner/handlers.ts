@@ -157,6 +157,20 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
         }
 
         console.log("[useMessageScanner] Claude detail endpoint detected:", { orgId, uuid })
+        
+        // ADD THIS: Log the raw response structure
+        console.log("[useMessageScanner] Claude detail RAW response structure:", {
+          hasChatMessages: Array.isArray((evt.data as any)?.chat_messages),
+          chatMessagesLength: Array.isArray((evt.data as any)?.chat_messages) ? (evt.data as any).chat_messages.length : 0,
+          hasMessages: Array.isArray((evt.data as any)?.messages),
+          messagesLength: Array.isArray((evt.data as any)?.messages) ? (evt.data as any).messages.length : 0,
+          hasTurns: Array.isArray((evt.data as any)?.turns),
+          turnsLength: Array.isArray((evt.data as any)?.turns) ? (evt.data as any).turns.length : 0,
+          topLevelKeys: Object.keys(evt.data as any || {}),
+          dataType: typeof evt.data,
+          isArray: Array.isArray(evt.data)
+        })
+        
         const parsed = parseClaudeDetail(orgId, uuid, evt.data)
         console.log("[useMessageScanner] Parsed Claude detail:", {
           uuid,

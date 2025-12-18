@@ -42,9 +42,10 @@ function shouldCapture(urlStr: string): boolean {
       return true
     }
 
-    // Claude endpoints
-    if (p.includes("/api/organizations/") && (p.includes("/chat_conversations") || p.includes("/conversations"))) {
-      console.log("[Interceptor] shouldCapture: MATCH (Claude)", { url: urlStr, pathname: p })
+    // Claude: Capture ALL /api/organizations/... URLs
+    // Handler extracts orgId and filters conversation endpoints
+    if (p.startsWith("/api/organizations/")) {
+      console.log("[Interceptor] shouldCapture: MATCH (Claude org URL)", { url: urlStr, pathname: p })
       return true
     }
 
