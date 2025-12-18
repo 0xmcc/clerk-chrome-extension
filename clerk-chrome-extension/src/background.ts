@@ -107,6 +107,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     return true
   }
-
+ // ADD THIS NEW HANDLER
+ if (message.action === "interceptedNetworkData") {
+  console.log("[Background] Received intercepted data:", message.payload.url)
+  sendResponse({ success: true })
+  return true
+}
+// END ADD
   return true
 })

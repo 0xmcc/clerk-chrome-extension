@@ -43,9 +43,14 @@
     "key": "$CRX_PUBLIC_KEY",
     "permissions": [
       "cookies",
-      "storage"
+      "storage",
+      "scripting"
     ],
     "host_permissions": [
+      "https://chat.openai.com/*",
+      "https://chatgpt.com/*",
+      "https://claude.ai/*",
+      "https://*.claude.ai/*",
       "$PLASMO_PUBLIC_CLERK_SYNC_HOST/*",
       "$CLERK_FRONTEND_API/*"
     ]

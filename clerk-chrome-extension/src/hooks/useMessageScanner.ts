@@ -216,7 +216,6 @@ interface UseMessageScannerProps {
   isExporterOpen: boolean
 }
 
-const INTERCEPTOR_MARK_ATTR = "data-echo-network-interceptor-installed"
 const INTERCEPTOR_SOURCE = "__echo_network_interceptor__"
 
 type InterceptorEvent = {
@@ -282,170 +281,6 @@ const extractPathSegment = (pathname: string, indexFromEnd: number): string | nu
   const idx = parts.length - 1 - indexFromEnd
   if (idx < 0 || idx >= parts.length) return null
   return parts[idx] || null
-}
-
-/**
- * Injects a MAIN-world network interceptor (fetch + XHR) that posts JSON responses back via window.postMessage.
- *
- * Your current codebase does NOT already do this (it DOM-scrapes), and content-script patching of fetch is
- * not reliable without MAIN-world injection.
- */
-const ensureNetworkInterceptorInstalled = (): void => {
-  if (typeof document === "undefined") return
-  const root = document.documentElement
-  if (!root) return
-
-  if (root.getAttribute(INTERCEPTOR_MARK_ATTR) === "true") {
-    console.log("[useMessageScanner] Network interceptor already installed")
-    return
-  }
-  console.log("[useMessageScanner] Installing network interceptor (fetch + XHR)")
-  root.setAttribute(INTERCEPTOR_MARK_ATTR, "true")
-
-  const script = document.createElement("script")
-  script.type = "text/javascript"
-  script.textContent = `
-(() => {
-  const SOURCE = ${JSON.stringify(INTERCEPTOR_SOURCE)};
-
-  const safePost = (payload) => {
-    try {
-      window.postMessage({ source: SOURCE, ...payload }, "*");
-    } catch (_) {}
-  };
-
-  const toAbs = (url) => {
-    try { return new URL(url, location.href).href; } catch (_) { return String(url || ""); }
-  };
-
-  const shouldCapture = (absUrl) => {
-    try {
-      const u = new URL(absUrl);
-      const p = u.pathname;
-
-      // ChatGPT
-      if (p === "/backend-api/conversations") return true;
-      if (p.startsWith("/backend-api/conversation/")) return true;
-
-      // Claude
-      if (/^\\/api\\/organizations\\/[^/]+\\/chat_conversations$/.test(p)) return true;
-      if (/^\\/api\\/organizations\\/[^/]+\\/chat_conversations\\/[^/]+$/.test(p)) return true;
-
-      return false;
-    } catch (_) {
-      return false;
-    }
-  };
-
-  const tryParseAndPost = (absUrl, method, status, ok, bodyText) => {
-    try {
-      const t = (bodyText || "").trim();
-      if (!t) return;
-      const first = t[0];
-      if (first !== "{" && first !== "[") return;
-      const data = JSON.parse(t);
-      safePost({ url: absUrl, method, status, ok, ts: Date.now(), data });
-    } catch (_) {}
-  };
-
-  // --- fetch patch ---
-  try {
-    const f = window.fetch;
-    if (typeof f === "function" && !f.__echoPatched) {
-      const patched = function(...args) {
-        const p = f.apply(this, args);
-
-        Promise.resolve(p).then((res) => {
-          try {
-            const input = args[0];
-            const init = args[1] || {};
-            let url = "";
-            let method = "GET";
-
-            if (typeof input === "string") url = input;
-            else if (input && typeof input === "object") {
-              url = input.url || "";
-              method = input.method || method;
-            }
-            if (init && init.method) method = init.method;
-
-            const absUrl = toAbs(url);
-            if (!shouldCapture(absUrl)) return;
-
-            const clone = res.clone();
-
-            // Prefer native json() then fallback to text parsing
-            clone.json().then((data) => {
-              safePost({
-                url: absUrl,
-                method,
-                status: res.status,
-                ok: res.ok,
-                ts: Date.now(),
-                data
-              });
-            }).catch(() => {
-              clone.text().then((txt) => {
-                tryParseAndPost(absUrl, method, res.status, res.ok, txt);
-              }).catch(() => {});
-            });
-
-          } catch (_) {}
-        }).catch(() => {});
-
-        return p;
-      };
-
-      patched.__echoPatched = true;
-      patched.__echoOriginal = f;
-      window.fetch = patched;
-    }
-  } catch (_) {}
-
-  // --- XHR patch ---
-  try {
-    const proto = window.XMLHttpRequest && window.XMLHttpRequest.prototype;
-    if (proto && !proto.__echoPatched) {
-      const origOpen = proto.open;
-      const origSend = proto.send;
-
-      proto.open = function(method, url, ...rest) {
-        try {
-          this.__echoMethod = method;
-          this.__echoUrl = url;
-        } catch (_) {}
-        return origOpen.call(this, method, url, ...rest);
-      };
-
-      proto.send = function(body) {
-        try {
-          this.addEventListener("load", function() {
-            try {
-              const absUrl = toAbs(this.__echoUrl || this.responseURL || "");
-              if (!shouldCapture(absUrl)) return;
-
-              const method = this.__echoMethod || "GET";
-              const status = this.status;
-              const ok = status >= 200 && status < 300;
-
-              const txt = typeof this.responseText === "string" ? this.responseText : "";
-              tryParseAndPost(absUrl, method, status, ok, txt);
-            } catch (_) {}
-          });
-        } catch (_) {}
-
-        return origSend.call(this, body);
-      };
-
-      proto.__echoPatched = true;
-    }
-  } catch (_) {}
-})();
-  `.trim()
-
-  // Important: do NOT remove the marker attribute (we rely on it); removing script is fine.
-  ;(document.head || document.documentElement).appendChild(script)
-  script.remove()
 }
 
 const getConversationKey = () => `${window.location.hostname}${window.location.pathname}${window.location.search}`
@@ -917,12 +752,6 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
     else stopScanning()
   }, [isExporterOpen, startScanning, stopScanning])
 
-  // Install the network interceptor once
-  useEffect(() => {
-    console.log("[useMessageScanner] Installing network interceptor on mount")
-    ensureNetworkInterceptorInstalled()
-  }, [])
-
   const handleInterceptorEvent = useCallback((evt: InterceptorEvent) => {
     if (!evt?.url || !evt?.data) {
       console.log("[useMessageScanner] handleInterceptorEvent: skipping (missing url or data)", { hasUrl: !!evt?.url, hasData: !!evt?.data })
@@ -1081,21 +910,32 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
     }
   }, [capturedPlatform, syncActiveMessages, upsertMany])
 
-  // Listen for MAIN-world interceptor posts
+  // Listen for intercepted network data from background
   useEffect(() => {
-    console.log("[useMessageScanner] Setting up message listener for network interceptor")
-    const onMessage = (e: MessageEvent) => {
-      const data = e.data as InterceptorEvent
-      if (!data || data.source !== INTERCEPTOR_SOURCE) return
-      handleInterceptorEvent(data)
+    if (!isExporterOpen) return
+
+    const listener = (message: any) => {
+      if (message.action === "interceptedNetworkData" && message.payload) {
+        // Convert to InterceptorEvent format
+        const event: InterceptorEvent = {
+          source: INTERCEPTOR_SOURCE,
+          url: message.payload.url,
+          method: message.payload.method,
+          status: message.payload.status,
+          ok: message.payload.ok,
+          ts: message.payload.ts,
+          data: message.payload.data
+        }
+        handleInterceptorEvent(event)
+      }
     }
 
-    window.addEventListener("message", onMessage)
+    chrome.runtime.onMessage.addListener(listener)
+
     return () => {
-      console.log("[useMessageScanner] Cleaning up message listener")
-      window.removeEventListener("message", onMessage)
+      chrome.runtime.onMessage.removeListener(listener)
     }
-  }, [handleInterceptorEvent])
+  }, [isExporterOpen, handleInterceptorEvent])
 
   // Detect URL changes (SPA navigation) and keep conversationKey + messages in sync
   useEffect(() => {

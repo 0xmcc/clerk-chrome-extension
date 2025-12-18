@@ -6,6 +6,39 @@ import { CountButton } from "~features/count-button"
 import { FloatingButton } from "~features/floating-button"
 import { SelectiveExporter } from "~components/SelectiveExporter"
 
+// Message source identifier from interceptor
+const INTERCEPTOR_SOURCE = "__echo_network_interceptor__"
+
+// Listen for messages from MAIN world interceptor and forward to background
+window.addEventListener(
+  "message",
+  (event) => {
+    // Security: only accept messages from same window
+    if (event.source !== window) return
+
+    const data = event.data
+    if (!data || data.source !== INTERCEPTOR_SOURCE) return
+
+    console.log("[Content] Received intercepted data:", data.url)
+
+    // Forward to background script
+    chrome.runtime.sendMessage({
+      action: "interceptedNetworkData",
+      payload: {
+        url: data.url,
+        method: data.method,
+        status: data.status,
+        ok: data.ok,
+        ts: data.ts,
+        data: data.data
+      }
+    }).catch(err => {
+      console.error("[Content] Failed to send to background:", err)
+    })
+  },
+  false
+)
+
 export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"]
 }
