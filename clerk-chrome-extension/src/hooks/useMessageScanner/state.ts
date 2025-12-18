@@ -2,21 +2,13 @@ import { useCallback, useState } from "react"
 import type { Conversation, Message, ScannerStats, CapturedPlatform } from "./types"
 import { mergeConversation, computeStats } from "./mergers"
 import { getActiveConversationIdFromUrl } from "./utils"
+import { storeRef, isScanningRef } from "./store"
 
 export interface ConversationStoreState {
   conversations: Conversation[]
   stats: ScannerStats
   isScanning: boolean
 }
-
-// Module-level shared state - all hook instances share the same store
-// This ensures conversations captured before exporter opens are preserved
-const sharedStore = new Map<string, Conversation>()
-const sharedIsScanningRef = { current: false }
-
-// Create stable ref-like objects that point to the shared state
-const storeRefObject = { current: sharedStore }
-const isScanningRefObject = sharedIsScanningRef
 
 export const useConversationStore = () => {
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -27,9 +19,6 @@ export const useConversationStore = () => {
     lastCapturedAt: undefined
   })
 
-  // Return the shared refs directly (they are stable across renders)
-  const storeRef = storeRefObject
-  const isScanningRef = isScanningRefObject
   const [isScanning, setIsScanning] = useState<boolean>(isScanningRef.current)
 
   const upsertMany = useCallback((incoming: Conversation[]) => {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { detectPlatform } from "~utils/platform"
 
 import type { UseMessageScannerProps, InterceptorEvent } from "./types"
-import { isCapturedPlatform, getConversationKey } from "./utils"
+import { isCapturedPlatform, getConversationKey, getActiveConversationIdFromUrl } from "./utils"
 import { useConversationStore, useActiveMessages } from "./state"
 import { createInterceptorEventHandler } from "./handlers"
 import { createRescanHandler, INTERCEPTOR_SOURCE } from "./rescan"
@@ -68,11 +68,26 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
   }, [capturedPlatform, flushAllStateWithSync, handleInterceptorEvent, storeRef])
 
   // Keep your old behavior: scanning enabled when exporter opens
+  // Also trigger rescan if store is empty to fetch current conversation
   useEffect(() => {
     console.log("[useMessageScanner] isExporterOpen changed:", isExporterOpen)
-    if (isExporterOpen) startScanningWithFlush()
-    else stopScanning()
-  }, [isExporterOpen, startScanningWithFlush, stopScanning])
+    if (isExporterOpen) {
+      startScanningWithFlush()
+      // If store is empty or current conversation not in store, trigger rescan
+      const activeId = capturedPlatform ? getActiveConversationIdFromUrl(capturedPlatform) : null
+      const hasActiveConversation = activeId && storeRef.current.has(`${capturedPlatform}:${activeId}`)
+      if (!hasActiveConversation && capturedPlatform) {
+        console.log("[useMessageScanner] Store empty or missing active conversation, triggering rescan", {
+          storeSize: storeRef.current.size,
+          activeId,
+          hasActiveConversation
+        })
+        rescan()
+      }
+    } else {
+      stopScanning()
+    }
+  }, [isExporterOpen, startScanningWithFlush, stopScanning, capturedPlatform, storeRef, rescan])
 
   // Listen for intercepted network data directly from window.postMessage (from MAIN world interceptor)
   useEffect(() => {

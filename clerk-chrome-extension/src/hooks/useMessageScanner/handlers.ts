@@ -3,7 +3,14 @@ import { inferCapturedPlatformFromUrl, extractPathSegment, now } from "./utils"
 import { matchChatGPTList, matchChatGPTDetail, matchClaudeList, matchClaudeDetail } from "./urlMatchers"
 import { parseChatGPTList, parseChatGPTDetail } from "./parsers/chatgpt"
 import { parseClaudeList, parseClaudeDetail } from "./parsers/claude"
+import { setClaudeOrgId } from "./store"
 import type React from "react"
+
+// Extract orgId from any /api/organizations/{orgId}/... URL
+const extractOrgIdFromUrl = (pathname: string): string | null => {
+  const match = pathname.match(/^\/api\/organizations\/([^/]+)/)
+  return match?.[1] || null
+}
 
 export interface InterceptorEventHandlerDeps {
   capturedPlatform: CapturedPlatform | null
@@ -108,6 +115,12 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
 
     // Claude
     if (inferred === "claude") {
+      // Cache orgId from any /api/organizations/{orgId}/... URL for later use in rescan
+      const extractedOrgId = extractOrgIdFromUrl(url.pathname)
+      if (extractedOrgId) {
+        setClaudeOrgId(extractedOrgId)
+      }
+
       if (matchClaudeList(url)) {
         // List: /api/organizations/{orgId}/conversations → orgId is index 1 from end
         const orgId = extractPathSegment(url.pathname, 1)
@@ -152,6 +165,17 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
           messageCount: parsed.messages.length,
           hasFullHistory: parsed.hasFullHistory
         })
+        
+        // Log actual messages for debugging
+        console.log("[useMessageScanner] Claude messages parsed:", parsed.messages.map((m, i) => ({
+          index: i,
+          id: m.id,
+          role: m.role,
+          authorName: m.authorName,
+          textLength: m.text.length,
+          textPreview: m.text.substring(0, 100) + (m.text.length > 100 ? "..." : "")
+        })))
+        
         upsertMany([
           {
             id: uuid,
