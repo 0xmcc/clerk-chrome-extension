@@ -910,33 +910,31 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
     }
   }, [capturedPlatform, syncActiveMessages, upsertMany])
 
-  // Listen for intercepted network data from background
+  // Listen for intercepted network data directly from window.postMessage (from MAIN world interceptor)
   useEffect(() => {
-    if (!isExporterOpen) return
+    const listener = (event: MessageEvent) => {
+      // Security: only accept messages from same window
+      if (event.source !== window) return
 
-    const listener = (message: any) => {
-      if (message.action === "interceptedNetworkData" && message.payload) {
-        // Convert to InterceptorEvent format
-        const event: InterceptorEvent = {
-          source: INTERCEPTOR_SOURCE,
-          url: message.payload.url,
-          method: message.payload.method,
-          status: message.payload.status,
-          ok: message.payload.ok,
-          ts: message.payload.ts,
-          data: message.payload.data
-        }
-        handleInterceptorEvent(event)
-      }
+      const data = event.data
+      if (!data || data.source !== INTERCEPTOR_SOURCE) return
+
+      console.log("[useMessageScanner] Received intercepted data via postMessage:", data.url)
+
+      handleInterceptorEvent({
+        source: INTERCEPTOR_SOURCE,
+        url: data.url,
+        method: data.method,
+        status: data.status,
+        ok: data.ok,
+        ts: data.ts,
+        data: data.data
+      })
     }
 
-    chrome.runtime.onMessage.addListener(listener)
-
-    return () => {
-      chrome.runtime.onMessage.removeListener(listener)
-    }
-  }, [isExporterOpen, handleInterceptorEvent])
-
+    window.addEventListener("message", listener)
+    return () => window.removeEventListener("message", listener)
+  }, [handleInterceptorEvent])
   // Detect URL changes (SPA navigation) and keep conversationKey + messages in sync
   useEffect(() => {
     console.log("[useMessageScanner] Setting up URL change detection interval")
