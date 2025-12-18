@@ -200,14 +200,60 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
         ]
 
         let resp: Response | null = null
+        let lastError: string | null = null
+        const MAX_RETRIES = 2
+        const BASE_DELAY = 300
+
         for (const url of endpoints) {
-          console.log("[rescan] STEP 10: Claude fetch attempt", { url })
-          resp = await fetchWithRetry(url)
-          if (resp?.ok) break
+          for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            if (attempt > 0) {
+              const delay = BASE_DELAY * Math.pow(2, attempt - 1) // 300ms, 600ms
+              console.log(`[rescan] Retry ${attempt}/${MAX_RETRIES} for ${url}, waiting ${delay}ms`)
+              await new Promise(resolve => setTimeout(resolve, delay))
+            }
+
+            console.log("[rescan] STEP 10: Claude fetch attempt", { url, attempt })
+
+            try {
+              resp = await fetch(url, {
+                credentials: "include",
+                headers: { accept: "application/json" }
+              })
+
+              console.log("[rescan] STEP 11: Claude response", {
+                url,
+                status: resp.status,
+                ok: resp.ok,
+                contentType: resp.headers.get("content-type"),
+                attempt
+              })
+
+              if (resp.ok) {
+                console.log("[rescan] STEP 11a: Success with endpoint", url)
+                break // Found working endpoint
+              } else if (resp.status === 404) {
+                console.log("[rescan] STEP 11b: 404 - endpoint doesn't exist, skipping retries", { url })
+                lastError = `${url} returned 404`
+                break // Don't retry 404s
+              } else {
+                lastError = `${url} returned ${resp.status}`
+                console.log("[rescan] STEP 11b: Endpoint failed", { url, status: resp.status, attempt })
+              }
+            } catch (error) {
+              lastError = `${url} threw ${error}`
+              console.log("[rescan] STEP 11c: Endpoint error", { url, error, attempt })
+            }
+          }
+
+          if (resp?.ok) break // Exit endpoint loop if successful
         }
 
         if (!resp || !resp.ok) {
-          console.log("[rescan] STEP 11: EXIT - All Claude endpoints failed", { endpoints })
+          console.log("[rescan] STEP 12: EXIT - All Claude endpoints failed after retries", {
+            endpoints,
+            lastError,
+            maxRetries: MAX_RETRIES
+          })
           return
         }
 

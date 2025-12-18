@@ -77,12 +77,12 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
       const activeId = capturedPlatform ? getActiveConversationIdFromUrl(capturedPlatform) : null
       const hasActiveConversation = activeId && storeRef.current.has(`${capturedPlatform}:${activeId}`)
       if (!hasActiveConversation && capturedPlatform) {
-        console.log("[useMessageScanner] Store empty or missing active conversation, triggering rescan in 300ms", {
+        console.log("[useMessageScanner] Store empty or missing active conversation, triggering rescan", {
           storeSize: storeRef.current.size,
           activeId,
           hasActiveConversation
         })
-        setTimeout(() => rescan(), 300)
+        rescan()
       }
     } else {
       stopScanning()
@@ -121,27 +121,59 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
     const interval = window.setInterval(() => {
       const nextKey = getConversationKey()
       if (nextKey !== conversationKey) {
-        console.log("[useMessageScanner] URL changed:", { from: conversationKey, to: nextKey })
+        console.log("[useMessageScanner] URL changed:", { 
+          from: conversationKey, 
+          to: nextKey,
+          isScanning: isScanningRef.current,
+          storeSize: storeRef.current.size,
+          storeKeys: Array.from(storeRef.current.keys())
+        })
         setConversationKey(nextKey)
 
         if (isScanningRef.current) {
-          // Refresh conversations list from store
+          console.log("[useMessageScanner] URL change: Scanning active, refreshing state")
+          
+          // Refresh conversations list and sync messages
+          const storeSizeBefore = storeRef.current.size
           flushAllStateWithSync()
+          const storeSizeAfter = storeRef.current.size
+          
+          console.log("[useMessageScanner] URL change: State refreshed", {
+            storeSizeBefore,
+            storeSizeAfter,
+            conversationsCount: conversations.length,
+            activeMessagesCount: messages.length
+          })
 
-          // Check if new conversation exists and has messages
+          // Check if new conversation is missing or incomplete, trigger rescan if needed
           const activeId = capturedPlatform ? getActiveConversationIdFromUrl(capturedPlatform) : null
           const convo = activeId ? storeRef.current.get(`${capturedPlatform}:${activeId}`) : null
-          const needsRescan = !convo || !convo.messages.length
-
-          if (needsRescan && capturedPlatform) {
-            console.log("[useMessageScanner] URL changed, conversation missing/incomplete, triggering rescan", {
+          
+          console.log("[useMessageScanner] URL change: Conversation check", {
+            capturedPlatform,
+            activeId,
+            hasConversation: !!convo,
+            conversationKey: activeId ? `${capturedPlatform}:${activeId}` : null,
+            messageCount: convo?.messages.length ?? 0,
+            conversationTitle: convo?.title,
+            needsRescan: capturedPlatform && (!convo || !convo.messages.length)
+          })
+          
+          if (capturedPlatform && (!convo || !convo.messages.length)) {
+            console.log("[useMessageScanner] URL change: Conversation missing/incomplete, triggering rescan in 300ms", { 
               activeId,
-              hasConvo: !!convo,
+              hasConversation: !!convo,
               messageCount: convo?.messages.length ?? 0
             })
             setTimeout(() => rescan(), 300)
+          } else {
+            console.log("[useMessageScanner] URL change: Conversation found with messages, no rescan needed", {
+              activeId,
+              messageCount: convo?.messages.length ?? 0
+            })
           }
         } else {
+          console.log("[useMessageScanner] URL change: Not scanning, clearing messages")
           clearMessages()
         }
       }
@@ -151,7 +183,7 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
       console.log("[useMessageScanner] Cleaning up URL change detection interval")
       window.clearInterval(interval)
     }
-  }, [conversationKey, flushAllStateWithSync, clearMessages, isScanningRef, capturedPlatform, storeRef, rescan])
+  }, [conversationKey, flushAllStateWithSync, clearMessages, isScanningRef, capturedPlatform, storeRef, rescan, conversations.length, messages.length])
 
   return {
     // Existing return fields (do not break current usage)
