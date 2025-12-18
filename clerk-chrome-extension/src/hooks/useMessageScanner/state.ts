@@ -112,6 +112,14 @@ export const useActiveMessages = (capturedPlatform: CapturedPlatform | null, sto
     }
 
     const activeId = getActiveConversationIdFromUrl(capturedPlatform)
+    console.log("[useMessageScanner] syncActiveMessages: DEBUG", {
+      capturedPlatform,
+      activeId,
+      currentPath: window.location.pathname,
+      storeSize: storeRef.current.size,
+      storeKeys: Array.from(storeRef.current.keys())
+    })
+
     if (!activeId) {
       console.log("[useMessageScanner] syncActiveMessages: no active conversation ID, clearing messages")
       setMessages([])
@@ -126,7 +134,9 @@ export const useActiveMessages = (capturedPlatform: CapturedPlatform | null, sto
       activeId,
       key,
       messageCount,
-      hasConversation: !!convo
+      hasConversation: !!convo,
+      conversationTitle: convo?.title,
+      conversationMessages: convo?.messages?.length ?? 0
     })
     setMessages(convo?.messages ?? [])
   }, [capturedPlatform, storeRef])
