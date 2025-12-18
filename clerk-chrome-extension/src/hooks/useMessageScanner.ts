@@ -176,57 +176,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { detectPlatform, getPlatformLabel, type Platform } from "~utils/platform"
 
-export interface Message {
-  id: string
-  role: "user" | "assistant"
-  text: string
-  authorName: string
-  // Kept for backward-compatibility with existing consumers/types.
-  // In network mode this is a detached node (NOT scraped from DOM).
-  node: Element
-}
+import type {
+  Message,
+  CapturedPlatform,
+  Conversation,
+  ScannerStats,
+  UseMessageScannerProps,
+  InterceptorEvent
+} from "./useMessageScanner/types"
 
-export type CapturedPlatform = "chatgpt" | "claude"
-
-export interface Conversation {
-  id: string
-  platform: CapturedPlatform
-  title?: string
-  createdAt?: number
-  updatedAt?: number
-
-  // Full message history when available (detail endpoint)
-  messages: Message[]
-  hasFullHistory: boolean
-
-  // Claude only (handy for rescan fetches)
-  orgId?: string
-
-  lastSeenAt: number
-}
-
-export interface ScannerStats {
-  totalConversations: number
-  conversationsWithMessages: number
-  totalMessages: number
-  lastCapturedAt?: number
-}
-
-interface UseMessageScannerProps {
-  isExporterOpen: boolean
-}
+// Re-export types for consumers
+export type { Message, CapturedPlatform, Conversation, ScannerStats }
 
 const INTERCEPTOR_SOURCE = "__echo_network_interceptor__"
-
-type InterceptorEvent = {
-  source: string
-  url: string
-  method?: string
-  status?: number
-  ok?: boolean
-  ts?: number
-  data?: any
-}
 
 const now = () => Date.now()
 
