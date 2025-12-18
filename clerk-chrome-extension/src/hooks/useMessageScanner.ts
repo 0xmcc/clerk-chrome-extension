@@ -762,7 +762,8 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
 
     let url: URL
     try {
-      url = new URL(evt.url)
+      // Handle both absolute and relative URLs
+      url = evt.url.startsWith("http") ? new URL(evt.url) : new URL(evt.url, window.location.origin)
     } catch {
       console.log("[useMessageScanner] handleInterceptorEvent: invalid URL", evt.url)
       return
