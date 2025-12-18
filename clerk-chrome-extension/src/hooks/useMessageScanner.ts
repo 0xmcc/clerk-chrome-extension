@@ -274,7 +274,8 @@ const matchClaudeList = (u: URL) =>
   /^\/api\/organizations\/[^/]+\/chat_conversations$/.test(u.pathname)
 
 const matchClaudeDetail = (u: URL) =>
-  /^\/api\/organizations\/[^/]+\/chat_conversations\/[^/]+$/.test(u.pathname)
+  /^\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+$/.test(u.pathname) ||
+  /^\/api\/organizations\/[^/]+\/conversations\/[^/?]+$/.test(u.pathname)
 
 const extractPathSegment = (pathname: string, indexFromEnd: number): string | null => {
   const parts = pathname.split("/").filter(Boolean)
@@ -1022,7 +1023,7 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
           return
         }
 
-        const url = `/api/organizations/${orgId}/chat_conversations/${activeId}`
+        const url = `/api/organizations/${orgId}/conversations/${activeId}`
         console.log("[useMessageScanner] rescan: fetching Claude detail", url)
         const resp = await fetch(url, {
           credentials: "include",

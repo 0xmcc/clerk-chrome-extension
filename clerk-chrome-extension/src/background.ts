@@ -66,6 +66,14 @@ async function initializeClerk() {
 }
 
 initializeClerk()
+// Inject into existing tabs on startup
+chrome.tabs.query({ 
+  url: ["https://chat.openai.com/*", "https://chatgpt.com/*", "https://claude.ai/*", "https://*.claude.ai/*"] 
+}, (tabs) => {
+  tabs.forEach((tab) => {
+    if (tab.id) injectInterceptor(tab.id)
+  })
+})
 
 // Inject network interceptor into MAIN world for ChatGPT/Claude tabs
 const injectInterceptor = (tabId: number) => {
@@ -83,14 +91,16 @@ const injectInterceptor = (tabId: number) => {
       const MESSAGE_SOURCE = "__echo_network_interceptor__"
 
       function shouldCapture(urlStr: string): boolean {
+        // In shouldCapture function, add at the top:
         try {
           const u = new URL(urlStr, location.href)
           const p = u.pathname
+          console.log("[Interceptor] Checking URL:", urlStr, "pathname:", new URL(urlStr, location.href).pathname)
           if (p.startsWith("/backend-api/conversation/") || p === "/backend-api/conversations") {
             console.log("[Interceptor] shouldCapture: MATCH (ChatGPT)", { url: urlStr, pathname: p })
             return true
           }
-          if (p.includes("/api/organizations/") && p.includes("/chat_conversations")) {
+          if (p.includes("/api/organizations/") && p.includes("/conversations")) {
             console.log("[Interceptor] shouldCapture: MATCH (Claude)", { url: urlStr, pathname: p })
             return true
           }
@@ -303,7 +313,7 @@ chrome.storage?.onChanged?.addListener((changes, areaName) => {
 })
 
 // Listen for messages from content scripts
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "openOptionsPage") {
     chrome.runtime.openOptionsPage()
     sendResponse({ success: true })
@@ -330,27 +340,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         })
       })
 
-    return true
-  }
-  if (message.action === "interceptedNetworkData") {
-    const tabId = sender.tab?.id
-    if (!tabId) {
-      console.error("[Background] No sender.tab.id for interceptedNetworkData")
-      sendResponse({ success: false, error: "No sender.tab.id" })
-      return true
-    }
-
-    console.log("[Background] Received intercepted data:", message.payload.url)
-
-    // Forward to content script listeners (your hook is listening here)
-    chrome.tabs.sendMessage(tabId, {
-      action: "interceptedNetworkData",
-      payload: message.payload
-    }).catch((err) => {
-      console.error("[Background] Failed to forward to tab:", err)
-    })
-
-    sendResponse({ success: true })
     return true
   }
   return true
