@@ -4,6 +4,34 @@ import { getClaudeOrgId } from "./store"
 
 export const INTERCEPTOR_SOURCE = "__echo_network_interceptor__"
 
+// Fetch with retry logic - returns Response or null, skips retries on 404
+const fetchWithRetry = async (
+  url: string,
+  maxRetries = 2,
+  baseDelay = 300
+): Promise<Response | null> => {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      const delay = baseDelay * Math.pow(2, attempt - 1)
+      console.log(`[rescan] Retry ${attempt}/${maxRetries} for ${url}, waiting ${delay}ms`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+
+    try {
+      const resp = await fetch(url, {
+        credentials: "include",
+        headers: { accept: "application/json" }
+      })
+      console.log("[rescan] fetchWithRetry", { url, status: resp.status, ok: resp.ok, attempt })
+
+      if (resp.ok || resp.status === 404) return resp
+    } catch (error) {
+      console.log("[rescan] fetchWithRetry error", { url, error, attempt })
+    }
+  }
+  return null
+}
+
 export interface RescanHandlerDeps {
   capturedPlatform: CapturedPlatform | null
   flushAllState: () => void
@@ -172,43 +200,14 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
         ]
 
         let resp: Response | null = null
-        let lastError: string | null = null
-
         for (const url of endpoints) {
           console.log("[rescan] STEP 10: Claude fetch attempt", { url })
-          
-          try {
-            resp = await fetch(url, {
-              credentials: "include",
-              headers: { accept: "application/json" }
-            })
-            
-            console.log("[rescan] STEP 11: Claude response", { 
-              url,
-              status: resp.status, 
-              ok: resp.ok,
-              contentType: resp.headers.get("content-type")
-            })
-            
-            if (resp.ok) {
-              console.log("[rescan] STEP 11a: Success with endpoint", url)
-              break // Found working endpoint
-            } else {
-              lastError = `${url} returned ${resp.status}`
-              console.log("[rescan] STEP 11b: Endpoint failed, trying next", { url, status: resp.status })
-            }
-          } catch (error) {
-            lastError = `${url} threw ${error}`
-            console.log("[rescan] STEP 11c: Endpoint error, trying next", { url, error })
-            continue
-          }
+          resp = await fetchWithRetry(url)
+          if (resp?.ok) break
         }
 
         if (!resp || !resp.ok) {
-          console.log("[rescan] STEP 12: EXIT - All Claude endpoints failed", { 
-            endpoints,
-            lastError
-          })
+          console.log("[rescan] STEP 11: EXIT - All Claude endpoints failed", { endpoints })
           return
         }
 
