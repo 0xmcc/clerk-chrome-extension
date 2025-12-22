@@ -112,6 +112,8 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
     }
 
     window.addEventListener("message", listener)
+    // Signal to interceptor that listener is ready (flushes queued messages)
+    window.postMessage("__echo_listener_ready__", "*")
     return () => window.removeEventListener("message", listener)
   }, [handleInterceptorEvent])
 

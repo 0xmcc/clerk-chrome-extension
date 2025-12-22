@@ -13,6 +13,23 @@ export const config: PlasmoCSConfig = {
 
 // Message contract (page -> content script)
 const MESSAGE_SOURCE = "__echo_network_interceptor__"
+const LISTENER_READY_SIGNAL = "__echo_listener_ready__"
+
+// Message queue for race condition handling
+const messageQueue: any[] = []
+let listenerReady = false
+
+// Listen for ready signal from content script
+window.addEventListener("message", (event) => {
+  if (event.source === window && event.data === LISTENER_READY_SIGNAL) {
+    if (!listenerReady) {
+      listenerReady = true
+      console.log("[Interceptor] Listener ready, flushing", messageQueue.length, "queued messages")
+      messageQueue.forEach(msg => window.postMessage(msg, "*"))
+      messageQueue.length = 0
+    }
+  }
+})
 
 // Prevent double-install in SPA navigations
 declare global {
@@ -57,24 +74,23 @@ function shouldCapture(urlStr: string): boolean {
 }
 
 function post(payload: any) {
-  console.log("[Interceptor] Posting message:", {
+  const msg = {
+    source: MESSAGE_SOURCE,
     url: payload.url,
     method: payload.method,
     status: payload.status,
-    hasData: !!payload.body
-  })
-  window.postMessage(
-    {
-      source: MESSAGE_SOURCE,
-      url: payload.url,
-      method: payload.method,
-      status: payload.status,
-      ok: payload.ok,
-      ts: payload.ts,
-      data: payload.body
-    },
-    "*"
-  )
+    ok: payload.ok,
+    ts: payload.ts,
+    data: payload.body
+  }
+
+  if (listenerReady) {
+    console.log("[Interceptor] Posting message:", payload.url)
+    window.postMessage(msg, "*")
+  } else {
+    console.log("[Interceptor] Queueing message (listener not ready):", payload.url)
+    messageQueue.push(msg)
+  }
 }
 
 function installFetchHook() {
