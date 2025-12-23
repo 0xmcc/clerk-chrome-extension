@@ -18,14 +18,35 @@ const LISTENER_READY_SIGNAL = "__echo_listener_ready__"
 // Message queue for race condition handling
 const messageQueue: any[] = []
 let listenerReady = false
+let messageSeq = 0 // Sequence number for tracking message flow
+
+// Instrumentation helper
+function logFlow(step: string, details?: Record<string, unknown>) {
+  const timestamp = performance.now().toFixed(2)
+  console.log(`[Interceptor:FLOW] [${timestamp}ms] ${step}`, details ?? "")
+}
+
+logFlow("INIT", { messageQueueLength: messageQueue.length, listenerReady })
 
 // Listen for ready signal from content script
 window.addEventListener("message", (event) => {
   if (event.source === window && event.data === LISTENER_READY_SIGNAL) {
+    logFlow("READY_SIGNAL_RECEIVED", {
+      wasAlreadyReady: listenerReady,
+      queuedMessageCount: messageQueue.length
+    })
     if (!listenerReady) {
       listenerReady = true
-      console.log("[Interceptor] Listener ready, flushing", messageQueue.length, "queued messages")
-      messageQueue.forEach(msg => window.postMessage(msg, "*"))
+      logFlow("QUEUE_FLUSH_START", { messageCount: messageQueue.length })
+      messageQueue.forEach((msg, idx) => {
+        logFlow("QUEUE_FLUSH_ITEM", {
+          index: idx,
+          url: msg.url,
+          seq: msg._seq
+        })
+        window.postMessage(msg, "*")
+      })
+      logFlow("QUEUE_FLUSH_COMPLETE", { flushedCount: messageQueue.length })
       messageQueue.length = 0
     }
   }
@@ -74,6 +95,7 @@ function shouldCapture(urlStr: string): boolean {
 }
 
 function post(payload: any) {
+  const seq = ++messageSeq
   const msg = {
     source: MESSAGE_SOURCE,
     url: payload.url,
@@ -81,14 +103,27 @@ function post(payload: any) {
     status: payload.status,
     ok: payload.ok,
     ts: payload.ts,
-    data: payload.body
+    data: payload.body,
+    _seq: seq // Track sequence for debugging
   }
 
+  logFlow("MESSAGE_CREATED", {
+    seq,
+    url: payload.url,
+    method: payload.method,
+    status: payload.status,
+    listenerReady
+  })
+
   if (listenerReady) {
-    console.log("[Interceptor] Posting message:", payload.url)
+    logFlow("MESSAGE_POST_IMMEDIATE", { seq, url: payload.url })
     window.postMessage(msg, "*")
   } else {
-    console.log("[Interceptor] Queueing message (listener not ready):", payload.url)
+    logFlow("MESSAGE_QUEUED", {
+      seq,
+      url: payload.url,
+      queueLength: messageQueue.length + 1
+    })
     messageQueue.push(msg)
   }
 }

@@ -6,6 +6,12 @@ import { parseClaudeList, parseClaudeDetail } from "./parsers/claude"
 import { setClaudeOrgId } from "./store"
 import type React from "react"
 
+// Instrumentation helper for handler flow tracking
+function logFlow(step: string, details?: Record<string, unknown>) {
+  const timestamp = performance.now().toFixed(2)
+  console.log(`[Handler:FLOW] [${timestamp}ms] ${step}`, details ?? "")
+}
+
 // Extract orgId from any /api/organizations/{orgId}/... URL
 const extractOrgIdFromUrl = (pathname: string): string | null => {
   const match = pathname.match(/^\/api\/organizations\/([^/]+)/)
@@ -15,16 +21,18 @@ const extractOrgIdFromUrl = (pathname: string): string | null => {
 export interface InterceptorEventHandlerDeps {
   capturedPlatform: CapturedPlatform | null
   upsertMany: (conversations: Conversation[]) => void
-  syncActiveMessages: () => void
+  updateActiveMessagesFromStore: () => void
   isScanningRef: React.MutableRefObject<boolean>
 }
 
 export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps) => {
-  const { capturedPlatform, upsertMany, syncActiveMessages, isScanningRef } = deps
+  const { capturedPlatform, upsertMany, updateActiveMessagesFromStore, isScanningRef } = deps
 
   return (evt: InterceptorEvent) => {
+    logFlow("HANDLER_ENTRY", { url: evt?.url, hasData: !!evt?.data })
+
     if (!evt?.url || !evt?.data) {
-      console.log("[useMessageScanner] handleInterceptorEvent: skipping (missing url or data)", { hasUrl: !!evt?.url, hasData: !!evt?.data })
+      logFlow("HANDLER_SKIP_NO_DATA", { hasUrl: !!evt?.url, hasData: !!evt?.data })
       return
     }
 
@@ -33,23 +41,22 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
       // Handle both absolute and relative URLs
       url = evt.url.startsWith("http") ? new URL(evt.url) : new URL(evt.url, window.location.origin)
     } catch {
-      console.log("[useMessageScanner] handleInterceptorEvent: invalid URL", evt.url)
+      logFlow("HANDLER_SKIP_INVALID_URL", { url: evt.url })
       return
     }
 
     const inferred = inferCapturedPlatformFromUrl(url)
     if (!inferred) {
-      console.log("[useMessageScanner] handleInterceptorEvent: not a captured platform", { url: evt.url, pathname: url.pathname })
+      logFlow("HANDLER_SKIP_NOT_CAPTURED", { url: evt.url, pathname: url.pathname })
       return
     }
 
-    console.log("[useMessageScanner] handleInterceptorEvent: intercepted", {
+    logFlow("HANDLER_PROCESSING", {
       platform: inferred,
       url: evt.url,
       method: evt.method,
       status: evt.status,
-      ok: evt.ok,
-      hasData: !!evt.data
+      isScanning: isScanningRef.current
     })
 
     const seenAt = now()
@@ -57,9 +64,9 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
     // ChatGPT
     if (inferred === "chatgpt") {
       if (matchChatGPTList(url)) {
-        console.log("[useMessageScanner] ChatGPT list endpoint detected")
+        logFlow("CHATGPT_LIST_MATCH")
         const metas = parseChatGPTList(evt.data)
-        console.log("[useMessageScanner] Parsed ChatGPT list:", metas.length, "conversations")
+        logFlow("CHATGPT_LIST_PARSED", { count: metas.length })
         const convos: Conversation[] = metas.map((m) => ({
           id: m.id,
           platform: "chatgpt",
@@ -70,25 +77,27 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
           hasFullHistory: false,
           lastSeenAt: seenAt
         }))
+        logFlow("UPSERT_MANY_START", { platform: "chatgpt", type: "list", count: convos.length })
         upsertMany(convos)
+        logFlow("UPSERT_MANY_COMPLETE", { platform: "chatgpt", type: "list" })
         return
       }
 
       if (matchChatGPTDetail(url)) {
         const id = extractPathSegment(url.pathname, 0)
         if (!id) {
-          console.log("[useMessageScanner] ChatGPT detail: failed to extract ID from", url.pathname)
+          logFlow("CHATGPT_DETAIL_NO_ID", { pathname: url.pathname })
           return
         }
 
-        console.log("[useMessageScanner] ChatGPT detail endpoint detected:", id)
+        logFlow("CHATGPT_DETAIL_MATCH", { id })
         const parsed = parseChatGPTDetail(id, evt.data)
-        console.log("[useMessageScanner] Parsed ChatGPT detail:", {
+        logFlow("CHATGPT_DETAIL_PARSED", {
           id,
           title: parsed.title,
-          messageCount: parsed.messages.length,
-          hasFullHistory: parsed.hasFullHistory
+          messageCount: parsed.messages.length
         })
+        logFlow("UPSERT_MANY_START", { platform: "chatgpt", type: "detail", id, messageCount: parsed.messages.length })
         upsertMany([
           {
             id,
@@ -101,11 +110,13 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
             lastSeenAt: seenAt
           }
         ])
+        logFlow("UPSERT_MANY_COMPLETE", { platform: "chatgpt", type: "detail", id })
 
-        // If this is the active conversation, refresh messages immediately
-        if (isScanningRef.current && capturedPlatform === "chatgpt") {
-          console.log("[useMessageScanner] Active ChatGPT conversation updated, syncing messages")
-          syncActiveMessages()
+        // Sync active messages if current tab matches the event's platform
+        if (capturedPlatform === inferred) {
+          logFlow("UPDATE_ACTIVE_MESSAGES_START", { platform: inferred })
+          updateActiveMessagesFromStore()
+          logFlow("UPDATE_ACTIVE_MESSAGES_COMPLETE", { platform: inferred })
         }
         return
       }
@@ -125,13 +136,13 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
         // List: /api/organizations/{orgId}/conversations → orgId is index 1 from end
         const orgId = extractPathSegment(url.pathname, 1)
         if (!orgId) {
-          console.log("[useMessageScanner] Claude list: failed to extract orgId from", url.pathname)
+          logFlow("CLAUDE_LIST_NO_ORGID", { pathname: url.pathname })
           return
         }
 
-        console.log("[useMessageScanner] Claude list endpoint detected, orgId:", orgId)
+        logFlow("CLAUDE_LIST_MATCH", { orgId })
         const metas = parseClaudeList(orgId, evt.data)
-        console.log("[useMessageScanner] Parsed Claude list:", metas.length, "conversations")
+        logFlow("CLAUDE_LIST_PARSED", { orgId, count: metas.length })
         const convos: Conversation[] = metas.map((m) => ({
           id: m.id,
           platform: "claude",
@@ -143,7 +154,9 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
           hasFullHistory: false,
           lastSeenAt: seenAt
         }))
+        logFlow("UPSERT_MANY_START", { platform: "claude", type: "list", count: convos.length })
         upsertMany(convos)
+        logFlow("UPSERT_MANY_COMPLETE", { platform: "claude", type: "list" })
         return
       }
 
@@ -152,44 +165,28 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
         const uuid = extractPathSegment(url.pathname, 0)
         const orgId = extractPathSegment(url.pathname, 2)
         if (!uuid || !orgId) {
-          console.log("[useMessageScanner] Claude detail: failed to extract UUID or orgId from", url.pathname)
+          logFlow("CLAUDE_DETAIL_NO_IDS", { pathname: url.pathname })
           return
         }
 
-        console.log("[useMessageScanner] Claude detail endpoint detected:", { orgId, uuid })
-        
-        // ADD THIS: Log the raw response structure
-        console.log("[useMessageScanner] Claude detail RAW response structure:", {
+        logFlow("CLAUDE_DETAIL_MATCH", { orgId, uuid })
+
+        // Log the raw response structure for debugging
+        logFlow("CLAUDE_DETAIL_RAW_STRUCTURE", {
           hasChatMessages: Array.isArray((evt.data as any)?.chat_messages),
           chatMessagesLength: Array.isArray((evt.data as any)?.chat_messages) ? (evt.data as any).chat_messages.length : 0,
-          hasMessages: Array.isArray((evt.data as any)?.messages),
-          messagesLength: Array.isArray((evt.data as any)?.messages) ? (evt.data as any).messages.length : 0,
-          hasTurns: Array.isArray((evt.data as any)?.turns),
-          turnsLength: Array.isArray((evt.data as any)?.turns) ? (evt.data as any).turns.length : 0,
-          topLevelKeys: Object.keys(evt.data as any || {}),
-          dataType: typeof evt.data,
-          isArray: Array.isArray(evt.data)
+          topLevelKeys: Object.keys(evt.data as any || {})
         })
-        
+
         const parsed = parseClaudeDetail(orgId, uuid, evt.data)
-        console.log("[useMessageScanner] Parsed Claude detail:", {
+        logFlow("CLAUDE_DETAIL_PARSED", {
           uuid,
           orgId: parsed.orgId,
           title: parsed.title,
-          messageCount: parsed.messages.length,
-          hasFullHistory: parsed.hasFullHistory
+          messageCount: parsed.messages.length
         })
-        
-        // Log actual messages for debugging
-        console.log("[useMessageScanner] Claude messages parsed:", parsed.messages.map((m, i) => ({
-          index: i,
-          id: m.id,
-          role: m.role,
-          authorName: m.authorName,
-          textLength: m.text.length,
-          textPreview: m.text.substring(0, 100) + (m.text.length > 100 ? "..." : "")
-        })))
-        
+
+        logFlow("UPSERT_MANY_START", { platform: "claude", type: "detail", uuid, messageCount: parsed.messages.length })
         upsertMany([
           {
             id: uuid,
@@ -203,10 +200,13 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
             lastSeenAt: seenAt
           }
         ])
+        logFlow("UPSERT_MANY_COMPLETE", { platform: "claude", type: "detail", uuid })
 
-        if (isScanningRef.current && capturedPlatform === "claude") {
-          console.log("[useMessageScanner] Active Claude conversation updated, syncing messages")
-          syncActiveMessages()
+        // Sync active messages if current tab matches the event's platform
+        if (capturedPlatform === inferred) {
+          logFlow("UPDATE_ACTIVE_MESSAGES_START", { platform: inferred })
+          updateActiveMessagesFromStore()
+          logFlow("UPDATE_ACTIVE_MESSAGES_COMPLETE", { platform: inferred })
         }
         return
       }

@@ -34,54 +34,48 @@ const fetchWithRetry = async (
 
 export interface RescanHandlerDeps {
   capturedPlatform: CapturedPlatform | null
-  flushAllState: () => void
+  updateAllDerivedState: () => void
   handleInterceptorEvent: (evt: InterceptorEvent) => void
   storeRef: React.MutableRefObject<Map<string, Conversation>>
 }
 
-// Discover Claude orgId by fetching /api/me
-const discoverClaudeOrgId = async (): Promise<string | null> => {
-  console.log("[rescan] STEP: discoverClaudeOrgId - START")
+// Discover Claude orgId from page's __NEXT_DATA__ (Next.js embeds this on all pages)
+const discoverClaudeOrgId = (): string | null => {
+  console.log("[rescan] discoverClaudeOrgId - START")
+
+  // Try __NEXT_DATA__ script tag (always present on Claude pages)
   try {
-    console.log("[rescan] STEP: discoverClaudeOrgId - Fetching /api/me")
-    const resp = await fetch("/api/me", {
-      credentials: "include",
-      headers: { accept: "application/json" }
-    })
-    console.log("[rescan] STEP: discoverClaudeOrgId - Response status:", resp.status, resp.ok)
-    
-    if (!resp.ok) {
-      console.log("[rescan] STEP: discoverClaudeOrgId - FAILED: Response not OK")
-      return null
+    const nextDataScript = document.getElementById("__NEXT_DATA__")
+    if (nextDataScript?.textContent) {
+      const data = JSON.parse(nextDataScript.textContent)
+      const orgId = data?.props?.pageProps?.organizationId
+      if (orgId) {
+        console.log("[rescan] discoverClaudeOrgId - Found in __NEXT_DATA__", { orgId })
+        return orgId
+      }
     }
-    
-    const data = await resp.json().catch((e) => {
-      console.log("[rescan] STEP: discoverClaudeOrgId - FAILED: JSON parse error", e)
-      return null
-    })
-    
-    if (!data) {
-      console.log("[rescan] STEP: discoverClaudeOrgId - FAILED: No data")
-      return null
-    }
-    
-    const orgId = data?.default_organization_id || data?.organization_id || data?.uuid || null
-    console.log("[rescan] STEP: discoverClaudeOrgId - SUCCESS", { 
-      orgId, 
-      hasDefaultOrgId: !!data?.default_organization_id,
-      hasOrgId: !!data?.organization_id,
-      hasUuid: !!data?.uuid,
-      dataKeys: Object.keys(data || {})
-    })
-    return orgId
-  } catch (error) {
-    console.error("[rescan] STEP: discoverClaudeOrgId - EXCEPTION", error)
-    return null
+  } catch (e) {
+    console.log("[rescan] discoverClaudeOrgId - __NEXT_DATA__ parse error", e)
   }
+
+  // Try window.__NEXT_DATA__ global (Next.js also exposes it on window)
+  try {
+    const win = window as any
+    if (win.__NEXT_DATA__?.props?.pageProps?.organizationId) {
+      const orgId = win.__NEXT_DATA__.props.pageProps.organizationId
+      console.log("[rescan] discoverClaudeOrgId - Found in window.__NEXT_DATA__", { orgId })
+      return orgId
+    }
+  } catch (e) {
+    console.log("[rescan] discoverClaudeOrgId - window check error", e)
+  }
+
+  console.log("[rescan] discoverClaudeOrgId - No orgId found")
+  return null
 }
 
 export const createRescanHandler = (deps: RescanHandlerDeps) => {
-  const { capturedPlatform, flushAllState, handleInterceptorEvent, storeRef } = deps
+  const { capturedPlatform, updateAllDerivedState, handleInterceptorEvent, storeRef } = deps
 
   return async () => {
     console.log("[rescan] ========== RESCAN START ==========", { 
@@ -90,8 +84,8 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
       storeKeys: Array.from(storeRef.current.keys())
     })
     
-    console.log("[rescan] STEP 1: flushAllState")
-    flushAllState()
+    console.log("[rescan] STEP 1: updateAllDerivedState")
+    updateAllDerivedState()
 
     if (!capturedPlatform) {
       console.log("[rescan] STEP 2: EXIT - No captured platform")
@@ -177,9 +171,9 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
         }
 
         if (!orgId) {
-          console.log("[rescan] STEP 7c: Attempting API discovery")
-          orgId = await discoverClaudeOrgId()
-          console.log("[rescan] STEP 7c: API discovery result", { orgId })
+          console.log("[rescan] STEP 7c: Extracting from page data")
+          orgId = discoverClaudeOrgId()
+          console.log("[rescan] STEP 7c: Page extraction result", { orgId })
         }
 
         if (!orgId) {

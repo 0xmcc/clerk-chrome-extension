@@ -4,6 +4,12 @@ import { mergeConversation, computeStats } from "./mergers"
 import { getActiveConversationIdFromUrl } from "./utils"
 import { storeRef, isScanningRef } from "./store"
 
+// Instrumentation helper for state flow tracking
+function logFlow(step: string, details?: Record<string, unknown>) {
+  const timestamp = performance.now().toFixed(2)
+  console.log(`[State:FLOW] [${timestamp}ms] ${step}`, details ?? "")
+}
+
 export interface ConversationStoreState {
   conversations: Conversation[]
   stats: ScannerStats
@@ -22,63 +28,84 @@ export const useConversationStore = () => {
   const [isScanning, setIsScanning] = useState<boolean>(isScanningRef.current)
 
   const upsertMany = useCallback((incoming: Conversation[]) => {
-    if (incoming.length === 0) return
+    logFlow("UPSERT_MANY_ENTRY", { incomingCount: incoming.length })
 
-    console.log("[useMessageScanner] upsertMany: processing", incoming.length, "conversation(s)")
+    if (incoming.length === 0) {
+      logFlow("UPSERT_MANY_EMPTY", {})
+      return
+    }
 
     const store = storeRef.current
+    const storeSizeBefore = store.size
+
     for (const c of incoming) {
       const key = `${c.platform}:${c.id}`
       const existing = store.get(key)
       const merged = mergeConversation(existing, c)
       store.set(key, merged)
 
-      console.log("[useMessageScanner] Upserted conversation", {
+      logFlow("UPSERT_CONVERSATION", {
         key,
         platform: c.platform,
         id: c.id,
-        title: c.title,
-        messageCount: merged.messages.length,
-        hasFullHistory: merged.hasFullHistory,
+        title: c.title?.substring(0, 30),
+        incomingMsgs: c.messages.length,
+        existingMsgs: existing?.messages.length ?? 0,
+        mergedMsgs: merged.messages.length,
         wasNew: !existing
       })
     }
+
+    logFlow("UPSERT_STORE_UPDATED", {
+      storeSizeBefore,
+      storeSizeAfter: store.size
+    })
 
     const next = Array.from(store.values()).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
     setConversations(next)
     const newStats = computeStats(next)
     setStats(newStats)
-    console.log("[useMessageScanner] upsertMany: updated state", {
+
+    logFlow("UPSERT_STATE_SET", {
       totalConversations: newStats.totalConversations,
       conversationsWithMessages: newStats.conversationsWithMessages,
       totalMessages: newStats.totalMessages
     })
   }, [])
 
-  const flushAllState = useCallback((syncActiveMessages: () => void) => {
+  const updateConversationListFromStore = useCallback((updateActiveMessagesFromStore: () => void) => {
+    logFlow("UPDATE_CONVERSATION_LIST_ENTRY", { storeSize: storeRef.current.size })
+
     const next = Array.from(storeRef.current.values()).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
     const stats = computeStats(next)
-    console.log("[useMessageScanner] flushAllState", {
+
+    logFlow("UPDATE_CONVERSATION_LIST_COMPUTED", {
       conversationCount: next.length,
       totalMessages: stats.totalMessages,
       conversationsWithMessages: stats.conversationsWithMessages
     })
+
     setConversations(next)
     setStats(stats)
-    syncActiveMessages()
+
+    logFlow("UPDATE_ACTIVE_MESSAGES_CALLING")
+    updateActiveMessagesFromStore()
+    logFlow("UPDATE_CONVERSATION_LIST_COMPLETE")
   }, [])
 
-  const startScanning = useCallback((flushAllStateFn: () => void) => {
-    console.log("[useMessageScanner] startScanning: enabling scan mode")
+  const startScanning = useCallback((updateAllDerivedStateFn: () => void) => {
+    logFlow("START_SCANNING", { previousState: isScanningRef.current })
     isScanningRef.current = true
     setIsScanning(true)
-    flushAllStateFn()
+    updateAllDerivedStateFn()
+    logFlow("START_SCANNING_COMPLETE")
   }, [])
 
   const stopScanning = useCallback(() => {
-    console.log("[useMessageScanner] stopScanning: disabling scan mode")
+    logFlow("STOP_SCANNING", { previousState: isScanningRef.current })
     isScanningRef.current = false
     setIsScanning(false)
+    logFlow("STOP_SCANNING_COMPLETE")
   }, [])
 
   return {
@@ -88,7 +115,7 @@ export const useConversationStore = () => {
     storeRef,
     isScanningRef,
     upsertMany,
-    flushAllState,
+    updateConversationListFromStore,
     startScanning,
     stopScanning
   }
@@ -97,15 +124,17 @@ export const useConversationStore = () => {
 export const useActiveMessages = (capturedPlatform: CapturedPlatform | null, storeRef: React.MutableRefObject<Map<string, Conversation>>) => {
   const [messages, setMessages] = useState<Message[]>([])
 
-  const syncActiveMessages = useCallback(() => {
+  const updateActiveMessagesFromStore = useCallback(() => {
+    logFlow("UPDATE_ACTIVE_MESSAGES_ENTRY", { capturedPlatform, storeSize: storeRef.current.size })
+
     if (!capturedPlatform) {
-      console.log("[useMessageScanner] syncActiveMessages: no captured platform, clearing messages")
+      logFlow("UPDATE_ACTIVE_NO_PLATFORM", {})
       setMessages([])
       return
     }
 
     const activeId = getActiveConversationIdFromUrl(capturedPlatform)
-    console.log("[useMessageScanner] syncActiveMessages: DEBUG", {
+    logFlow("UPDATE_ACTIVE_ID_RESOLVED", {
       capturedPlatform,
       activeId,
       currentPath: window.location.pathname,
@@ -114,7 +143,7 @@ export const useActiveMessages = (capturedPlatform: CapturedPlatform | null, sto
     })
 
     if (!activeId) {
-      console.log("[useMessageScanner] syncActiveMessages: no active conversation ID, clearing messages")
+      logFlow("UPDATE_ACTIVE_NO_ID", {})
       setMessages([])
       return
     }
@@ -122,16 +151,19 @@ export const useActiveMessages = (capturedPlatform: CapturedPlatform | null, sto
     const key = `${capturedPlatform}:${activeId}`
     const convo = storeRef.current.get(key)
     const messageCount = convo?.messages.length ?? 0
-    console.log("[useMessageScanner] syncActiveMessages", {
-      platform: capturedPlatform,
-      activeId,
+
+    logFlow("UPDATE_ACTIVE_CONVERSATION_LOOKUP", {
       key,
-      messageCount,
       hasConversation: !!convo,
-      conversationTitle: convo?.title,
-      conversationMessages: convo?.messages?.length ?? 0
+      messageCount,
+      title: convo?.title?.substring(0, 30)
     })
+
     setMessages(convo?.messages ?? [])
+
+    logFlow("UPDATE_ACTIVE_MESSAGES_SET", {
+      messageCount: convo?.messages?.length ?? 0
+    })
   }, [capturedPlatform, storeRef])
 
   const clearMessages = useCallback(() => {
@@ -140,7 +172,7 @@ export const useActiveMessages = (capturedPlatform: CapturedPlatform | null, sto
 
   return {
     messages,
-    syncActiveMessages,
+    updateActiveMessagesFromStore,
     clearMessages
   }
 }
