@@ -5,7 +5,6 @@ import type { Conversation } from "./types"
 // captured before exporter opens are preserved
 
 export const sharedStore = new Map<string, Conversation>()
-export const sharedIsScanningRef = { current: false }
 
 // Cached Claude orgId - extracted from any /api/organizations/{orgId}/ URL
 let cachedClaudeOrgId: string | null = null
@@ -19,6 +18,5 @@ export const setClaudeOrgId = (orgId: string) => {
 
 export const getClaudeOrgId = (): string | null => cachedClaudeOrgId
 
-// Stable ref-like objects that point to the shared state
+// Stable ref-like object that points to the shared state
 export const storeRef = { current: sharedStore }
-export const isScanningRef = sharedIsScanningRef

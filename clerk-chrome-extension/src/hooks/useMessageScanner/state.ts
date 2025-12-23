@@ -2,7 +2,7 @@ import { useCallback, useState } from "react"
 import type { Conversation, Message, ScannerStats, CapturedPlatform } from "./types"
 import { mergeConversation, computeStats } from "./mergers"
 import { getActiveConversationIdFromUrl } from "./utils"
-import { storeRef, isScanningRef } from "./store"
+import { storeRef } from "./store"
 
 // Instrumentation helper for state flow tracking
 function logFlow(step: string, details?: Record<string, unknown>) {
@@ -13,7 +13,6 @@ function logFlow(step: string, details?: Record<string, unknown>) {
 export interface ConversationStoreState {
   conversations: Conversation[]
   stats: ScannerStats
-  isScanning: boolean
 }
 
 export const useConversationStore = () => {
@@ -24,8 +23,6 @@ export const useConversationStore = () => {
     totalMessages: 0,
     lastCapturedAt: undefined
   })
-
-  const [isScanning, setIsScanning] = useState<boolean>(isScanningRef.current)
 
   const upsertMany = useCallback((incoming: Conversation[]) => {
     logFlow("UPSERT_MANY_ENTRY", { incomingCount: incoming.length })
@@ -73,51 +70,31 @@ export const useConversationStore = () => {
     })
   }, [])
 
-  const updateConversationListFromStore = useCallback((updateActiveMessagesFromStore: () => void) => {
+  // Simplified: no callback, just updates conversations and stats from store
+  const updateConversationListFromStore = useCallback(() => {
     logFlow("UPDATE_CONVERSATION_LIST_ENTRY", { storeSize: storeRef.current.size })
 
     const next = Array.from(storeRef.current.values()).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
-    const stats = computeStats(next)
+    const newStats = computeStats(next)
 
     logFlow("UPDATE_CONVERSATION_LIST_COMPUTED", {
       conversationCount: next.length,
-      totalMessages: stats.totalMessages,
-      conversationsWithMessages: stats.conversationsWithMessages
+      totalMessages: newStats.totalMessages,
+      conversationsWithMessages: newStats.conversationsWithMessages
     })
 
     setConversations(next)
-    setStats(stats)
+    setStats(newStats)
 
-    logFlow("UPDATE_ACTIVE_MESSAGES_CALLING")
-    updateActiveMessagesFromStore()
     logFlow("UPDATE_CONVERSATION_LIST_COMPLETE")
-  }, [])
-
-  const startScanning = useCallback((updateAllDerivedStateFn: () => void) => {
-    logFlow("START_SCANNING", { previousState: isScanningRef.current })
-    isScanningRef.current = true
-    setIsScanning(true)
-    updateAllDerivedStateFn()
-    logFlow("START_SCANNING_COMPLETE")
-  }, [])
-
-  const stopScanning = useCallback(() => {
-    logFlow("STOP_SCANNING", { previousState: isScanningRef.current })
-    isScanningRef.current = false
-    setIsScanning(false)
-    logFlow("STOP_SCANNING_COMPLETE")
   }, [])
 
   return {
     conversations,
     stats,
-    isScanning,
     storeRef,
-    isScanningRef,
     upsertMany,
-    updateConversationListFromStore,
-    startScanning,
-    stopScanning
+    updateConversationListFromStore
   }
 }
 

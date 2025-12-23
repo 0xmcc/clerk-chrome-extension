@@ -34,10 +34,6 @@ export interface ScannerStats {
   lastCapturedAt?: number
 }
 
-export interface UseMessageScannerProps {
-  isExporterOpen: boolean
-}
-
 export type InterceptorEvent = {
   source: string
   url: string

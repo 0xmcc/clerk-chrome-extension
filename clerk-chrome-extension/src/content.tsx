@@ -1,13 +1,18 @@
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import cssText from "data-text:~style.css"
 import type { PlasmoCSConfig } from "plasmo"
 
-import { CountButton } from "~features/count-button"
 import { FloatingButton } from "~features/floating-button"
 import { SelectiveExporter } from "~components/SelectiveExporter"
+import { useMessageScanner } from "~hooks/useMessageScanner"
 
 export const config: PlasmoCSConfig = {
-  matches: ["<all_urls>"]
+  matches: [
+    "https://chat.openai.com/*",
+    "https://chatgpt.com/*",
+    "https://claude.ai/*",
+    "https://*.claude.ai/*"
+  ]
 }
 
 /**
@@ -40,16 +45,44 @@ export const getStyle = (): HTMLStyleElement => {
   return styleElement
 }
 
+// Rescan-on-open cooldown to prevent repeated rescans
+const RESCAN_ON_OPEN_COOLDOWN_MS = 10000
+
 const PlasmoOverlay = () => {
   const [isExporterOpen, setIsExporterOpen] = useState(false)
 
+  // Track rescan-on-open attempts with timestamp for cooldown-based retry
+  const rescanOnOpenAttemptsRef = useRef<Map<string, number>>(new Map())
+
+  // Always-on scanner - no props, returns stable activeConvoKey and activeMessageCount for guards
+  const { messages, conversationKey, rescan, activeConvoKey, activeMessageCount } = useMessageScanner()
+
+  // Guarded rescan-on-open: uses store-based activeMessageCount and cooldown retry
+  useEffect(() => {
+    if (!isExporterOpen) return
+    if (!activeConvoKey) return // No active conversation
+    if (activeMessageCount > 0) return // Already have messages in store for this convo
+
+    // Check cooldown - allow retry after timeout
+    const lastAttempt = rescanOnOpenAttemptsRef.current.get(activeConvoKey) ?? 0
+    const now = Date.now()
+    if (now - lastAttempt < RESCAN_ON_OPEN_COOLDOWN_MS) return
+
+    rescanOnOpenAttemptsRef.current.set(activeConvoKey, now)
+    // Small delay to allow interceptor events to arrive first
+    const timer = setTimeout(() => rescan(), 300)
+    return () => clearTimeout(timer)
+  }, [isExporterOpen, activeConvoKey, activeMessageCount, rescan])
+
   return (
     <>
-      {/* <div className="plasmo-z-50 plasmo-flex plasmo-fixed plasmo-top-32 plasmo-right-8">
-        <CountButton />
-      </div> */}
       <FloatingButton onOpenExporter={() => setIsExporterOpen(true)} />
-      <SelectiveExporter isOpen={isExporterOpen} onClose={() => setIsExporterOpen(false)} />
+      <SelectiveExporter
+        isOpen={isExporterOpen}
+        onClose={() => setIsExporterOpen(false)}
+        messages={messages}
+        conversationKey={conversationKey}
+      />
     </>
   )
 }

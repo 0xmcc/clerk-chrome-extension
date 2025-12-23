@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { marked } from "marked"
 
-import { useMessageScanner } from "~hooks/useMessageScanner"
+import type { Message } from "~hooks/useMessageScanner/types"
 import { detectPlatform, getPlatformLabel } from "~utils/platform"
 
 const API_BASE_URL = process.env.PLASMO_PUBLIC_API_BASE_URL || "http://localhost:3000"
@@ -9,6 +9,8 @@ const API_BASE_URL = process.env.PLASMO_PUBLIC_API_BASE_URL || "http://localhost
 interface SelectiveExporterProps {
   isOpen: boolean
   onClose: () => void
+  messages: Message[]
+  conversationKey: string
 }
 
 type PromptContainer = {
@@ -100,7 +102,7 @@ const deriveConversationId = () => {
   return `conversation-${Date.now()}`
 }
 
-export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) => {
+export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey }: SelectiveExporterProps) => {
   const [previewTab, setPreviewTab] = useState<"markdown" | "json">("markdown")
   const [historyFormat, setHistoryFormat] = useState<"markdown" | "json">("markdown")
   const [chatEntries, setChatEntries] = useState<ChatEntry[]>([])
@@ -146,10 +148,6 @@ export const SelectiveExporter = ({ isOpen, onClose }: SelectiveExporterProps) =
         status: "idle"
       }
     ]
-  })
-
-  const { messages, conversationKey } = useMessageScanner({
-    isExporterOpen: isOpen
   })
 
   // Reset selection when conversation changes

@@ -4,7 +4,6 @@ import { matchChatGPTList, matchChatGPTDetail, matchClaudeList, matchClaudeDetai
 import { parseChatGPTList, parseChatGPTDetail } from "./parsers/chatgpt"
 import { parseClaudeList, parseClaudeDetail } from "./parsers/claude"
 import { setClaudeOrgId } from "./store"
-import type React from "react"
 
 // Instrumentation helper for handler flow tracking
 function logFlow(step: string, details?: Record<string, unknown>) {
@@ -22,11 +21,10 @@ export interface InterceptorEventHandlerDeps {
   capturedPlatform: CapturedPlatform | null
   upsertMany: (conversations: Conversation[]) => void
   updateActiveMessagesFromStore: () => void
-  isScanningRef: React.MutableRefObject<boolean>
 }
 
 export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps) => {
-  const { capturedPlatform, upsertMany, updateActiveMessagesFromStore, isScanningRef } = deps
+  const { capturedPlatform, upsertMany, updateActiveMessagesFromStore } = deps
 
   return (evt: InterceptorEvent) => {
     logFlow("HANDLER_ENTRY", { url: evt?.url, hasData: !!evt?.data })
@@ -55,8 +53,7 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
       platform: inferred,
       url: evt.url,
       method: evt.method,
-      status: evt.status,
-      isScanning: isScanningRef.current
+      status: evt.status
     })
 
     const seenAt = now()

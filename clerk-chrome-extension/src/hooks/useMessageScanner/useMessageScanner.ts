@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react"
 import { detectPlatform } from "~utils/platform"
 
-import type { UseMessageScannerProps, InterceptorEvent } from "./types"
+import type { InterceptorEvent } from "./types"
 import { isCapturedPlatform, getConversationKey, getActiveConversationIdFromUrl } from "./utils"
 import { useConversationStore, useActiveMessages } from "./state"
 import { createInterceptorEventHandler } from "./handlers"
@@ -13,25 +13,27 @@ function logFlow(step: string, details?: Record<string, unknown>) {
   console.log(`[Scanner:FLOW] [${timestamp}ms] ${step}`, details ?? "")
 }
 
-export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) => {
+// Rescan cooldown to prevent spam
+const RESCAN_COOLDOWN_MS = 5000
+
+export const useMessageScanner = () => {
   const platform = useMemo(() => detectPlatform(), [])
   const capturedPlatform = isCapturedPlatform(platform) ? platform : null
   const receivedMessageCount = useRef(0)
   const processedMessageCount = useRef(0)
 
-  logFlow("HOOK_INIT", { platform, capturedPlatform, isExporterOpen })
+  // Track rescan attempts with timestamp for cooldown-based retry
+  const rescanAttemptsRef = useRef<Map<string, number>>(new Map())
 
-  // Conversation store state
+  logFlow("HOOK_INIT", { platform, capturedPlatform })
+
+  // Conversation store state (simplified - no start/stop)
   const {
     conversations,
     stats,
-    isScanning,
     storeRef,
-    isScanningRef,
     upsertMany,
-    updateConversationListFromStore,
-    startScanning,
-    stopScanning
+    updateConversationListFromStore
   } = useConversationStore()
 
   // Active messages state
@@ -40,28 +42,37 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
   // Conversation key for URL change detection
   const [conversationKey, setConversationKey] = useState<string>(getConversationKey())
 
-  // Create update function that syncs active messages
+  // Compute stable activeConvoKey for guard checks
+  const activeId = capturedPlatform ? getActiveConversationIdFromUrl(capturedPlatform) : null
+  const activeConvoKey = capturedPlatform && activeId ? `${capturedPlatform}:${activeId}` : null
+
+  // Compute activeMessageCount from store (not messages.length which can be stale)
+  const activeMessageCount = activeConvoKey
+    ? (storeRef.current.get(activeConvoKey)?.messages.length ?? 0)
+    : 0
+//  const activeMessageCount = messages.length
+
+  // Split update functions - no callback nesting
   const updateAllDerivedState = useCallback(() => {
-    updateConversationListFromStore(updateActiveMessagesFromStore)
+    updateConversationListFromStore()
+    updateActiveMessagesFromStore()
   }, [updateConversationListFromStore, updateActiveMessagesFromStore])
 
-  // Create start scanning function
-  const startScanningWithUpdate = useCallback(() => {
-    startScanning(updateAllDerivedState)
-  }, [startScanning, updateAllDerivedState])
+  // Create interceptor handler ONCE with useMemo (not per-event)
+  const interceptorHandler = useMemo(
+    () => createInterceptorEventHandler({
+      capturedPlatform,
+      upsertMany,
+      updateActiveMessagesFromStore
+    }),
+    [capturedPlatform, upsertMany, updateActiveMessagesFromStore]
+  )
 
-  // Create interceptor event handler
   const handleInterceptorEvent = useCallback(
     (evt: InterceptorEvent) => {
-      const handler = createInterceptorEventHandler({
-        capturedPlatform,
-        upsertMany,
-        updateActiveMessagesFromStore,
-        isScanningRef
-      })
-      handler(evt)
+      interceptorHandler(evt)
     },
-    [capturedPlatform, upsertMany, updateActiveMessagesFromStore, isScanningRef]
+    [interceptorHandler]
   )
 
   // Create rescan handler
@@ -75,29 +86,7 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
     await handler()
   }, [capturedPlatform, updateAllDerivedState, handleInterceptorEvent, storeRef])
 
-  // Keep your old behavior: scanning enabled when exporter opens
-  // Also trigger rescan if store is empty to fetch current conversation
-  useEffect(() => {
-    console.log("[useMessageScanner] isExporterOpen changed:", isExporterOpen)
-    if (isExporterOpen) {
-      startScanningWithUpdate()
-      // If store is empty or current conversation not in store, trigger rescan
-      const activeId = capturedPlatform ? getActiveConversationIdFromUrl(capturedPlatform) : null
-      const hasActiveConversation = activeId && storeRef.current.has(`${capturedPlatform}:${activeId}`)
-      if (!hasActiveConversation && capturedPlatform) {
-        console.log("[useMessageScanner] Store empty or missing active conversation, triggering rescan", {
-          storeSize: storeRef.current.size,
-          activeId,
-          hasActiveConversation
-        })
-        rescan()
-      }
-    } else {
-      stopScanning()
-    }
-  }, [isExporterOpen, startScanningWithUpdate, stopScanning, capturedPlatform, storeRef, rescan])
-
-  // Listen for intercepted network data directly from window.postMessage (from MAIN world interceptor)
+  // Effect: Message listener - always active
   useEffect(() => {
     logFlow("LISTENER_SETUP_START", { handlerDeps: "handleInterceptorEvent" })
 
@@ -114,8 +103,7 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
         url: data.url,
         method: data.method,
         status: data.status,
-        receivedCount: receivedMessageCount.current,
-        isScanning: isScanningRef.current
+        receivedCount: receivedMessageCount.current
       })
 
       logFlow("MESSAGE_PROCESS_START", {
@@ -148,28 +136,32 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
     logFlow("READY_SIGNAL_SENDING")
     window.postMessage("__echo_listener_ready__", "*")
     logFlow("READY_SIGNAL_SENT")
-    // Update state after queue drains (next tick)
+
+    // Double-tick to handle "detail arrives after first tick" case
     setTimeout(() => {
-      logFlow("INITIAL_UPDATE_AFTER_READY")
+      logFlow("INITIAL_UPDATE_AFTER_READY_0")
       updateAllDerivedState()
     }, 0)
+    setTimeout(() => {
+      logFlow("INITIAL_UPDATE_AFTER_READY_100")
+      updateAllDerivedState()
+    }, 100)
 
     return () => {
       logFlow("LISTENER_CLEANUP")
       window.removeEventListener("message", listener)
     }
-  }, [handleInterceptorEvent, isScanningRef, updateAllDerivedState])
+  }, [handleInterceptorEvent, updateAllDerivedState])
 
-  // Detect URL changes (SPA navigation) and keep conversationKey + messages in sync
+  // Effect: URL change detection - always update state, throttled rescan
   useEffect(() => {
     console.log("[useMessageScanner] Setting up URL change detection interval")
     const interval = window.setInterval(() => {
       const nextKey = getConversationKey()
       if (nextKey !== conversationKey) {
-        console.log("[useMessageScanner] URL changed:", { 
-          from: conversationKey, 
+        console.log("[useMessageScanner] URL changed:", {
+          from: conversationKey,
           to: nextKey,
-          isScanning: isScanningRef.current,
           storeSize: storeRef.current.size,
           storeKeys: Array.from(storeRef.current.keys())
         })
@@ -179,20 +171,31 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
         console.log("[useMessageScanner] URL change: Syncing state")
         updateAllDerivedState()
 
-        // Only do extra work (rescan) when scanning is enabled
-        if (isScanningRef.current) {
-          const activeId = capturedPlatform ? getActiveConversationIdFromUrl(capturedPlatform) : null
-          const convo = activeId ? storeRef.current.get(`${capturedPlatform}:${activeId}`) : null
+        // Compute activeConvoKey for this URL
+        const nextActiveId = capturedPlatform ? getActiveConversationIdFromUrl(capturedPlatform) : null
+        const nextActiveConvoKey = capturedPlatform && nextActiveId
+          ? `${capturedPlatform}:${nextActiveId}`
+          : null
+
+        // Throttled rescan with cooldown-based retry (not permanent lockout)
+        if (nextActiveConvoKey) {
+          const lastAttempt = rescanAttemptsRef.current.get(nextActiveConvoKey) ?? 0
+          const now = Date.now()
+          const convo = storeRef.current.get(nextActiveConvoKey)
 
           console.log("[useMessageScanner] URL change: Conversation check", {
             capturedPlatform,
-            activeId,
+            nextActiveId,
+            nextActiveConvoKey,
             hasConversation: !!convo,
-            messageCount: convo?.messages.length ?? 0
+            messageCount: convo?.messages.length ?? 0,
+            timeSinceLastAttempt: now - lastAttempt
           })
 
-          if (capturedPlatform && (!convo || !convo.messages.length)) {
+          // Only rescan if: missing/empty AND (never tried OR cooldown expired)
+          if ((!convo || !convo.messages.length) && (now - lastAttempt > RESCAN_COOLDOWN_MS)) {
             console.log("[useMessageScanner] URL change: Conversation missing/incomplete, triggering rescan in 300ms")
+            rescanAttemptsRef.current.set(nextActiveConvoKey, now)
             setTimeout(() => rescan(), 300)
           }
         }
@@ -203,19 +206,15 @@ export const useMessageScanner = ({ isExporterOpen }: UseMessageScannerProps) =>
       console.log("[useMessageScanner] Cleaning up URL change detection interval")
       window.clearInterval(interval)
     }
-  }, [conversationKey, updateAllDerivedState, isScanningRef, capturedPlatform, storeRef, rescan])
+  }, [conversationKey, updateAllDerivedState, capturedPlatform, storeRef, rescan])
 
   return {
-    // Existing return fields (do not break current usage)
     messages,
     rescan,
     conversationKey,
-
-    // Additive fields you asked to keep (won't break existing destructuring)
     conversations,
     stats,
-    isScanning,
-    startScanning: startScanningWithUpdate,
-    stopScanning
+    activeConvoKey,
+    activeMessageCount
   }
 }

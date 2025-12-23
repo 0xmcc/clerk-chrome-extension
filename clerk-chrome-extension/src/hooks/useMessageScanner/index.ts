@@ -7,7 +7,6 @@ export type {
   CapturedPlatform,
   Conversation,
   ScannerStats,
-  UseMessageScannerProps,
   InterceptorEvent
 } from "./types"
 
