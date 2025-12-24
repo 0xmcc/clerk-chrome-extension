@@ -1,4 +1,10 @@
 import { createClerkClient } from "@clerk/chrome-extension/background"
+import {
+  ALL_HOST_PATTERNS,
+  isTargetSite,
+  CHATGPT_ENDPOINTS,
+  CLAUDE_ENDPOINTS,
+} from "./config/endpoints"
 
 const publishableKey = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY
 const syncHost = process.env.PLASMO_PUBLIC_CLERK_SYNC_HOST
@@ -67,20 +73,28 @@ async function initializeClerk() {
 
 initializeClerk()
 // Inject into existing tabs on startup
-chrome.tabs.query({ 
-  url: ["https://chat.openai.com/*", "https://chatgpt.com/*", "https://claude.ai/*", "https://*.claude.ai/*"] 
-}, (tabs) => {
+chrome.tabs.query({ url: [...ALL_HOST_PATTERNS] }, (tabs) => {
   tabs.forEach((tab) => {
     if (tab.id) injectInterceptor(tab.id)
   })
 })
 
 // Inject network interceptor into MAIN world for ChatGPT/Claude tabs
+// Pass endpoint patterns as arguments to avoid duplication (patterns defined in config/endpoints.ts)
 const injectInterceptor = (tabId: number) => {
   chrome.scripting.executeScript({
     target: { tabId },
     world: "MAIN",
-    func: () => {
+    args: [
+      CHATGPT_ENDPOINTS.CONVERSATION_DETAIL_PREFIX,
+      CHATGPT_ENDPOINTS.CONVERSATIONS_LIST,
+      CLAUDE_ENDPOINTS.ORG_API_PREFIX,
+    ],
+    func: (
+      chatgptDetailPrefix: string,
+      chatgptListPath: string,
+      claudeOrgPrefix: string
+    ) => {
       // Prevent double-install
       if ((window as any).__echo_net_hook_installed) {
         console.log("[Interceptor] Hooks already installed, skipping")
@@ -91,17 +105,17 @@ const injectInterceptor = (tabId: number) => {
       const MESSAGE_SOURCE = "__echo_network_interceptor__"
 
       function shouldCapture(urlStr: string): boolean {
-        // In shouldCapture function, add at the top:
         try {
           const u = new URL(urlStr, location.href)
           const p = u.pathname
-          console.log("[Interceptor] Checking URL:", urlStr, "pathname:", new URL(urlStr, location.href).pathname)
-          if (p.startsWith("/backend-api/conversation/") || p === "/backend-api/conversations") {
+          console.log("[Interceptor] Checking URL:", urlStr, "pathname:", p)
+          // ChatGPT endpoints (patterns from centralized config)
+          if (p.startsWith(chatgptDetailPrefix) || p === chatgptListPath) {
             console.log("[Interceptor] shouldCapture: MATCH (ChatGPT)", { url: urlStr, pathname: p })
             return true
           }
-          // Capture ALL Claude organization URLs - handler extracts orgId and filters conversation endpoints
-          if (p.startsWith("/api/organizations/")) {
+          // Claude: Capture ALL /api/organizations/... URLs (pattern from centralized config)
+          if (p.startsWith(claudeOrgPrefix)) {
             console.log("[Interceptor] shouldCapture: MATCH (Claude org URL)", { url: urlStr, pathname: p })
             return true
           }
@@ -292,12 +306,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   const url = tab.url
   if (!url) return
 
-  const isTargetSite =
-    url.includes("chat.openai.com") ||
-    url.includes("chatgpt.com") ||
-    url.includes("claude.ai")
-
-  if (isTargetSite) {
+  if (isTargetSite(url)) {
     console.log("[Background] Injecting interceptor into tab:", tabId, url)
     injectInterceptor(tabId)
   }

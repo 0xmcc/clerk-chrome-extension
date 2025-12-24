@@ -1,6 +1,7 @@
 import type { Conversation, CapturedPlatform, InterceptorEvent } from "./types"
 import { getActiveConversationIdFromUrl, now } from "./utils"
 import { getClaudeOrgId } from "./store"
+import { buildChatGPTDetailUrl, buildClaudeDetailUrls } from "../../config/endpoints"
 
 export const INTERCEPTOR_SOURCE = "__echo_network_interceptor__"
 
@@ -106,7 +107,7 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
     try {
       if (capturedPlatform === "chatgpt") {
         console.log("[rescan] STEP 6: ChatGPT branch")
-        const url = `/backend-api/conversation/${activeId}`
+        const url = buildChatGPTDetailUrl(activeId)
         console.log("[rescan] STEP 7: ChatGPT fetch", { url })
         
         const resp = await fetch(url, {
@@ -187,11 +188,8 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
 
         console.log("[rescan] STEP 9: Claude orgId resolved", { orgId, activeId })
 
-        // Try both endpoint formats (Claude uses both)
-        const endpoints = [
-          `/api/organizations/${orgId}/conversations/${activeId}`,
-          `/api/organizations/${orgId}/chat_conversations/${activeId}`
-        ]
+        // Try both endpoint formats (Claude uses both) - patterns from centralized config
+        const endpoints = buildClaudeDetailUrls(orgId, activeId)
 
         let resp: Response | null = null
         let lastError: string | null = null

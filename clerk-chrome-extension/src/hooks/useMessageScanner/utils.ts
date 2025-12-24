@@ -1,5 +1,6 @@
 import type { Platform } from "~utils/platform"
 import type { CapturedPlatform } from "./types"
+import { inferPlatformFromPath } from "../../config/endpoints"
 
 export const now = () => Date.now()
 
@@ -34,10 +35,8 @@ export const inferCapturedPlatformFromUrl = (u: URL): CapturedPlatform | null =>
   if (host.includes("claude.ai")) return "claude"
   if (host.includes("chatgpt") || host.includes("openai")) return "chatgpt"
 
-  // Fallback by path matching (in case host matching changes)
-  if (u.pathname.startsWith("/backend-api/")) return "chatgpt"
-  if (u.pathname.startsWith("/api/organizations/")) return "claude"
-  return null
+  // Fallback by path matching (patterns from centralized config)
+  return inferPlatformFromPath(u.pathname)
 }
 
 export const extractPathSegment = (pathname: string, indexFromEnd: number): string | null => {

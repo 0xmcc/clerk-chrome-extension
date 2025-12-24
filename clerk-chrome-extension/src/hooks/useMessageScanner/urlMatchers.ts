@@ -1,11 +1,13 @@
-export const matchChatGPTList = (u: URL) => u.pathname === "/backend-api/conversations"
+/**
+ * URL matchers for intercepted API requests.
+ *
+ * Re-exports from centralized config to maintain single source of truth.
+ * Other files in useMessageScanner can continue importing from here.
+ */
 
-export const matchChatGPTDetail = (u: URL) => u.pathname.startsWith("/backend-api/conversation/")
-
-export const matchClaudeList = (u: URL) =>
-  /^\/api\/organizations\/[^/]+\/chat_conversations$/.test(u.pathname) ||
-  /^\/api\/organizations\/[^/]+\/conversations$/.test(u.pathname)
-
-export const matchClaudeDetail = (u: URL) =>
-  /^\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+$/.test(u.pathname) ||
-  /^\/api\/organizations\/[^/]+\/conversations\/[^/?]+$/.test(u.pathname)
+export {
+  matchChatGPTList,
+  matchChatGPTDetail,
+  matchClaudeList,
+  matchClaudeDetail,
+} from "../../config/endpoints"

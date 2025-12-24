@@ -1,12 +1,8 @@
 import type { PlasmoCSConfig } from "plasmo"
+import { shouldCaptureUrl, ALL_HOST_PATTERNS } from "./config/endpoints"
 
 export const config: PlasmoCSConfig = {
-  matches: [
-    "https://chat.openai.com/*",
-    "https://chatgpt.com/*",
-    "https://claude.ai/*",
-    "https://*.claude.ai/*"
-  ],
+  matches: [...ALL_HOST_PATTERNS],
   run_at: "document_start",
   world: "MAIN"
 }
@@ -70,28 +66,11 @@ if (!window.__echo_net_hook_installed) {
 }
 
 function shouldCapture(urlStr: string): boolean {
-  try {
-    const u = new URL(urlStr, location.href)
-    const p = u.pathname
-
-    // ChatGPT endpoints
-    if (p.startsWith("/backend-api/conversation/") || p === "/backend-api/conversations") {
-      console.log("[Interceptor] shouldCapture: MATCH (ChatGPT)", { url: urlStr, pathname: p })
-      return true
-    }
-
-    // Claude: Capture ALL /api/organizations/... URLs
-    // Handler extracts orgId and filters conversation endpoints
-    if (p.startsWith("/api/organizations/")) {
-      console.log("[Interceptor] shouldCapture: MATCH (Claude org URL)", { url: urlStr, pathname: p })
-      return true
-    }
-
-    return false
-  } catch (e) {
-    console.log("[Interceptor] shouldCapture: ERROR parsing URL", { url: urlStr, error: e })
-    return false
+  const result = shouldCaptureUrl(urlStr, location.href)
+  if (result) {
+    console.log("[Interceptor] shouldCapture: MATCH", { url: urlStr })
   }
+  return result
 }
 
 function post(payload: any) {

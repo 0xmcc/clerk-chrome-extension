@@ -4,17 +4,12 @@ import { matchChatGPTList, matchChatGPTDetail, matchClaudeList, matchClaudeDetai
 import { parseChatGPTList, parseChatGPTDetail } from "./parsers/chatgpt"
 import { parseClaudeList, parseClaudeDetail } from "./parsers/claude"
 import { setClaudeOrgId } from "./store"
+import { extractClaudeOrgId } from "../../config/endpoints"
 
 // Instrumentation helper for handler flow tracking
 function logFlow(step: string, details?: Record<string, unknown>) {
   const timestamp = performance.now().toFixed(2)
   console.log(`[Handler:FLOW] [${timestamp}ms] ${step}`, details ?? "")
-}
-
-// Extract orgId from any /api/organizations/{orgId}/... URL
-const extractOrgIdFromUrl = (pathname: string): string | null => {
-  const match = pathname.match(/^\/api\/organizations\/([^/]+)/)
-  return match?.[1] || null
 }
 
 export interface InterceptorEventHandlerDeps {
@@ -123,8 +118,8 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
 
     // Claude
     if (inferred === "claude") {
-      // Cache orgId from any /api/organizations/{orgId}/... URL for later use in rescan
-      const extractedOrgId = extractOrgIdFromUrl(url.pathname)
+      // Cache orgId from any Claude org URL for later use in rescan (pattern from centralized config)
+      const extractedOrgId = extractClaudeOrgId(url.pathname)
       if (extractedOrgId) {
         setClaudeOrgId(extractedOrgId)
       }
