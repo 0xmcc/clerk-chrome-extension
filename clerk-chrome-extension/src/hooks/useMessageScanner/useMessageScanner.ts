@@ -37,7 +37,7 @@ export const useMessageScanner = () => {
   } = useConversationStore()
 
   // Active messages state
-  const { messages, updateActiveMessagesFromStore } = useActiveMessages(capturedPlatform, storeRef)
+  const { messages, updateActiveMessagesFromStore, activeMessageCount } = useActiveMessages(capturedPlatform, storeRef)
 
   // Conversation key for URL change detection
   const [conversationKey, setConversationKey] = useState<string>(getConversationKey())
@@ -45,12 +45,6 @@ export const useMessageScanner = () => {
   // Compute stable activeConvoKey for guard checks
   const activeId = capturedPlatform ? getActiveConversationIdFromUrl(capturedPlatform) : null
   const activeConvoKey = capturedPlatform && activeId ? `${capturedPlatform}:${activeId}` : null
-
-  // Compute activeMessageCount from store (not messages.length which can be stale)
-  const activeMessageCount = activeConvoKey
-    ? (storeRef.current.get(activeConvoKey)?.messages.length ?? 0)
-    : 0
-//  const activeMessageCount = messages.length
 
   // Split update functions - no callback nesting
   const updateAllDerivedState = useCallback(() => {
