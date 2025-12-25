@@ -1,120 +1,242 @@
 /**
- * SINGLE SOURCE OF TRUTH for all API endpoint patterns.
- *
- * This file defines endpoint patterns ONCE. All other files import from here.
- * If ChatGPT changes /backend-api/conversation/ to /api/v2/conversation/,
- * update it HERE and all code automatically uses the new pattern.
- *
- * CONSTRAINT: One definition point, many reference points.
+ * Endpoint configuration for ChatGPT and Claude APIs.
+ * 
+ * This is the SINGLE SOURCE OF TRUTH for all API endpoint patterns.
+ * 
+ * TO UPDATE ENDPOINTS: Change the ENDPOINTS object below.
+ * All matchers, builders, and utilities automatically use these definitions.
+ * 
+ * TO ADD A NEW PLATFORM: Add a new entry to ENDPOINTS with list/detail patterns.
  */
 
 // =============================================================================
-// CHATGPT ENDPOINTS
+// ENDPOINT DEFINITIONS (Single Source of Truth)
 // =============================================================================
 
-export const CHATGPT_ENDPOINTS = {
-  /** Prefix for all ChatGPT API paths */
-  API_PREFIX: "/backend-api",
-
-  /** Path for conversation list endpoint */
-  CONVERSATIONS_LIST: "/backend-api/conversations",
-
-  /** Path prefix for single conversation detail (append /{id}) */
-  CONVERSATION_DETAIL_PREFIX: "/backend-api/conversation/",
+/**
+ * Endpoint templates for each platform.
+ * 
+ * Placeholders:
+ * - {id} = conversation ID (UUID)
+ * - {orgId} = organization ID (for Claude)
+ * 
+ * Examples:
+ * - ChatGPT list: "/backend-api/conversations"
+ * - ChatGPT detail: "/backend-api/conversation/abc-123"
+ * - Claude list: "/api/organizations/org-123/conversations"
+ * - Claude detail: "/api/organizations/org-123/conversations/uuid-456"
+ */
+export const ENDPOINTS = {
+  chatgpt: {
+    /** List endpoint: GET all conversations */
+    list: "/backend-api/conversations",
+    /** Detail endpoint: GET single conversation (replace {id} with actual ID) */
+    detail: "/backend-api/conversation/{id}",
+    /** API prefix for platform detection */
+    apiPrefix: "/backend-api",
+  },
+  claude: {
+    /** 
+     * List endpoints: Claude uses two possible path formats.
+     * Both are checked when matching.
+     */
+    list: [
+      "/api/organizations/{orgId}/conversations",
+      "/api/organizations/{orgId}/chat_conversations"
+    ],
+    /** 
+     * Detail endpoints: Claude uses two possible path formats.
+     * Both are checked when matching.
+     */
+    detail: [
+      "/api/organizations/{orgId}/conversations/{id}",
+      "/api/organizations/{orgId}/chat_conversations/{id}"
+    ],
+    /** Organization API prefix for platform detection */
+    orgPrefix: "/api/organizations/",
+  }
 } as const
 
 // =============================================================================
-// CLAUDE ENDPOINTS
+// HELPER FUNCTIONS (Internal - used by matchers/builders)
 // =============================================================================
 
-export const CLAUDE_ENDPOINTS = {
-  /** Prefix for all Claude organization API paths */
-  ORG_API_PREFIX: "/api/organizations/",
-
-  /** Claude uses two different endpoint formats for conversations */
-  CONVERSATION_PATHS: ["conversations", "chat_conversations"] as const,
-} as const
-
-// =============================================================================
-// URL BUILDERS (for making requests)
-// =============================================================================
-
-/** Build ChatGPT conversation detail URL */
-export const buildChatGPTDetailUrl = (conversationId: string): string =>
-  `${CHATGPT_ENDPOINTS.CONVERSATION_DETAIL_PREFIX}${conversationId}`
-
-/** Build Claude conversation detail URLs (returns both possible formats) */
-export const buildClaudeDetailUrls = (orgId: string, conversationId: string): string[] =>
-  CLAUDE_ENDPOINTS.CONVERSATION_PATHS.map(
-    (path) => `${CLAUDE_ENDPOINTS.ORG_API_PREFIX}${orgId}/${path}/${conversationId}`
+/**
+ * Convert endpoint template to regex pattern.
+ * Replaces {id} and {orgId} placeholders with regex patterns.
+ */
+function templateToRegex(template: string): RegExp {
+  return new RegExp(
+    "^" + 
+    template
+      .replace(/\{orgId\}/g, "[^/]+")
+      .replace(/\{id\}/g, "[^/]+")
+      .replace(/[{}]/g, "") +  // Remove any remaining braces
+    "$"
   )
-
-/** Build Claude conversation list URLs (returns both possible formats) */
-export const buildClaudeListUrls = (orgId: string): string[] =>
-  CLAUDE_ENDPOINTS.CONVERSATION_PATHS.map(
-    (path) => `${CLAUDE_ENDPOINTS.ORG_API_PREFIX}${orgId}/${path}`
-  )
-
-// =============================================================================
-// URL MATCHERS (for checking incoming URLs)
-// =============================================================================
-
-/** Check if URL matches ChatGPT conversation list */
-export const matchChatGPTList = (u: URL): boolean =>
-  u.pathname === CHATGPT_ENDPOINTS.CONVERSATIONS_LIST
-
-/** Check if URL matches ChatGPT conversation detail */
-export const matchChatGPTDetail = (u: URL): boolean =>
-  u.pathname.startsWith(CHATGPT_ENDPOINTS.CONVERSATION_DETAIL_PREFIX)
-
-/** Check if URL matches any ChatGPT API endpoint */
-export const matchChatGPTAny = (u: URL): boolean =>
-  u.pathname.startsWith(CHATGPT_ENDPOINTS.API_PREFIX)
-
-/** Check if URL matches Claude conversation list (either format) */
-export const matchClaudeList = (u: URL): boolean => {
-  const patterns = CLAUDE_ENDPOINTS.CONVERSATION_PATHS.map(
-    (path) => new RegExp(`^${CLAUDE_ENDPOINTS.ORG_API_PREFIX}[^/]+/${path}$`)
-  )
-  return patterns.some((regex) => regex.test(u.pathname))
 }
 
-/** Check if URL matches Claude conversation detail (either format) */
-export const matchClaudeDetail = (u: URL): boolean => {
-  const patterns = CLAUDE_ENDPOINTS.CONVERSATION_PATHS.map(
-    (path) => new RegExp(`^${CLAUDE_ENDPOINTS.ORG_API_PREFIX}[^/]+/${path}/[^/?]+$`)
-  )
-  return patterns.some((regex) => regex.test(u.pathname))
+/**
+ * Replace placeholders in template with actual values.
+ */
+function fillTemplate(template: string, replacements: Record<string, string>): string {
+  let result = template
+  for (const [key, value] of Object.entries(replacements)) {
+    result = result.replace(`{${key}}`, value)
+  }
+  return result
 }
 
-/** Check if URL matches any Claude organization API endpoint */
-export const matchClaudeOrgApi = (u: URL): boolean =>
-  u.pathname.startsWith(CLAUDE_ENDPOINTS.ORG_API_PREFIX)
+// =============================================================================
+// URL MATCHERS (Check if URLs match endpoints)
+// =============================================================================
+
+/**
+ * Check if URL matches ChatGPT conversation list.
+ * 
+ * Matches: /backend-api/conversations
+ * Doesn't match: /backend-api/conversations?offset=0 (query params are OK)
+ */
+export function matchChatGPTList(url: URL): boolean {
+  return url.pathname === ENDPOINTS.chatgpt.list
+}
+
+/**
+ * Check if URL matches ChatGPT conversation detail.
+ * 
+ * Matches: /backend-api/conversation/abc-123
+ * Matches: /backend-api/conversation/694b9e70-4910-832a-9a2f-4333e7f3fe63
+ * Matches: /backend-api/conversation/init (if it's a valid conversation ID)
+ * Doesn't match: /backend-api/conversation/abc-123/stream_status (has trailing segment)
+ * Doesn't match: /backend-api/conversation/abc-123/textdocs (has trailing segment)
+ * 
+ * FIXED: Now uses exact pattern matching instead of startsWith() to avoid matching sub-paths.
+ */
+export function matchChatGPTDetail(url: URL): boolean {
+  const pattern = templateToRegex(ENDPOINTS.chatgpt.detail)
+  return pattern.test(url.pathname)
+}
+
+/**
+ * Check if URL matches any ChatGPT API endpoint.
+ */
+export function matchChatGPTAny(url: URL): boolean {
+  return url.pathname.startsWith(ENDPOINTS.chatgpt.apiPrefix)
+}
+
+/**
+ * Check if URL matches Claude conversation list (either format).
+ * 
+ * Matches: /api/organizations/org-123/conversations
+ * Matches: /api/organizations/org-123/chat_conversations
+ */
+export function matchClaudeList(url: URL): boolean {
+  const templates = Array.isArray(ENDPOINTS.claude.list) 
+    ? ENDPOINTS.claude.list 
+    : [ENDPOINTS.claude.list]
+  
+  return templates.some(template => {
+    const pattern = templateToRegex(template)
+    return pattern.test(url.pathname)
+  })
+}
+
+/**
+ * Check if URL matches Claude conversation detail (either format).
+ * 
+ * Matches: /api/organizations/org-123/conversations/uuid-456
+ * Matches: /api/organizations/org-123/chat_conversations/uuid-456
+ */
+export function matchClaudeDetail(url: URL): boolean {
+  const templates = Array.isArray(ENDPOINTS.claude.detail) 
+    ? ENDPOINTS.claude.detail 
+    : [ENDPOINTS.claude.detail]
+  
+  return templates.some(template => {
+    // For detail, allow query params: /conversations/{id}?param=value
+    const pattern = templateToRegex(template.replace(/\{id\}/, "[^/?]+"))
+    return pattern.test(url.pathname)
+  })
+}
+
+/**
+ * Check if URL matches any Claude organization API endpoint.
+ */
+export function matchClaudeOrgApi(url: URL): boolean {
+  return url.pathname.startsWith(ENDPOINTS.claude.orgPrefix)
+}
 
 // =============================================================================
-// CAPTURE LOGIC (for interceptors)
+// URL BUILDERS (Create URLs for requests)
+// =============================================================================
+
+/**
+ * Build ChatGPT conversation detail URL.
+ * 
+ * Example: buildChatGPTDetailUrl("abc-123")
+ * Returns: "/backend-api/conversation/abc-123"
+ */
+export function buildChatGPTDetailUrl(conversationId: string): string {
+  return fillTemplate(ENDPOINTS.chatgpt.detail, { id: conversationId })
+}
+
+/**
+ * Build Claude conversation detail URLs (returns both possible formats).
+ * 
+ * Example: buildClaudeDetailUrls("org-123", "uuid-456")
+ * Returns: [
+ *   "/api/organizations/org-123/conversations/uuid-456",
+ *   "/api/organizations/org-123/chat_conversations/uuid-456"
+ * ]
+ */
+export function buildClaudeDetailUrls(orgId: string, conversationId: string): string[] {
+  const templates = Array.isArray(ENDPOINTS.claude.detail) 
+    ? ENDPOINTS.claude.detail 
+    : [ENDPOINTS.claude.detail]
+  
+  return templates.map(template => 
+    fillTemplate(template, { orgId, id: conversationId })
+  )
+}
+
+/**
+ * Build Claude conversation list URLs (returns both possible formats).
+ */
+export function buildClaudeListUrls(orgId: string): string[] {
+  const templates = Array.isArray(ENDPOINTS.claude.list) 
+    ? ENDPOINTS.claude.list 
+    : [ENDPOINTS.claude.list]
+  
+  return templates.map(template => 
+    fillTemplate(template, { orgId })
+  )
+}
+
+// =============================================================================
+// CAPTURE LOGIC (For interceptors)
 // =============================================================================
 
 /**
  * Determine if a URL should be captured by the interceptor.
- * This is the canonical implementation - do not duplicate elsewhere.
+ * 
+ * Captures:
+ * - ChatGPT: exact list and detail endpoints (not sub-paths)
+ * - Claude: all /api/organizations/... URLs (handler filters further)
+ * 
+ * FIXED: Now only captures exact detail endpoints, not sub-paths like /stream_status
  */
-export const shouldCaptureUrl = (urlStr: string, baseUrl?: string): boolean => {
+export function shouldCaptureUrl(urlStr: string, baseUrl?: string): boolean {
   try {
-    const u = new URL(urlStr, baseUrl || "http://localhost")
-    const p = u.pathname
+    const url = new URL(urlStr, baseUrl || "http://localhost")
+    const path = url.pathname
 
-    // ChatGPT endpoints
-    if (
-      p.startsWith(CHATGPT_ENDPOINTS.CONVERSATION_DETAIL_PREFIX) ||
-      p === CHATGPT_ENDPOINTS.CONVERSATIONS_LIST
-    ) {
+    // ChatGPT: Only capture exact endpoints (not sub-paths)
+    if (matchChatGPTDetail(url) || matchChatGPTList(url)) {
       return true
     }
 
-    // Claude: Capture ALL /api/organizations/... URLs
-    // Handler extracts orgId and filters conversation endpoints
-    if (p.startsWith(CLAUDE_ENDPOINTS.ORG_API_PREFIX)) {
+    // Claude: Capture ALL org URLs (handler filters conversation endpoints)
+    if (matchClaudeOrgApi(url)) {
       return true
     }
 
@@ -125,31 +247,33 @@ export const shouldCaptureUrl = (urlStr: string, baseUrl?: string): boolean => {
 }
 
 // =============================================================================
-// PLATFORM INFERENCE (from URL patterns)
+// PLATFORM INFERENCE
 // =============================================================================
 
 export type CapturedPlatformType = "chatgpt" | "claude"
 
-/** Infer platform from API path patterns (fallback when host detection fails) */
-export const inferPlatformFromPath = (pathname: string): CapturedPlatformType | null => {
-  if (pathname.startsWith(CHATGPT_ENDPOINTS.API_PREFIX)) return "chatgpt"
-  if (pathname.startsWith(CLAUDE_ENDPOINTS.ORG_API_PREFIX)) return "claude"
+/**
+ * Infer platform from API path patterns (fallback when host detection fails).
+ */
+export function inferPlatformFromPath(pathname: string): CapturedPlatformType | null {
+  if (pathname.startsWith(ENDPOINTS.chatgpt.apiPrefix)) return "chatgpt"
+  if (pathname.startsWith(ENDPOINTS.claude.orgPrefix)) return "claude"
   return null
 }
 
-// =============================================================================
-// ORG ID EXTRACTION (Claude-specific)
-// =============================================================================
-
-/** Extract orgId from Claude API URL pathname */
-export const extractClaudeOrgId = (pathname: string): string | null => {
-  const regex = new RegExp(`^${CLAUDE_ENDPOINTS.ORG_API_PREFIX}([^/]+)`)
-  const match = pathname.match(regex)
+/**
+ * Extract orgId from Claude API URL pathname.
+ * 
+ * Example: extractClaudeOrgId("/api/organizations/org-123/conversations")
+ * Returns: "org-123"
+ */
+export function extractClaudeOrgId(pathname: string): string | null {
+  const match = pathname.match(new RegExp(`^${ENDPOINTS.claude.orgPrefix}([^/]+)`))
   return match?.[1] || null
 }
 
 // =============================================================================
-// HOST PATTERNS (for content script matching)
+// HOST PATTERNS (For content script matching)
 // =============================================================================
 
 export const HOST_PATTERNS = {
@@ -159,6 +283,32 @@ export const HOST_PATTERNS = {
 
 export const ALL_HOST_PATTERNS = [...HOST_PATTERNS.CHATGPT, ...HOST_PATTERNS.CLAUDE] as const
 
-/** Check if a URL string matches target sites */
-export const isTargetSite = (url: string): boolean =>
-  url.includes("chat.openai.com") || url.includes("chatgpt.com") || url.includes("claude.ai")
+/**
+ * Check if a URL string matches target sites.
+ */
+export function isTargetSite(url: string): boolean {
+  return url.includes("chat.openai.com") || url.includes("chatgpt.com") || url.includes("claude.ai")
+}
+
+// =============================================================================
+// BACKWARD COMPATIBILITY (Deprecated - use ENDPOINTS directly)
+// =============================================================================
+
+/**
+ * @deprecated Use ENDPOINTS.chatgpt instead
+ * Kept for backward compatibility with existing code.
+ */
+export const CHATGPT_ENDPOINTS = {
+  API_PREFIX: ENDPOINTS.chatgpt.apiPrefix,
+  CONVERSATIONS_LIST: ENDPOINTS.chatgpt.list,
+  CONVERSATION_DETAIL_PREFIX: "/backend-api/conversation/",  // Keep for compatibility
+} as const
+
+/**
+ * @deprecated Use ENDPOINTS.claude instead
+ * Kept for backward compatibility with existing code.
+ */
+export const CLAUDE_ENDPOINTS = {
+  ORG_API_PREFIX: ENDPOINTS.claude.orgPrefix,
+  CONVERSATION_PATHS: ["conversations", "chat_conversations"] as const,
+} as const
