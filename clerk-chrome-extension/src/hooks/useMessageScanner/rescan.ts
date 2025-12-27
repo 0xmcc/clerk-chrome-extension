@@ -110,6 +110,7 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
         const url = buildChatGPTDetailUrl(activeId)
         console.log("[rescan] STEP 7: ChatGPT fetch", { url })
         
+        // Match ChatGPT's request headers to avoid 404
         const resp = await fetch(url, {
           credentials: "include",
           headers: { accept: "application/json" }

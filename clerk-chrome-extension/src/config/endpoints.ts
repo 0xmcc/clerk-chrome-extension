@@ -176,9 +176,14 @@ export function matchClaudeOrgApi(url: URL): boolean {
  * Example: buildChatGPTDetailUrl("abc-123")
  * Returns: "/backend-api/conversation/abc-123"
  */
+// export function buildChatGPTDetailUrl(conversationId: string): string {
+//   return fillTemplate(ENDPOINTS.chatgpt.detail, { id: conversationId })
+// }
 export function buildChatGPTDetailUrl(conversationId: string): string {
-  return fillTemplate(ENDPOINTS.chatgpt.detail, { id: conversationId })
+  const path = fillTemplate(ENDPOINTS.chatgpt.detail, { id: conversationId })
+  return new URL(path, window.location.origin).href
 }
+
 
 /**
  * Build Claude conversation detail URLs (returns both possible formats).
@@ -229,6 +234,16 @@ export function shouldCaptureUrl(urlStr: string, baseUrl?: string): boolean {
   try {
     const url = new URL(urlStr, baseUrl || "http://localhost")
     const path = url.pathname
+
+    // Debug ChatGPT matching
+    if (path.includes("/backend-api/conversation/")) {
+      const detailMatch = matchChatGPTDetail(url)
+      console.log("[shouldCaptureUrl] ChatGPT detail check", {
+        path,
+        detailMatch,
+        pattern: ENDPOINTS.chatgpt.detail
+      })
+    }
 
     // ChatGPT: Only capture exact endpoints (not sub-paths)
     if (matchChatGPTDetail(url) || matchChatGPTList(url)) {

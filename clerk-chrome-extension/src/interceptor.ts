@@ -122,6 +122,15 @@ function installFetchHook() {
           ? input.toString()
           : input.url
 
+    // Log ALL requests to see if we're missing the conversation endpoint
+    if (requestUrl.includes("/backend-api/conversation/")) {
+      console.log("[Interceptor] FETCH CALLED for conversation endpoint:", {
+        url: requestUrl,
+        fullInput: input,
+        hasInit: !!init
+      })
+    }
+
     const method =
       init?.method ||
       (typeof input === "object" && input && "method" in input
@@ -131,6 +140,10 @@ function installFetchHook() {
     const response = await originalFetch(input as any, init)
 
     if (!shouldCapture(requestUrl)) {
+      // Also log when we check but don't capture
+      if (requestUrl.includes("/backend-api/conversation/")) {
+        console.log("[Interceptor] Conversation endpoint NOT captured", { url: requestUrl })
+      }
       return response
     }
 
