@@ -3,8 +3,8 @@ import { inferCapturedPlatformFromUrl, extractPathSegment, now } from "./utils"
 import { matchChatGPTList, matchChatGPTDetail, matchClaudeList, matchClaudeDetail } from "./urlMatchers"
 import { parseChatGPTList, parseChatGPTDetail } from "./parsers/chatgpt"
 import { parseClaudeList, parseClaudeDetail } from "./parsers/claude"
-import { setClaudeOrgId } from "./store"
-import { extractClaudeOrgId } from "../../config/endpoints"
+import { setClaudeOrgId, setChatGPTAuthToken } from "./store"
+import { extractClaudeOrgId, extractChatGPTAuthToken } from "../../config/endpoints"
 
 // Instrumentation helper for handler flow tracking
 function logFlow(step: string, details?: Record<string, unknown>) {
@@ -55,6 +55,21 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
 
     // ChatGPT
     if (inferred === "chatgpt") {
+      // Cache auth token from any ChatGPT backend-api request for later use in rescan
+      const extractedAuthToken = extractChatGPTAuthToken(evt.headers)
+      if (extractedAuthToken) {
+        logFlow("CHATGPT_AUTH_TOKEN_EXTRACTED", { 
+          hasToken: true,
+          tokenPrefix: extractedAuthToken.substring(0, 30) + "..."
+        })
+        setChatGPTAuthToken(extractedAuthToken)
+      } else if (evt.headers) {
+        logFlow("CHATGPT_AUTH_TOKEN_MISSING", { 
+          hasHeaders: true,
+          headerKeys: Object.keys(evt.headers)
+        })
+      }
+
       if (matchChatGPTList(url)) {
         logFlow("CHATGPT_LIST_MATCH")
         const metas = parseChatGPTList(evt.data)

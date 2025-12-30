@@ -42,4 +42,5 @@ export type InterceptorEvent = {
   ok?: boolean
   ts?: number
   data?: unknown
+  headers?: Record<string, string>
 }

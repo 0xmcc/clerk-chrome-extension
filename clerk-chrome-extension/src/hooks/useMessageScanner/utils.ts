@@ -50,18 +50,24 @@ export const getConversationKey = () => `${window.location.hostname}${window.loc
 
 export const getActiveConversationIdFromUrl = (platform: CapturedPlatform): string | null => {
   const path = window.location.pathname
+  console.log("[getActiveConversationIdFromUrl] Extracting ID", { platform, path })
 
   // Claude uses /chat/{uuid}
   if (platform === "claude") {
     const m = path.match(/\/chat\/([^/?#]+)/)
-    return m?.[1] || null
+    const result = m?.[1] || null
+    console.log("[getActiveConversationIdFromUrl] Claude result", { result, match: m })
+    return result
   }
 
   // ChatGPT commonly uses /c/{id}
   if (platform === "chatgpt") {
     const m = path.match(/\/c\/([^/?#]+)/)
-    return m?.[1] || null
+    const result = m?.[1] || null
+    console.log("[getActiveConversationIdFromUrl] ChatGPT result", { result, match: m })
+    return result
   }
 
+  console.log("[getActiveConversationIdFromUrl] No match", { platform, path })
   return null
 }

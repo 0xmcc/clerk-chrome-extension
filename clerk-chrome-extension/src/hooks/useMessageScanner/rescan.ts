@@ -1,6 +1,6 @@
 import type { Conversation, CapturedPlatform, InterceptorEvent } from "./types"
 import { getActiveConversationIdFromUrl, now } from "./utils"
-import { getClaudeOrgId } from "./store"
+import { getClaudeOrgId, getChatGPTAuthToken } from "./store"
 import { buildChatGPTDetailUrl, buildClaudeDetailUrls } from "../../config/endpoints"
 
 export const INTERCEPTOR_SOURCE = "__echo_network_interceptor__"
@@ -110,10 +110,37 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
         const url = buildChatGPTDetailUrl(activeId)
         console.log("[rescan] STEP 7: ChatGPT fetch", { url })
         
-        // Match ChatGPT's request headers to avoid 404
+        // Get cached auth token (parallel to Claude orgId pattern)
+        const authToken = getChatGPTAuthToken()
+        const headers: Record<string, string> = {
+          "accept": "*/*",
+          "accept-language": "en-US,en;q=0.9",
+          "referer": window.location.href,
+          "sec-fetch-dest": "empty",
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "same-origin",
+        }
+
+        if (authToken) {
+          headers["authorization"] = authToken
+          console.log("[rescan] Using cached ChatGPT auth token")
+        } else {
+          console.log("[rescan] WARNING: No ChatGPT auth token cached, request may fail")
+        }
+        
+        console.log("[rescan] Request details:", {
+          url,
+          method: "GET",
+          hasAuth: !!authToken,
+          headerKeys: Object.keys(headers),
+          referer: headers["referer"]
+        })
+        
+        // Match ChatGPT's request headers to avoid 404 - explicitly set method
         const resp = await fetch(url, {
+          method: "GET",
           credentials: "include",
-          headers: { accept: "application/json" }
+          headers
         })
         
         console.log("[rescan] STEP 8: ChatGPT response", { 

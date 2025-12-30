@@ -83,6 +83,7 @@ function post(payload: any) {
     ok: payload.ok,
     ts: payload.ts,
     data: payload.body,
+    headers: payload.headers,
     _seq: seq // Track sequence for debugging
   }
 
@@ -139,10 +140,52 @@ function installFetchHook() {
 
     const response = await originalFetch(input as any, init)
 
+    // Extract request headers for auth token caching - do this for ALL backend-api requests
+    // (not just captured ones) so we can get the auth token even if the request isn't captured
+    let requestHeaders: Record<string, string> | undefined
+    if (requestUrl.includes("/backend-api/")) {
+      try {
+        const headersSource = init?.headers || (typeof input === "object" && input && "headers" in input ? (input as Request).headers : undefined)
+        if (headersSource) {
+          if (headersSource instanceof Headers) {
+            requestHeaders = {}
+            headersSource.forEach((value, key) => {
+              requestHeaders![key] = value
+            })
+          } else if (typeof headersSource === "object" && headersSource !== null) {
+            requestHeaders = headersSource as Record<string, string>
+          }
+          
+          // Log if we found an auth token
+          if (requestHeaders && (requestHeaders["authorization"] || requestHeaders["Authorization"])) {
+            console.log("[Interceptor] Found auth token in backend-api request:", {
+              url: requestUrl,
+              hasAuth: true,
+              authPrefix: (requestHeaders["authorization"] || requestHeaders["Authorization"])?.substring(0, 20) + "..."
+            })
+          }
+        }
+      } catch (e) {
+        console.log("[Interceptor] Error extracting headers:", e)
+      }
+    }
+
     if (!shouldCapture(requestUrl)) {
       // Also log when we check but don't capture
       if (requestUrl.includes("/backend-api/conversation/")) {
         console.log("[Interceptor] Conversation endpoint NOT captured", { url: requestUrl })
+      }
+      // Still post headers even if not captured, so we can extract auth token
+      if (requestHeaders) {
+        post({
+          url: requestUrl,
+          method,
+          status: response.status,
+          ok: response.ok,
+          ts: Date.now(),
+          body: null,
+          headers: requestHeaders
+        })
       }
       return response
     }
@@ -182,7 +225,8 @@ function installFetchHook() {
       status: response.status,
       ok: response.ok,
       ts: Date.now(),
-      body
+      body,
+      headers: requestHeaders
     })
 
     return response

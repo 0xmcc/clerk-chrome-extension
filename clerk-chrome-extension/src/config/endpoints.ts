@@ -287,6 +287,30 @@ export function extractClaudeOrgId(pathname: string): string | null {
   return match?.[1] || null
 }
 
+/**
+ * Extract auth token from ChatGPT request headers.
+ * 
+ * Example: extractChatGPTAuthToken({ authorization: "Bearer token..." })
+ * Returns: "Bearer token..." or null
+ */
+export function extractChatGPTAuthToken(headers: Record<string, string> | HeadersInit | null | undefined): string | null {
+  if (!headers) return null
+  
+  try {
+    if (headers instanceof Headers) {
+      return headers.get("authorization") || headers.get("Authorization") || null
+    }
+    if (typeof headers === "object" && headers !== null) {
+      const auth = (headers as Record<string, string>)["authorization"] || 
+                   (headers as Record<string, string>)["Authorization"]
+      return auth || null
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
 // =============================================================================
 // HOST PATTERNS (For content script matching)
 // =============================================================================

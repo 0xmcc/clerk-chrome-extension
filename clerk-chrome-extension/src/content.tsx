@@ -59,19 +59,64 @@ const PlasmoOverlay = () => {
 
   // Guarded rescan-on-open: uses store-based activeMessageCount and cooldown retry
   useEffect(() => {
-    if (!isExporterOpen) return
-    if (!activeConvoKey) return // No active conversation
-    if (activeMessageCount > 0) return // Already have messages in store for this convo
+    console.log("[RescanOnOpen] Effect triggered", {
+      isExporterOpen,
+      activeConvoKey,
+      activeMessageCount,
+      timestamp: Date.now()
+    })
+
+    if (!isExporterOpen) {
+      console.log("[RescanOnOpen] SKIP - Exporter not open")
+      return
+    }
+    if (!activeConvoKey) {
+      console.log("[RescanOnOpen] SKIP - No active conversation key")
+      return
+    }
+    if (activeMessageCount > 0) {
+      console.log("[RescanOnOpen] SKIP - Already have messages", { activeMessageCount })
+      return
+    }
 
     // Check cooldown - allow retry after timeout
     const lastAttempt = rescanOnOpenAttemptsRef.current.get(activeConvoKey) ?? 0
     const now = Date.now()
-    if (now - lastAttempt < RESCAN_ON_OPEN_COOLDOWN_MS) return
+    const timeSinceLastAttempt = now - lastAttempt
+    
+    console.log("[RescanOnOpen] Cooldown check", {
+      activeConvoKey,
+      lastAttempt,
+      now,
+      timeSinceLastAttempt,
+      cooldownMs: RESCAN_ON_OPEN_COOLDOWN_MS,
+      canRetry: timeSinceLastAttempt >= RESCAN_ON_OPEN_COOLDOWN_MS
+    })
+
+    if (timeSinceLastAttempt < RESCAN_ON_OPEN_COOLDOWN_MS) {
+      console.log("[RescanOnOpen] SKIP - Cooldown active", {
+        timeSinceLastAttempt,
+        cooldownMs: RESCAN_ON_OPEN_COOLDOWN_MS
+      })
+      return
+    }
+
+    console.log("[RescanOnOpen] TRIGGERING RESCAN", {
+      activeConvoKey,
+      activeMessageCount,
+      timeSinceLastAttempt
+    })
 
     rescanOnOpenAttemptsRef.current.set(activeConvoKey, now)
     // Small delay to allow interceptor events to arrive first
-    const timer = setTimeout(() => rescan(), 300)
-    return () => clearTimeout(timer)
+    const timer = setTimeout(() => {
+      console.log("[RescanOnOpen] Calling rescan() now")
+      rescan()
+    }, 300)
+    return () => {
+      console.log("[RescanOnOpen] Cleanup - clearing timer")
+      clearTimeout(timer)
+    }
   }, [isExporterOpen, activeConvoKey, activeMessageCount, rescan])
 
   return (
