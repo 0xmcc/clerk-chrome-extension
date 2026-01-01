@@ -84,6 +84,10 @@ const requestClerkToken = async () => {
   })
 }
 
+const openSignInPage = () => {
+  chrome.runtime.sendMessage({ action: "openOptionsPage" })
+}
+
 const deriveConversationId = () => {
   const path = window.location.pathname
   const linkedinMatch = path.match(/messaging\/thread\/([^/?#]+)/)
@@ -118,6 +122,7 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey }
   const [followupLocked, setFollowupLocked] = useState(true)
   const [exportState, setExportState] = useState<"idle" | "loading" | "success" | "error">("idle")
   const [statusMessage, setStatusMessage] = useState("")
+  const [insightCount] = useState(() => Math.floor(Math.random() * 8) + 3) // Random 3-10
   const hasInitializedRef = useRef(false)
   const platformLabelRef = useRef(getPlatformLabel())
   const isLinkedIn = useMemo(() => detectPlatform() === "linkedin", [])
@@ -407,11 +412,9 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey }
   }
 
   const selectedPromptId = promptContainers[0]?.id
-  const historyMenuOptions: { label: string; value: "markdown" | "json" | "copy" | "export" }[] = [
-    { label: "Readable view", value: "markdown" },
-    { label: "Structured (JSON)", value: "json" },
-    { label: "Copy", value: "copy" },
-    { label: "Export", value: "export" }
+  const historyMenuOptions: { label: string; value: "markdown" | "json" }[] = [
+    { label: "Markdown", value: "markdown" },
+    { label: "JSON", value: "json" }
   ]
 
   const handleExport = async () => {
@@ -731,37 +734,68 @@ Please provide your analysis in markdown format with clear section headings.`
           <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: DARK_THEME.text }}>
             {platformLabelRef.current} Export Pizza
           </h2>
-          <button
-            onClick={handleClose}
-            style={{
-              background: "transparent",
-              border: "none",
-              fontSize: "24px",
-              cursor: "pointer",
-              color: DARK_THEME.muted,
-              padding: "0 4px",
-              lineHeight: 1,
-              borderRadius: "9999px",
-              transition: "background 0.15s ease, color 0.15s ease"
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = DARK_THEME.borderSubtle
-              e.currentTarget.style.color = DARK_THEME.text
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent"
-              e.currentTarget.style.color = DARK_THEME.muted
-            }}>
-            ×
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {/* Settings gear icon */}
+            <button
+              onClick={() => setPreviewTab("json")}
+              title="Settings"
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                color: DARK_THEME.muted,
+                padding: "4px",
+                borderRadius: "9999px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "background 0.15s ease, color 0.15s ease"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = DARK_THEME.borderSubtle
+                e.currentTarget.style.color = DARK_THEME.text
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent"
+                e.currentTarget.style.color = DARK_THEME.muted
+              }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
+            <button
+              onClick={handleClose}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "24px",
+                cursor: "pointer",
+                color: DARK_THEME.muted,
+                padding: "0 4px",
+                lineHeight: 1,
+                borderRadius: "9999px",
+                transition: "background 0.15s ease, color 0.15s ease"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = DARK_THEME.borderSubtle
+                e.currentTarget.style.color = DARK_THEME.text
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent"
+                e.currentTarget.style.color = DARK_THEME.muted
+              }}>
+              ×
+            </button>
+          </div>
         </div>
         <div style={{ marginTop: "8px", fontSize: "12px", color: DARK_THEME.muted }}>
           {selectedCount} messages detected
         </div>
       </div>
 
-      {/* Tabs or Analysis Header */}
-      {analyzeMode ? (
+      {/* Sub-header - only show back button in analyze mode or settings */}
+      {(analyzeMode || previewTab === "json") && (
         <div
           style={{
             display: "flex",
@@ -772,7 +806,10 @@ Please provide your analysis in markdown format with clear section headings.`
             backgroundColor: DARK_THEME.surface
           }}>
           <button
-            onClick={() => setAnalyzeMode(false)}
+            onClick={() => {
+              setAnalyzeMode(false)
+              setPreviewTab("markdown")
+            }}
             style={{
               border: "none",
               background: "transparent",
@@ -782,46 +819,10 @@ Please provide your analysis in markdown format with clear section headings.`
             }}>
             ←
           </button>
-          <div style={{ fontWeight: 700, color: DARK_THEME.text }}>AI Analysis</div>
+          <div style={{ fontWeight: 700, color: DARK_THEME.text }}>
+            {analyzeMode ? "AI Analysis" : "Settings"}
+          </div>
         </div>
-      ) : (
-        <div
-          style={{
-            display: "flex",
-            borderBottom: `1px solid ${DARK_THEME.border}`,
-            backgroundColor: DARK_THEME.surface
-          }}>
-          <button
-            onClick={() => setPreviewTab("markdown")}
-            style={{
-              flex: 1,
-              padding: "12px",
-              border: "none",
-              background: previewTab === "markdown" ? DARK_THEME.panel : "transparent",
-              borderBottom: previewTab === "markdown" ? `2px solid ${DARK_THEME.accent}` : "2px solid transparent",
-              cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: 500,
-              color: previewTab === "markdown" ? DARK_THEME.accent : DARK_THEME.muted
-          }}>
-          Conversation View
-        </button>
-        <button
-          onClick={() => setPreviewTab("json")}
-            style={{
-              flex: 1,
-              padding: "12px",
-              border: "none",
-              background: previewTab === "json" ? DARK_THEME.panel : "transparent",
-              borderBottom: previewTab === "json" ? `2px solid ${DARK_THEME.accent}` : "2px solid transparent",
-              cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: 500,
-              color: previewTab === "json" ? DARK_THEME.accent : DARK_THEME.muted
-          }}>
-          Settings
-        </button>
-      </div>
       )}
 
       {/* Preview Area */}
@@ -859,49 +860,8 @@ Please provide your analysis in markdown format with clear section headings.`
                   flexDirection: "column",
                   gap: "12px",
                   padding: "8px 0",
-                  height: "100%",
-                  position: "relative"
+                  height: "100%"
                 }}>
-                {/* Settings button to quickly access JSON tab */}
-                <button
-                  onClick={() => {
-                    setPreviewTab("json")
-                    setAnalyzeMode(false)
-                  }}
-                  title="Customize prompts"
-                  style={{
-                    position: "absolute",
-                    top: "0",
-                    right: "0",
-                    background: DARK_THEME.panel,
-                    border: `1px solid ${DARK_THEME.border}`,
-                    borderRadius: "6px",
-                    padding: "6px 10px",
-                    cursor: "pointer",
-                    fontSize: "11px",
-                    color: DARK_THEME.muted,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    transition: "all 0.2s",
-                    zIndex: 10
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = DARK_THEME.surface
-                    e.currentTarget.style.borderColor = DARK_THEME.accent
-                    e.currentTarget.style.color = DARK_THEME.text
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = DARK_THEME.panel
-                    e.currentTarget.style.borderColor = DARK_THEME.border
-                    e.currentTarget.style.color = DARK_THEME.muted
-                  }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M12 1v6m0 6v6m9-9h-6m-6 0H3" />
-                  </svg>
-                  Prompts
-                </button>
                 <div
                   style={{
                     display: "flex",
@@ -1488,22 +1448,43 @@ Please provide your analysis in markdown format with clear section headings.`
           </>
         ) : (
           <button
-            onClick={() => runAnalysis()}
-            disabled={selectedCount === 0}
+            onClick={() => handleExport()}
+            disabled={selectedCount === 0 || exportState === "loading"}
             style={{
               flex: 1,
-              padding: "12px",
+              padding: "12px 16px",
               borderRadius: "8px",
               border: "none",
-              background: selectedCount === 0 ? DARK_THEME.border : "#ffffff",
-              color: selectedCount === 0 ? DARK_THEME.muted : "#0a0a0a",
-              cursor: selectedCount === 0 ? "not-allowed" : "pointer",
+              background: selectedCount === 0 || exportState === "loading" ? DARK_THEME.border : "#ffffff",
+              color: selectedCount === 0 || exportState === "loading" ? DARK_THEME.muted : "#0a0a0a",
+              cursor: selectedCount === 0 || exportState === "loading" ? "not-allowed" : "pointer",
               fontSize: "15px",
               fontWeight: 600,
               boxShadow: DARK_THEME.glow,
-              opacity: selectedCount === 0 ? 0.7 : 1
+              opacity: selectedCount === 0 || exportState === "loading" ? 0.7 : 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "10px",
+              position: "relative"
             }}>
-            Analyze this conversation
+            <span>{exportState === "loading" ? "Saving..." : "Save"}</span>
+            {/* <span
+              style={{
+                background: "#ef4444",
+                color: "#ffffff",
+                fontSize: "12px",
+                fontWeight: 700,
+                minWidth: "20px",
+                height: "20px",
+                borderRadius: "10px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 6px"
+              }}>
+              {insightCount}
+            </span> */}
           </button>
         )}
       </div>
@@ -1514,7 +1495,23 @@ Please provide your analysis in markdown format with clear section headings.`
             fontSize: "12px",
             color: exportState === "error" ? DARK_THEME.danger : DARK_THEME.success
           }}>
-          {statusMessage}
+          {exportState === "error" && statusMessage.toLowerCase().includes("sign in") ? (
+            <>
+              Missing Clerk session.{" "}
+              <span
+                onClick={openSignInPage}
+                style={{
+                  color: DARK_THEME.accent,
+                  cursor: "pointer",
+                  textDecoration: "underline"
+                }}>
+                Sign in
+              </span>
+              {" "}to continue.
+            </>
+          ) : (
+            statusMessage
+          )}
         </div>
       )}
     </div>
