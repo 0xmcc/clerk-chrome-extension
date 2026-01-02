@@ -1,4 +1,4 @@
-import { SpacesApp } from "./spaces/SpacesApp"
+import { SpacesApp } from "../spaces/SpacesApp"
 
 import "~style.css"
 

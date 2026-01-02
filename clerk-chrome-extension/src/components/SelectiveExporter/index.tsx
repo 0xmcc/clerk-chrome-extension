@@ -417,11 +417,11 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey }
     { label: "JSON", value: "json" }
   ]
 
-  const handleExport = async () => {
+  const handleSaveToDatabase = async () => {
     if (selectedCount === 0 || exportState === "loading") return
 
     setExportState("loading")
-    setStatusMessage("Exporting conversation...")
+    setStatusMessage("Saving conversation...")
 
     try {
       const token = await requestClerkToken()
@@ -461,17 +461,39 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey }
       const result = await response.json().catch(() => null)
 
       if (!response.ok) {
-        throw new Error(result?.error || result?.message || `Export failed with status ${response.status}`)
+        throw new Error(result?.error || result?.message || `Save failed with status ${response.status}`)
       }
 
       setExportState("success")
-      setStatusMessage("Conversation exported successfully.")
-      console.log("[SelectiveExporter] Export success", result)
+      setStatusMessage("Conversation saved successfully.")
+      console.log("[SelectiveExporter] Save success", result)
     } catch (error) {
-      console.error("[SelectiveExporter] Export failed:", error)
+      console.error("[SelectiveExporter] Save failed:", error)
       setExportState("error")
-      setStatusMessage(error instanceof Error ? error.message : "Failed to export conversation.")
+      setStatusMessage(error instanceof Error ? error.message : "Failed to save conversation.")
     }
+  }
+
+  const handleExport = () => {
+    if (selectedCount === 0) return
+
+    const content = historyFormat === "markdown"
+      ? generateMarkdown()
+      : JSON.stringify(generateJSON(), null, 2)
+    const filename = `conversation-${deriveConversationId()}.${historyFormat === "markdown" ? "md" : "json"}`
+    const mimeType = historyFormat === "markdown" ? "text/markdown" : "application/json"
+
+    const blob = new Blob([content], { type: mimeType })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+
+    console.log(`[SelectiveExporter] Exported ${historyFormat} file: ${filename}`)
   }
 
   const handleHistoryMenuChange = (value: "markdown" | "json") => {
@@ -731,8 +753,10 @@ Please provide your analysis in markdown format with clear section headings.`
           backgroundColor: DARK_THEME.surface
         }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: DARK_THEME.text }}>
-            {platformLabelRef.current} Export Pizza
+          <h2
+            style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: DARK_THEME.text }}
+            title="Export Pizza is all about the speedy delivery of your AI conversations">
+            🍕 {platformLabelRef.current} Export Pizza
           </h2>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             {/* Settings gear icon */}
@@ -1448,7 +1472,7 @@ Please provide your analysis in markdown format with clear section headings.`
           </>
         ) : (
           <button
-            onClick={() => handleExport()}
+            onClick={() => handleSaveToDatabase()}
             disabled={selectedCount === 0 || exportState === "loading"}
             style={{
               flex: 1,

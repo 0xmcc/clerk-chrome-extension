@@ -1,7 +1,7 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 
-import { SpacesApp } from "../../src/spaces/SpacesApp"
+import { SpacesApp } from "../../spaces/SpacesApp"
 
 import "../../src/style.css"
 
