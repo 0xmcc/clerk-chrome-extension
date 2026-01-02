@@ -68,45 +68,49 @@ export const parseChatGPTDetail = (conversationId: string, json: unknown): Pick<
 > => {
   const data = json as Record<string, unknown>
   const mapping = data?.mapping && typeof data.mapping === "object" ? data.mapping as Record<string, unknown> : {}
-  const currentNode = typeof data?.current_node === "string" ? data.current_node : null
 
-  const chain: Record<string, unknown>[] = []
-  const visited = new Set<string>()
+  // LINEAR APPROACH: Extract all messages from mapping, sort by create_time
+  // This is more robust than tree traversal - works even if tree structure is broken
+  const allNodes: Array<{ node: Record<string, unknown>; createTime: number }> = []
 
-  let nodeId: string | null = currentNode
-  while (nodeId && mapping[nodeId] && !visited.has(nodeId)) {
-    visited.add(nodeId)
+  for (const nodeId of Object.keys(mapping)) {
     const node = mapping[nodeId] as Record<string, unknown>
-    chain.push(node)
-    nodeId = typeof node?.parent === "string" ? node.parent : null
+    const msg = node?.message as Record<string, unknown> | undefined
+
+    if (!msg) continue // Skip nodes without messages (internal/system nodes)
+
+    const authorRole = (msg?.author as Record<string, unknown>)?.role
+    if (authorRole !== "user" && authorRole !== "assistant") continue // Skip system messages
+
+    const text = extractChatGPTText(msg)
+    if (!text) continue // Skip empty messages
+
+    const createTime = typeof msg?.create_time === "number" ? msg.create_time : 0
+    allNodes.push({ node, createTime })
   }
 
-  chain.reverse()
+  // Sort chronologically by create_time
+  allNodes.sort((a, b) => a.createTime - b.createTime)
 
   const platformLabel = getPlatformLabel("chatgpt")
 
-  const messages: Message[] = []
-  for (let i = 0; i < chain.length; i++) {
-    const node = chain[i]
-    const msg = node?.message as Record<string, unknown>
-    if (!msg) continue
-
-    const text = extractChatGPTText(msg)
-    if (!text) continue
-
+  // Convert to Message objects
+  const messages: Message[] = allNodes.map(({ node }, idx) => {
+    const msg = node.message as Record<string, unknown>
     const author = msg?.author as Record<string, unknown>
     const role = roleFromChatGPTAuthor(author?.role)
-    const id = typeof msg?.id === "string" ? msg.id : typeof node?.id === "string" ? node.id as string : `chatgpt-${conversationId}-${i}`
+    const text = extractChatGPTText(msg)
+    const id = typeof msg?.id === "string" ? msg.id : typeof node?.id === "string" ? node.id as string : `chatgpt-${conversationId}-${idx}`
     const authorName = role === "user" ? "You" : platformLabel
 
-    messages.push({
+    return {
       id,
       role,
       text,
       authorName,
       node: createDetachedNode(id)
-    })
-  }
+    }
+  })
 
   return {
     id: conversationId,
