@@ -1,6 +1,6 @@
 import type { Conversation, CapturedPlatform, InterceptorEvent } from "./types"
 import { getActiveConversationIdFromUrl, now } from "./utils"
-import { getClaudeOrgId, getChatGPTAuthToken } from "./store"
+import { getClaudeOrgId, getChatGPTAuthToken, setChatGPTAuthToken } from "./store"
 import { buildChatGPTDetailUrl, buildClaudeDetailUrls } from "../../config/endpoints"
 
 export const INTERCEPTOR_SOURCE = "__echo_network_interceptor__"
@@ -75,6 +75,25 @@ const discoverClaudeOrgId = (): string | null => {
   return null
 }
 
+// Helper to hunt for the token in DOM scripts (matches your successful console test)
+const extractChatGPTAuthTokenFromDOM = (): string | null => {
+  try {
+    const scripts = document.querySelectorAll('script');
+    for (const script of scripts) {
+      if (script.textContent && script.textContent.includes('"accessToken":"ey')) {
+        const match = script.textContent.match(/"accessToken":"(eyJ[^"]+)"/);
+        if (match && match[1]) {
+          console.log("[rescan] 🎯 Found auth token in DOM script tag");
+          return match[1];
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[rescan] DOM token extraction failed", e);
+  }
+  return null;
+};
+
 export const createRescanHandler = (deps: RescanHandlerDeps) => {
   const { capturedPlatform, updateAllDerivedState, handleInterceptorEvent, storeRef } = deps
 
@@ -109,9 +128,21 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
         console.log("[rescan] STEP 6: ChatGPT branch")
         const url = buildChatGPTDetailUrl(activeId)
         console.log("[rescan] STEP 7: ChatGPT fetch", { url })
-        
-        // Get cached auth token (parallel to Claude orgId pattern)
-        const authToken = getChatGPTAuthToken()
+
+        // STRATEGY: 1. Try Cache, 2. Try DOM, 3. Give up
+        let authToken = getChatGPTAuthToken()
+
+        if (!authToken) {
+           console.log("[rescan] Cache empty. Attempting DOM extraction...");
+           authToken = extractChatGPTAuthTokenFromDOM();
+           console.log("[rescan] DOM auth token extraction result", { authToken, hasToken: !!authToken })
+           if (authToken) {
+             // Cache it for next time so we don't have to parse DOM every time
+             setChatGPTAuthToken(authToken);
+           }
+           console.log("[rescan] DOM auth token extraction result", { authToken, hasToken: !!authToken })
+        }
+
         const headers: Record<string, string> = {
           "accept": "*/*",
           "accept-language": "en-US,en;q=0.9",
@@ -122,10 +153,10 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
         }
 
         if (authToken) {
-          headers["authorization"] = authToken
-          console.log("[rescan] Using cached ChatGPT auth token")
+          headers["authorization"] = `Bearer ${authToken}`
+          console.log("[rescan] Using Auth Token (Length: " + authToken.length + ")")
         } else {
-          console.log("[rescan] WARNING: No ChatGPT auth token cached, request may fail")
+          console.log("[rescan] CRITICAL WARNING: No ChatGPT auth token found in Cache OR DOM. Request will likely 404.")
         }
         
         console.log("[rescan] Request details:", {
