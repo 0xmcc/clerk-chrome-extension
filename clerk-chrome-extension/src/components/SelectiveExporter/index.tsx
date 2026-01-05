@@ -429,7 +429,7 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey }
       const payload = {
         conversationId,
         title: document.title || "Conversation",
-        model: null as string | null,
+        model: platformLabelRef.current.toLowerCase(),
         selectedMessageIds: selectedMessages.map((m) => m.id),
         messages: selectedMessages.map((msg) => ({
           id: msg.id,
