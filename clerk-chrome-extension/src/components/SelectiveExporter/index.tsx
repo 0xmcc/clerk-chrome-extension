@@ -11,6 +11,7 @@ interface SelectiveExporterProps {
   onClose: () => void
   messages: Message[]
   conversationKey: string
+  conversationTitle?: string
 }
 
 type PromptContainer = {
@@ -106,7 +107,7 @@ const deriveConversationId = () => {
   return `conversation-${Date.now()}`
 }
 
-export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey }: SelectiveExporterProps) => {
+export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, conversationTitle }: SelectiveExporterProps) => {
   const [previewTab, setPreviewTab] = useState<"markdown" | "json">("markdown")
   const [historyFormat, setHistoryFormat] = useState<"markdown" | "json">("markdown")
   const [chatEntries, setChatEntries] = useState<ChatEntry[]>([])
@@ -755,8 +756,8 @@ Please provide your analysis in markdown format with clear section headings.`
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h2
             style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: DARK_THEME.text }}
-            title="Export Pizza is all about the speedy delivery of your AI conversations">
-            🍕 {platformLabelRef.current} Export Pizza
+            title={conversationTitle || `${platformLabelRef.current} Conversation`}>
+            {conversationTitle || `${platformLabelRef.current} Conversation`}
           </h2>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             {/* Settings gear icon */}

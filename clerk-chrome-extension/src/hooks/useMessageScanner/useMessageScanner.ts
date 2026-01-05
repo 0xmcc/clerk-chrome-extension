@@ -37,7 +37,7 @@ export const useMessageScanner = () => {
   } = useConversationStore()
 
   // Active messages state
-  const { messages, updateActiveMessagesFromStore, activeMessageCount } = useActiveMessages(capturedPlatform, storeRef)
+  const { messages, conversationTitle, updateActiveMessagesFromStore, activeMessageCount } = useActiveMessages(capturedPlatform, storeRef)
 
   // Conversation key for URL change detection
   const [conversationKey, setConversationKey] = useState<string>(getConversationKey())
@@ -204,6 +204,7 @@ export const useMessageScanner = () => {
 
   return {
     messages,
+    conversationTitle,
     rescan,
     conversationKey,
     conversations,

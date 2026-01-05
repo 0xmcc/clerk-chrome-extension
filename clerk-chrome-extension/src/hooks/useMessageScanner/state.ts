@@ -100,6 +100,7 @@ export const useConversationStore = () => {
 
 export const useActiveMessages = (capturedPlatform: CapturedPlatform | null, storeRef: React.MutableRefObject<Map<string, Conversation>>) => {
   const [messages, setMessages] = useState<Message[]>([])
+  const [conversationTitle, setConversationTitle] = useState<string | undefined>(undefined)
 
   const updateActiveMessagesFromStore = useCallback(() => {
     logFlow("UPDATE_ACTIVE_MESSAGES_ENTRY", { capturedPlatform, storeSize: storeRef.current.size })
@@ -137,9 +138,11 @@ export const useActiveMessages = (capturedPlatform: CapturedPlatform | null, sto
     })
 
     setMessages(convo?.messages ?? [])
+    setConversationTitle(convo?.title)
 
     logFlow("UPDATE_ACTIVE_MESSAGES_SET", {
-      messageCount: convo?.messages?.length ?? 0
+      messageCount: convo?.messages?.length ?? 0,
+      title: convo?.title?.substring(0, 30)
     })
   }, [capturedPlatform, storeRef])
 
@@ -147,9 +150,14 @@ export const useActiveMessages = (capturedPlatform: CapturedPlatform | null, sto
     setMessages([])
   }, [])
 
+  // Compute activeMessageCount for external consumers
+  const activeMessageCount = messages.length
+
   return {
     messages,
+    conversationTitle,
     updateActiveMessagesFromStore,
     clearMessages,
+    activeMessageCount,
   }
 }

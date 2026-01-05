@@ -55,7 +55,7 @@ const PlasmoOverlay = () => {
   const rescanOnOpenAttemptsRef = useRef<Map<string, number>>(new Map())
 
   // Always-on scanner - no props, returns stable activeConvoKey and activeMessageCount for guards
-  const { messages, conversationKey, rescan, activeConvoKey, activeMessageCount } = useMessageScanner()
+  const { messages, conversationTitle, conversationKey, rescan, activeConvoKey, activeMessageCount } = useMessageScanner()
 
   // Guarded rescan-on-open: uses store-based activeMessageCount and cooldown retry
   useEffect(() => {
@@ -127,6 +127,7 @@ const PlasmoOverlay = () => {
         onClose={() => setIsExporterOpen(false)}
         messages={messages}
         conversationKey={conversationKey}
+        conversationTitle={conversationTitle}
       />
     </>
   )
