@@ -8,10 +8,16 @@ interface ActionAreaProps {
   exportState: ExportState
   statusMessage: string
   analysisInput: string
+  isSignedOut: boolean
   onAnalysisInputChange: (value: string) => void
   onAnalysisSend: () => void
   onBackToExport: () => void
   onSave: () => void
+}
+
+const getSaveButtonText = (exportState: ExportState, isSignedOut: boolean): string => {
+  if (exportState === "loading") return "Saving..."
+  return isSignedOut ? "Save to my library" : "Save"
 }
 
 export const ActionArea = ({
@@ -20,6 +26,7 @@ export const ActionArea = ({
   exportState,
   statusMessage,
   analysisInput,
+  isSignedOut,
   onAnalysisInputChange,
   onAnalysisSend,
   onBackToExport,
@@ -70,8 +77,21 @@ export const ActionArea = ({
               justifyContent: "center",
               gap: "10px"
             }}>
-            <span>{exportState === "loading" ? "Saving..." : "Save"}</span>
+            <span>{getSaveButtonText(exportState, isSignedOut)}</span>
           </button>
+          {isSignedOut && (
+            <div
+              onClick={openSignInPage}
+              style={{
+                marginTop: "12px",
+                textAlign: "center",
+                fontSize: "13px",
+                color: DARK_THEME.muted,
+                cursor: "pointer"
+              }}>
+              Sign in for full access
+            </div>
+          )}
         </div>
         {statusMessage && (
           <div

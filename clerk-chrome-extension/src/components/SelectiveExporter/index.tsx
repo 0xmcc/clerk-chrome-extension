@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useCallback } from "react"
+import { useEffect, useMemo, useRef, useCallback, useState } from "react"
 
 import { detectPlatform, getPlatformLabel } from "~utils/platform"
-import { requestClerkSignOut } from "~utils/clerk"
+import { requestClerkSignOut, requestClerkToken } from "~utils/clerk"
+import { openSignInPage } from "~utils/navigation"
 
 import type { SelectiveExporterProps } from "./types"
 import { DARK_THEME } from "./constants"
@@ -18,6 +19,7 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
   const hasInitializedRef = useRef(false)
   const platformLabelRef = useRef(getPlatformLabel())
   const isLinkedIn = useMemo(() => detectPlatform() === "linkedin", [])
+  const [isSignedOut, setIsSignedOut] = useState<boolean | null>(null)
 
   // View state management (single enum - no boolean drift)
   const { view, goToExport, goToSettings } = useViewState()
@@ -56,7 +58,8 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
   } = useExportActions({
     messages: selectedMessages,
     historyFormat: "markdown",
-    platformLabel: platformLabelRef.current
+    platformLabel: platformLabelRef.current,
+    conversationTitle
   })
 
   // Analysis actions
@@ -131,6 +134,24 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
     }
   }, [isOpen, resetExportState])
 
+  // Auth probe: check if user is signed in when drawer opens
+  useEffect(() => {
+    if (!isOpen) return
+
+    requestClerkToken()
+      .then(() => setIsSignedOut(false))
+      .catch((error) => {
+        // Only set signed out for known missing-session error
+        if (error?.message?.toLowerCase().includes("sign in") ||
+            error?.message?.toLowerCase().includes("missing clerk session")) {
+          setIsSignedOut(true)
+        } else {
+          // For other errors (transient/network), don't show banner
+          setIsSignedOut(false)
+        }
+      })
+  }, [isOpen])
+
   const handleHistoryMenuChange = (value: "markdown" | "json") => {
     setHistoryFormat(value)
   }
@@ -158,6 +179,8 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
         messageCount={selectedCount}
         onSettingsClick={goToSettings}
         onClose={handleClose}
+        showAuthBanner={isSignedOut === true}
+        onSignInClick={openSignInPage}
       />
 
       <SubHeader view={view} onBack={goToExport} />
@@ -245,6 +268,7 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
         exportState={exportState}
         statusMessage={statusMessage}
         analysisInput={analysisInput}
+        isSignedOut={isSignedOut === true}
         onAnalysisInputChange={setAnalysisInput}
         onAnalysisSend={handleAnalysisSend}
         onBackToExport={goToExport}

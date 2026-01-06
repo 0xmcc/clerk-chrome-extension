@@ -2,7 +2,7 @@ import { useState, useCallback } from "react"
 
 import type { Message } from "~hooks/useMessageScanner/types"
 import { requestClerkToken } from "~utils/clerk"
-import { deriveConversationId } from "~utils/conversation"
+import { deriveConversationId, sanitizeFilename } from "~utils/conversation"
 import { API_BASE_URL } from "~config/api"
 
 import type { ExportState, HistoryFormat } from "../types"
@@ -11,6 +11,7 @@ interface UseExportActionsParams {
   messages: Message[]
   historyFormat: HistoryFormat
   platformLabel: string
+  conversationTitle?: string
 }
 
 interface ExportActionsState {
@@ -38,7 +39,8 @@ interface ExportActions {
 export const useExportActions = ({
   messages,
   historyFormat: initialHistoryFormat,
-  platformLabel
+  platformLabel,
+  conversationTitle
 }: UseExportActionsParams): ExportActionsState & ExportActions => {
   const [exportState, setExportState] = useState<ExportState>("idle")
   const [statusMessage, setStatusMessage] = useState("")
@@ -88,7 +90,9 @@ export const useExportActions = ({
     const content = historyFormat === "markdown"
       ? generateMarkdown()
       : JSON.stringify(generateJSON(), null, 2)
-    const filename = `conversation-${deriveConversationId()}.${historyFormat === "markdown" ? "md" : "json"}`
+    const ext = historyFormat === "markdown" ? "md" : "json"
+    const base = sanitizeFilename(conversationTitle) || `conversation-${deriveConversationId()}`
+    const filename = `${base}.${ext}`
     const mimeType = historyFormat === "markdown" ? "text/markdown" : "application/json"
 
     const blob = new Blob([content], { type: mimeType })
@@ -102,7 +106,7 @@ export const useExportActions = ({
     URL.revokeObjectURL(url)
 
     console.log(`[SelectiveExporter] Exported ${historyFormat} file: ${filename}`)
-  }, [messages.length, historyFormat, generateMarkdown, generateJSON])
+  }, [messages.length, historyFormat, generateMarkdown, generateJSON, conversationTitle])
 
   const handleSaveToDatabase = useCallback(async () => {
     if (messages.length === 0 || exportState === "loading") return

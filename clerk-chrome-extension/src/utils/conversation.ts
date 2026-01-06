@@ -32,3 +32,20 @@ export const deriveConversationId = (): string => {
   // Final fallback: timestamp-based ID
   return `conversation-${Date.now()}`
 }
+
+/**
+ * Sanitize a string for use as a filename.
+ * Removes invalid characters, collapses whitespace, and replaces spaces with dashes.
+ *
+ * @param name - The string to sanitize
+ * @returns Sanitized filename string, or null if input is empty/undefined
+ */
+export const sanitizeFilename = (name: string | undefined): string | null => {
+  if (!name) return null
+  const sanitized = name
+    .replace(/[/\\:*?"<>|]/g, "")  // Remove invalid filename chars
+    .replace(/\s+/g, " ")          // Collapse whitespace
+    .trim()
+    .replace(/ /g, "-")            // Replace spaces with dashes
+  return sanitized || null
+}
