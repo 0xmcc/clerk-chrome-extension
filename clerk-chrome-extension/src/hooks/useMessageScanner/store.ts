@@ -1,4 +1,5 @@
 import type { Conversation } from "./types"
+import { debug } from "~utils/debug"
 
 // Module-level shared state singleton
 // All hook instances share the same store, ensuring conversations
@@ -11,7 +12,7 @@ let cachedClaudeOrgId: string | null = null
 
 export const setClaudeOrgId = (orgId: string) => {
   if (orgId && orgId !== cachedClaudeOrgId) {
-    console.log("[store] Cached Claude orgId:", orgId)
+    debug.any(["messages", "rescan"], "Cached Claude orgId", { orgId })
     cachedClaudeOrgId = orgId
   }
 }
@@ -23,7 +24,7 @@ let cachedChatGPTAuthToken: string | null = null
 
 export const setChatGPTAuthToken = (token: string) => {
   if (token && token !== cachedChatGPTAuthToken) {
-    console.log("[store] Cached ChatGPT auth token:", token.substring(0, 30) + "...")
+    debug.any(["messages", "rescan"], "Cached ChatGPT auth token", { tokenPrefix: token.substring(0, 30) + "..." })
     cachedChatGPTAuthToken = token
   }
 }

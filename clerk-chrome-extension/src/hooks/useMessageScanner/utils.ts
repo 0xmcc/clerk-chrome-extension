@@ -1,6 +1,7 @@
 import type { Platform } from "~utils/platform"
 import type { CapturedPlatform } from "./types"
 import { inferPlatformFromPath } from "../../config/endpoints"
+import { debug } from "~utils/debug"
 
 export const now = () => Date.now()
 
@@ -50,13 +51,13 @@ export const getConversationKey = () => `${window.location.hostname}${window.loc
 
 export const getActiveConversationIdFromUrl = (platform: CapturedPlatform): string | null => {
   const path = window.location.pathname
-  console.log("[getActiveConversationIdFromUrl] Extracting ID", { platform, path })
+  debug.any(["messages", "scanner"], "Extracting conversation ID from URL", { platform, path })
 
   // Claude uses /chat/{uuid}
   if (platform === "claude") {
     const m = path.match(/\/chat\/([^/?#]+)/)
     const result = m?.[1] || null
-    console.log("[getActiveConversationIdFromUrl] Claude result", { result, match: m })
+    debug.any(["messages", "scanner"], "Claude URL result", { result, match: m })
     return result
   }
 
@@ -64,10 +65,10 @@ export const getActiveConversationIdFromUrl = (platform: CapturedPlatform): stri
   if (platform === "chatgpt") {
     const m = path.match(/\/c\/([^/?#]+)/)
     const result = m?.[1] || null
-    console.log("[getActiveConversationIdFromUrl] ChatGPT result", { result, match: m })
+    debug.any(["messages", "scanner"], "ChatGPT URL result", { result, match: m })
     return result
   }
 
-  console.log("[getActiveConversationIdFromUrl] No match", { platform, path })
+  debug.any(["messages", "scanner"], "No URL match", { platform, path })
   return null
 }

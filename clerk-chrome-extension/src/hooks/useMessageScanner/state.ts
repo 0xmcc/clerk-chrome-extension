@@ -3,11 +3,12 @@ import type { Conversation, Message, ScannerStats, CapturedPlatform } from "./ty
 import { mergeConversation, computeStats } from "./mergers"
 import { getActiveConversationIdFromUrl } from "./utils"
 import { storeRef } from "./store"
+import { debug } from "~utils/debug"
 
 // Instrumentation helper for state flow tracking
 function logFlow(step: string, details?: Record<string, unknown>) {
   const timestamp = performance.now().toFixed(2)
-  console.log(`[State:FLOW] [${timestamp}ms] ${step}`, details ?? "")
+  debug.any(["messages", "state"], `[${timestamp}ms] ${step}`, details ?? "")
 }
 
 export interface ConversationStoreState {

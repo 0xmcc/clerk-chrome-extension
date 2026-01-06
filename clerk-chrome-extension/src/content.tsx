@@ -5,6 +5,12 @@ import type { PlasmoCSConfig } from "plasmo"
 import { FloatingButton } from "~features/floating-button"
 import { SelectiveExporter } from "~components/SelectiveExporter"
 import { useMessageScanner } from "~hooks/useMessageScanner"
+import { debug } from "~utils/debug"
+
+// Instrumentation helper for rescan-on-open flow tracking
+function logRescanOnOpen(step: string, details?: Record<string, unknown>) {
+  debug.any(["messages", "rescan"], `[RescanOnOpen] ${step}`, details ?? "")
+}
 
 export const config: PlasmoCSConfig = {
   matches: [
@@ -59,7 +65,7 @@ const PlasmoOverlay = () => {
 
   // Guarded rescan-on-open: uses store-based activeMessageCount and cooldown retry
   useEffect(() => {
-    console.log("[RescanOnOpen] Effect triggered", {
+    logRescanOnOpen("Effect triggered", {
       isExporterOpen,
       activeConvoKey,
       activeMessageCount,
@@ -67,15 +73,15 @@ const PlasmoOverlay = () => {
     })
 
     if (!isExporterOpen) {
-      console.log("[RescanOnOpen] SKIP - Exporter not open")
+      logRescanOnOpen("SKIP - Exporter not open")
       return
     }
     if (!activeConvoKey) {
-      console.log("[RescanOnOpen] SKIP - No active conversation key")
+      logRescanOnOpen("SKIP - No active conversation key")
       return
     }
     if (activeMessageCount > 0) {
-      console.log("[RescanOnOpen] SKIP - Already have messages", { activeMessageCount })
+      logRescanOnOpen("SKIP - Already have messages", { activeMessageCount })
       return
     }
 
@@ -83,8 +89,8 @@ const PlasmoOverlay = () => {
     const lastAttempt = rescanOnOpenAttemptsRef.current.get(activeConvoKey) ?? 0
     const now = Date.now()
     const timeSinceLastAttempt = now - lastAttempt
-    
-    console.log("[RescanOnOpen] Cooldown check", {
+
+    logRescanOnOpen("Cooldown check", {
       activeConvoKey,
       lastAttempt,
       now,
@@ -94,14 +100,14 @@ const PlasmoOverlay = () => {
     })
 
     if (timeSinceLastAttempt < RESCAN_ON_OPEN_COOLDOWN_MS) {
-      console.log("[RescanOnOpen] SKIP - Cooldown active", {
+      logRescanOnOpen("SKIP - Cooldown active", {
         timeSinceLastAttempt,
         cooldownMs: RESCAN_ON_OPEN_COOLDOWN_MS
       })
       return
     }
 
-    console.log("[RescanOnOpen] TRIGGERING RESCAN", {
+    logRescanOnOpen("TRIGGERING RESCAN", {
       activeConvoKey,
       activeMessageCount,
       timeSinceLastAttempt
@@ -110,11 +116,11 @@ const PlasmoOverlay = () => {
     rescanOnOpenAttemptsRef.current.set(activeConvoKey, now)
     // Small delay to allow interceptor events to arrive first
     const timer = setTimeout(() => {
-      console.log("[RescanOnOpen] Calling rescan() now")
+      logRescanOnOpen("Calling rescan() now")
       rescan()
     }, 300)
     return () => {
-      console.log("[RescanOnOpen] Cleanup - clearing timer")
+      logRescanOnOpen("Cleanup - clearing timer")
       clearTimeout(timer)
     }
   }, [isExporterOpen, activeConvoKey, activeMessageCount, rescan])

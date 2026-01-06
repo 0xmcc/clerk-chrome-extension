@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react"
 import { detectPlatform } from "~utils/platform"
+import { debug } from "~utils/debug"
 
 import type { InterceptorEvent } from "./types"
 import { isCapturedPlatform, getConversationKey, getActiveConversationIdFromUrl } from "./utils"
@@ -10,7 +11,7 @@ import { createRescanHandler, INTERCEPTOR_SOURCE } from "./rescan"
 // Instrumentation helper for message flow tracking
 function logFlow(step: string, details?: Record<string, unknown>) {
   const timestamp = performance.now().toFixed(2)
-  console.log(`[Scanner:FLOW] [${timestamp}ms] ${step}`, details ?? "")
+  debug.any(["messages", "scanner"], `[${timestamp}ms] ${step}`, details ?? "")
 }
 
 // Rescan cooldown to prevent spam
@@ -149,11 +150,11 @@ export const useMessageScanner = () => {
 
   // Effect: URL change detection - always update state, throttled rescan
   useEffect(() => {
-    console.log("[useMessageScanner] Setting up URL change detection interval")
+    debug.any(["messages", "scanner"], "Setting up URL change detection interval")
     const interval = window.setInterval(() => {
       const nextKey = getConversationKey()
       if (nextKey !== conversationKey) {
-        console.log("[useMessageScanner] URL changed:", {
+        debug.any(["messages", "scanner"], "URL changed", {
           from: conversationKey,
           to: nextKey,
           storeSize: storeRef.current.size,
@@ -162,7 +163,7 @@ export const useMessageScanner = () => {
         setConversationKey(nextKey)
 
         // Always sync state on URL change
-        console.log("[useMessageScanner] URL change: Syncing state")
+        debug.any(["messages", "scanner"], "URL change: Syncing state")
         updateAllDerivedState()
 
         // Compute activeConvoKey for this URL
@@ -177,7 +178,7 @@ export const useMessageScanner = () => {
           const now = Date.now()
           const convo = storeRef.current.get(nextActiveConvoKey)
 
-          console.log("[useMessageScanner] URL change: Conversation check", {
+          debug.any(["messages", "scanner"], "URL change: Conversation check", {
             capturedPlatform,
             nextActiveId,
             nextActiveConvoKey,
@@ -188,7 +189,7 @@ export const useMessageScanner = () => {
 
           // Only rescan if: missing/empty AND (never tried OR cooldown expired)
           if ((!convo || !convo.messages.length) && (now - lastAttempt > RESCAN_COOLDOWN_MS)) {
-            console.log("[useMessageScanner] URL change: Conversation missing/incomplete, triggering rescan in 300ms")
+            debug.any(["messages", "scanner"], "URL change: Conversation missing/incomplete, triggering rescan in 300ms")
             rescanAttemptsRef.current.set(nextActiveConvoKey, now)
             setTimeout(() => rescan(), 300)
           }
@@ -197,7 +198,7 @@ export const useMessageScanner = () => {
     }, 400)
 
     return () => {
-      console.log("[useMessageScanner] Cleaning up URL change detection interval")
+      debug.any(["messages", "scanner"], "Cleaning up URL change detection interval")
       window.clearInterval(interval)
     }
   }, [conversationKey, updateAllDerivedState, capturedPlatform, storeRef, rescan])

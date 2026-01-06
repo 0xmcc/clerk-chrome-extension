@@ -2,8 +2,14 @@ import type { Conversation, CapturedPlatform, InterceptorEvent } from "./types"
 import { getActiveConversationIdFromUrl, now } from "./utils"
 import { getClaudeOrgId, getChatGPTAuthToken, setChatGPTAuthToken } from "./store"
 import { buildChatGPTDetailUrl, buildClaudeDetailUrls } from "../../config/endpoints"
+import { debug } from "~utils/debug"
 
 export const INTERCEPTOR_SOURCE = "__echo_network_interceptor__"
+
+// Instrumentation helper for rescan flow tracking
+function logRescan(step: string, details?: Record<string, unknown>) {
+  debug.any(["messages", "rescan"], step, details ?? "")
+}
 
 // Fetch with retry logic - returns Response or null, skips retries on 404
 const fetchWithRetry = async (
@@ -14,7 +20,7 @@ const fetchWithRetry = async (
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
       const delay = baseDelay * Math.pow(2, attempt - 1)
-      console.log(`[rescan] Retry ${attempt}/${maxRetries} for ${url}, waiting ${delay}ms`)
+      logRescan(`Retry ${attempt}/${maxRetries} for ${url}, waiting ${delay}ms`)
       await new Promise(resolve => setTimeout(resolve, delay))
     }
 
@@ -23,11 +29,11 @@ const fetchWithRetry = async (
         credentials: "include",
         headers: { accept: "application/json" }
       })
-      console.log("[rescan] fetchWithRetry", { url, status: resp.status, ok: resp.ok, attempt })
+      logRescan("fetchWithRetry", { url, status: resp.status, ok: resp.ok, attempt })
 
       if (resp.ok || resp.status === 404) return resp
     } catch (error) {
-      console.log("[rescan] fetchWithRetry error", { url, error, attempt })
+      logRescan("fetchWithRetry error", { url, error, attempt })
     }
   }
   return null
@@ -42,7 +48,7 @@ export interface RescanHandlerDeps {
 
 // Discover Claude orgId from page's __NEXT_DATA__ (Next.js embeds this on all pages)
 const discoverClaudeOrgId = (): string | null => {
-  console.log("[rescan] discoverClaudeOrgId - START")
+  logRescan("discoverClaudeOrgId - START")
 
   // Try __NEXT_DATA__ script tag (always present on Claude pages)
   try {
@@ -51,12 +57,12 @@ const discoverClaudeOrgId = (): string | null => {
       const data = JSON.parse(nextDataScript.textContent)
       const orgId = data?.props?.pageProps?.organizationId
       if (orgId) {
-        console.log("[rescan] discoverClaudeOrgId - Found in __NEXT_DATA__", { orgId })
+        logRescan("discoverClaudeOrgId - Found in __NEXT_DATA__", { orgId })
         return orgId
       }
     }
   } catch (e) {
-    console.log("[rescan] discoverClaudeOrgId - __NEXT_DATA__ parse error", e)
+    logRescan("discoverClaudeOrgId - __NEXT_DATA__ parse error", { error: e })
   }
 
   // Try window.__NEXT_DATA__ global (Next.js also exposes it on window)
@@ -64,14 +70,14 @@ const discoverClaudeOrgId = (): string | null => {
     const win = window as any
     if (win.__NEXT_DATA__?.props?.pageProps?.organizationId) {
       const orgId = win.__NEXT_DATA__.props.pageProps.organizationId
-      console.log("[rescan] discoverClaudeOrgId - Found in window.__NEXT_DATA__", { orgId })
+      logRescan("discoverClaudeOrgId - Found in window.__NEXT_DATA__", { orgId })
       return orgId
     }
   } catch (e) {
-    console.log("[rescan] discoverClaudeOrgId - window check error", e)
+    logRescan("discoverClaudeOrgId - window check error", { error: e })
   }
 
-  console.log("[rescan] discoverClaudeOrgId - No orgId found")
+  logRescan("discoverClaudeOrgId - No orgId found")
   return null
 }
 
@@ -83,7 +89,7 @@ const extractChatGPTAuthTokenFromDOM = (): string | null => {
       if (script.textContent && script.textContent.includes('"accessToken":"ey')) {
         const match = script.textContent.match(/"accessToken":"(eyJ[^"]+)"/);
         if (match && match[1]) {
-          console.log("[rescan] 🎯 Found auth token in DOM script tag");
+          logRescan("Found auth token in DOM script tag");
           return match[1];
         }
       }
@@ -98,49 +104,48 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
   const { capturedPlatform, updateAllDerivedState, handleInterceptorEvent, storeRef } = deps
 
   return async () => {
-    console.log("[rescan] ========== RESCAN START ==========", { 
+    logRescan("========== RESCAN START ==========", {
       capturedPlatform,
       storeSize: storeRef.current.size,
       storeKeys: Array.from(storeRef.current.keys())
     })
-    
-    console.log("[rescan] STEP 1: updateAllDerivedState")
+
+    logRescan("STEP 1: updateAllDerivedState")
     updateAllDerivedState()
 
     if (!capturedPlatform) {
-      console.log("[rescan] STEP 2: EXIT - No captured platform")
-      return
-    }
-    
-    console.log("[rescan] STEP 3: Extracting activeId", { capturedPlatform })
-    const activeId = getActiveConversationIdFromUrl(capturedPlatform)
-    console.log("[rescan] STEP 3: Result", { activeId, currentPath: window.location.pathname })
-    
-    if (!activeId) {
-      console.log("[rescan] STEP 4: EXIT - No active conversation ID")
+      logRescan("STEP 2: EXIT - No captured platform")
       return
     }
 
-    console.log("[rescan] STEP 5: Platform routing", { platform: capturedPlatform, activeId })
+    logRescan("STEP 3: Extracting activeId", { capturedPlatform })
+    const activeId = getActiveConversationIdFromUrl(capturedPlatform)
+    logRescan("STEP 3: Result", { activeId, currentPath: window.location.pathname })
+
+    if (!activeId) {
+      logRescan("STEP 4: EXIT - No active conversation ID")
+      return
+    }
+
+    logRescan("STEP 5: Platform routing", { platform: capturedPlatform, activeId })
 
     try {
       if (capturedPlatform === "chatgpt") {
-        console.log("[rescan] STEP 6: ChatGPT branch")
+        logRescan("STEP 6: ChatGPT branch")
         const url = buildChatGPTDetailUrl(activeId)
-        console.log("[rescan] STEP 7: ChatGPT fetch", { url })
+        logRescan("STEP 7: ChatGPT fetch", { url })
 
         // STRATEGY: 1. Try Cache, 2. Try DOM, 3. Give up
         let authToken = getChatGPTAuthToken()
 
         if (!authToken) {
-           console.log("[rescan] Cache empty. Attempting DOM extraction...");
-           authToken = extractChatGPTAuthTokenFromDOM();
-           console.log("[rescan] DOM auth token extraction result", { authToken, hasToken: !!authToken })
+           logRescan("Cache empty. Attempting DOM extraction...")
+           authToken = extractChatGPTAuthTokenFromDOM()
+           logRescan("DOM auth token extraction result", { hasToken: !!authToken })
            if (authToken) {
              // Cache it for next time so we don't have to parse DOM every time
-             setChatGPTAuthToken(authToken);
+             setChatGPTAuthToken(authToken)
            }
-           console.log("[rescan] DOM auth token extraction result", { authToken, hasToken: !!authToken })
         }
 
         const headers: Record<string, string> = {
@@ -154,49 +159,49 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
 
         if (authToken) {
           headers["authorization"] = `Bearer ${authToken}`
-          console.log("[rescan] Using Auth Token (Length: " + authToken.length + ")")
+          logRescan("Using Auth Token", { length: authToken.length })
         } else {
-          console.log("[rescan] CRITICAL WARNING: No ChatGPT auth token found in Cache OR DOM. Request will likely 404.")
+          logRescan("CRITICAL WARNING: No ChatGPT auth token found in Cache OR DOM. Request will likely 404.")
         }
-        
-        console.log("[rescan] Request details:", {
+
+        logRescan("Request details", {
           url,
           method: "GET",
           hasAuth: !!authToken,
           headerKeys: Object.keys(headers),
           referer: headers["referer"]
         })
-        
+
         // Match ChatGPT's request headers to avoid 404 - explicitly set method
         const resp = await fetch(url, {
           method: "GET",
           credentials: "include",
           headers
         })
-        
-        console.log("[rescan] STEP 8: ChatGPT response", { 
-          status: resp.status, 
+
+        logRescan("STEP 8: ChatGPT response", {
+          status: resp.status,
           ok: resp.ok,
           contentType: resp.headers.get("content-type")
         })
-        
+
         if (!resp.ok) {
-          console.log("[rescan] STEP 9: EXIT - ChatGPT fetch failed", { status: resp.status, statusText: resp.statusText })
+          logRescan("STEP 9: EXIT - ChatGPT fetch failed", { status: resp.status, statusText: resp.statusText })
           return
         }
-        
-        console.log("[rescan] STEP 10: ChatGPT parsing JSON")
+
+        logRescan("STEP 10: ChatGPT parsing JSON")
         const json = await resp.json().catch((e) => {
-          console.log("[rescan] STEP 10: EXIT - ChatGPT JSON parse failed", e)
+          logRescan("STEP 10: EXIT - ChatGPT JSON parse failed", { error: e })
           return null
         })
-        
+
         if (!json) {
-          console.log("[rescan] STEP 11: EXIT - ChatGPT no JSON data")
+          logRescan("STEP 11: EXIT - ChatGPT no JSON data")
           return
         }
-        
-        console.log("[rescan] STEP 12: ChatGPT calling handleInterceptorEvent", {
+
+        logRescan("STEP 12: ChatGPT calling handleInterceptorEvent", {
           hasData: !!json,
           dataKeys: Object.keys(json || {})
         })
@@ -209,35 +214,35 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
           ts: now(),
           data: json
         })
-        console.log("[rescan] STEP 13: ChatGPT SUCCESS - handler called")
+        logRescan("STEP 13: ChatGPT SUCCESS - handler called")
       }
 
       if (capturedPlatform === "claude") {
-        console.log("[rescan] STEP 6: Claude branch")
-        
-        console.log("[rescan] STEP 7: Claude orgId discovery - checking cache")
+        logRescan("STEP 6: Claude branch")
+
+        logRescan("STEP 7: Claude orgId discovery - checking cache")
         let orgId = getClaudeOrgId()
-        console.log("[rescan] STEP 7a: Cached orgId", { orgId })
+        logRescan("STEP 7a: Cached orgId", { orgId })
 
         if (!orgId) {
-          console.log("[rescan] STEP 7b: Checking store for orgId", { activeId })
+          logRescan("STEP 7b: Checking store for orgId", { activeId })
           const convo = storeRef.current.get(`claude:${activeId}`)
           orgId = convo?.orgId || null
-          console.log("[rescan] STEP 7b: Store result", { 
-            hasConvo: !!convo, 
+          logRescan("STEP 7b: Store result", {
+            hasConvo: !!convo,
             orgIdFromStore: orgId,
             convoOrgId: convo?.orgId
           })
         }
 
         if (!orgId) {
-          console.log("[rescan] STEP 7c: Extracting from page data")
+          logRescan("STEP 7c: Extracting from page data")
           orgId = discoverClaudeOrgId()
-          console.log("[rescan] STEP 7c: Page extraction result", { orgId })
+          logRescan("STEP 7c: Page extraction result", { orgId })
         }
 
         if (!orgId) {
-          console.log("[rescan] STEP 8: EXIT - Could not determine Claude orgId", {
+          logRescan("STEP 8: EXIT - Could not determine Claude orgId", {
             cachedOrgId: getClaudeOrgId(),
             storeSize: storeRef.current.size,
             storeKeys: Array.from(storeRef.current.keys())
@@ -245,7 +250,7 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
           return
         }
 
-        console.log("[rescan] STEP 9: Claude orgId resolved", { orgId, activeId })
+        logRescan("STEP 9: Claude orgId resolved", { orgId, activeId })
 
         // Try both endpoint formats (Claude uses both) - patterns from centralized config
         const endpoints = buildClaudeDetailUrls(orgId, activeId)
@@ -259,11 +264,11 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
           for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             if (attempt > 0) {
               const delay = BASE_DELAY * Math.pow(2, attempt - 1) // 300ms, 600ms
-              console.log(`[rescan] Retry ${attempt}/${MAX_RETRIES} for ${url}, waiting ${delay}ms`)
+              logRescan(`Retry ${attempt}/${MAX_RETRIES} for ${url}, waiting ${delay}ms`)
               await new Promise(resolve => setTimeout(resolve, delay))
             }
 
-            console.log("[rescan] STEP 10: Claude fetch attempt", { url, attempt })
+            logRescan("STEP 10: Claude fetch attempt", { url, attempt })
 
             try {
               resp = await fetch(url, {
@@ -271,7 +276,7 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
                 headers: { accept: "application/json" }
               })
 
-              console.log("[rescan] STEP 11: Claude response", {
+              logRescan("STEP 11: Claude response", {
                 url,
                 status: resp.status,
                 ok: resp.ok,
@@ -280,19 +285,19 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
               })
 
               if (resp.ok) {
-                console.log("[rescan] STEP 11a: Success with endpoint", url)
+                logRescan("STEP 11a: Success with endpoint", { url })
                 break // Found working endpoint
               } else if (resp.status === 404) {
-                console.log("[rescan] STEP 11b: 404 - endpoint doesn't exist, skipping retries", { url })
+                logRescan("STEP 11b: 404 - endpoint doesn't exist, skipping retries", { url })
                 lastError = `${url} returned 404`
                 break // Don't retry 404s
               } else {
                 lastError = `${url} returned ${resp.status}`
-                console.log("[rescan] STEP 11b: Endpoint failed", { url, status: resp.status, attempt })
+                logRescan("STEP 11b: Endpoint failed", { url, status: resp.status, attempt })
               }
             } catch (error) {
               lastError = `${url} threw ${error}`
-              console.log("[rescan] STEP 11c: Endpoint error", { url, error, attempt })
+              logRescan("STEP 11c: Endpoint error", { url, error, attempt })
             }
           }
 
@@ -300,7 +305,7 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
         }
 
         if (!resp || !resp.ok) {
-          console.log("[rescan] STEP 12: EXIT - All Claude endpoints failed after retries", {
+          logRescan("STEP 12: EXIT - All Claude endpoints failed after retries", {
             endpoints,
             lastError,
             maxRetries: MAX_RETRIES
@@ -309,18 +314,18 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
         }
 
         // Continue with existing logic using the successful resp
-        console.log("[rescan] STEP 13: Claude parsing JSON")
+        logRescan("STEP 13: Claude parsing JSON")
         const json = await resp.json().catch((e) => {
-          console.log("[rescan] STEP 13: EXIT - Claude JSON parse failed", e)
+          logRescan("STEP 13: EXIT - Claude JSON parse failed", { error: e })
           return null
         })
-        
+
         if (!json) {
-          console.log("[rescan] STEP 14: EXIT - Claude no JSON data")
+          logRescan("STEP 14: EXIT - Claude no JSON data")
           return
         }
-        
-        console.log("[rescan] STEP 15: Claude calling handleInterceptorEvent", {
+
+        logRescan("STEP 15: Claude calling handleInterceptorEvent", {
           hasData: !!json,
           dataKeys: Object.keys(json || {}),
           dataType: typeof json
@@ -334,10 +339,10 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
           ts: now(),
           data: json
         })
-        console.log("[rescan] STEP 16: Claude SUCCESS - handler called")
+        logRescan("STEP 16: Claude SUCCESS - handler called")
       }
-      
-      console.log("[rescan] ========== RESCAN COMPLETE ==========")
+
+      logRescan("========== RESCAN COMPLETE ==========")
     } catch (error) {
       console.error("[rescan] ========== RESCAN EXCEPTION ==========", error)
       console.error("[rescan] Exception details:", {

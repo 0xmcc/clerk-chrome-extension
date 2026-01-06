@@ -5,11 +5,12 @@ import { parseChatGPTList, parseChatGPTDetail } from "./parsers/chatgpt"
 import { parseClaudeList, parseClaudeDetail } from "./parsers/claude"
 import { setClaudeOrgId, setChatGPTAuthToken } from "./store"
 import { extractClaudeOrgId, extractChatGPTAuthToken } from "../../config/endpoints"
+import { debug } from "~utils/debug"
 
 // Instrumentation helper for handler flow tracking
 function logFlow(step: string, details?: Record<string, unknown>) {
   const timestamp = performance.now().toFixed(2)
-  console.log(`[Handler:FLOW] [${timestamp}ms] ${step}`, details ?? "")
+  debug.any(["messages", "handler"], `[${timestamp}ms] ${step}`, details ?? "")
 }
 
 export interface InterceptorEventHandlerDeps {

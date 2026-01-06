@@ -5,6 +5,7 @@ import {
   CHATGPT_ENDPOINTS,
   CLAUDE_ENDPOINTS,
 } from "./config/endpoints"
+import { debug } from "./utils/debug"
 
 const publishableKey = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY
 const syncHost = process.env.PLASMO_PUBLIC_CLERK_SYNC_HOST
@@ -41,7 +42,7 @@ const refreshClerkClient = async (reason: string) => {
     try {
       const clerkClient = await getClerkClient()
       await clerkClient.load({ standardBrowser: false })
-      console.log("[Background] Clerk refreshed", { reason, hasSession: !!clerkClient.session })
+      debug.any(["auth", "clerk", "background"], "Clerk refreshed", { reason, hasSession: !!clerkClient.session })
     } catch (error) {
       console.error("[Background] Failed to refresh Clerk:", error)
     }
@@ -58,7 +59,7 @@ async function initializeClerk() {
   try {
     const clerkClient = await getClerkClient()
 
-    console.log("[Background] Clerk initialized", {
+    debug.any(["auth", "clerk", "background"], "Clerk initialized", {
       isSignedIn: !!clerkClient.session,
       sessionId: clerkClient.session?.id,
       timestamp: new Date().toISOString()
@@ -307,7 +308,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (!url) return
 
   if (isTargetSite(url)) {
-    console.log("[Background] Injecting interceptor into tab:", tabId, url)
+    debug.any(["interceptor", "background"], "Injecting interceptor into tab", { tabId, url })
     injectInterceptor(tabId)
   }
 })
@@ -388,7 +389,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     getClerkClient()
       .then(async (clerkClient) => {
         await clerkClient.signOut()
-        console.log("[Background] Clerk signed out successfully")
+        debug.any(["auth", "clerk", "background"], "Clerk signed out successfully")
         sendResponse({ success: true })
       })
       .catch((error) => {
