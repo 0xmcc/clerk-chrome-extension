@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, useCallback } from "react"
 
 import { detectPlatform, getPlatformLabel } from "~utils/platform"
+import { requestClerkSignOut } from "~utils/clerk"
 
 import type { SelectiveExporterProps } from "./types"
 import { DARK_THEME } from "./constants"
@@ -49,6 +50,7 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
     handleSaveToDatabase,
     setHistoryFormat,
     setExportState,
+    setStatusMessage,
     generateHistory,
     resetExportState
   } = useExportActions({
@@ -107,6 +109,8 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
   const handleClose = () => {
     onClose()
   }
+
+  const handleLogout = useCallback(() => requestClerkSignOut(), [])
 
   // Manage body padding when drawer opens/closes
   useEffect(() => {
@@ -214,6 +218,8 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
                 onAnalysisLockToggle={toggleAnalysisLock}
                 onFollowupLockToggle={toggleFollowupLock}
                 buildAnalysisSystemPrompt={buildAnalysisSystemPrompt}
+                onLogout={handleLogout}
+                setStatusMessage={setStatusMessage}
               />
             )}
           </div>

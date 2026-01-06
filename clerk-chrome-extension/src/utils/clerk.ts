@@ -31,3 +31,29 @@ export const requestClerkToken = async (): Promise<string> => {
     })
   })
 }
+
+/**
+ * Request Clerk sign out via the background script.
+ *
+ * @returns Promise resolving to success/error result
+ */
+export const requestClerkSignOut = async (): Promise<{ success: boolean; error?: string }> => {
+  return new Promise((resolve) => {
+    if (!chrome?.runtime?.sendMessage) {
+      resolve({ success: false, error: "Chrome runtime unavailable" })
+      return
+    }
+
+    chrome.runtime.sendMessage({ action: "clerkSignOut" }, (response) => {
+      if (chrome.runtime.lastError) {
+        resolve({ success: false, error: chrome.runtime.lastError.message })
+        return
+      }
+
+      resolve({
+        success: response?.success ?? false,
+        error: response?.error
+      })
+    })
+  })
+}

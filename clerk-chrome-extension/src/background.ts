@@ -352,5 +352,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     return true
   }
+
+  if (message.action === "clerkSignOut") {
+    getClerkClient()
+      .then(async (clerkClient) => {
+        await clerkClient.signOut()
+        console.log("[Background] Clerk signed out successfully")
+        sendResponse({ success: true })
+      })
+      .catch((error) => {
+        console.error("[Background] Failed to sign out:", error)
+        sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : "Sign out failed"
+        })
+      })
+
+    return true
+  }
+
   return true
 })

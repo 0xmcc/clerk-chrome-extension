@@ -1,3 +1,5 @@
+import { useState } from "react"
+
 import { DARK_THEME, DEFAULT_ANALYSIS_SYSTEM_PROMPT, DEFAULT_FOLLOWUP_SYSTEM_PROMPT } from "../constants"
 
 interface SettingsViewProps {
@@ -12,6 +14,8 @@ interface SettingsViewProps {
   onAnalysisLockToggle: () => void
   onFollowupLockToggle: () => void
   buildAnalysisSystemPrompt: () => string
+  onLogout: () => Promise<{ success: boolean; error?: string }>
+  setStatusMessage: (message: string) => void
 }
 
 export const SettingsView = ({
@@ -25,8 +29,27 @@ export const SettingsView = ({
   onPersonalContextChange,
   onAnalysisLockToggle,
   onFollowupLockToggle,
-  buildAnalysisSystemPrompt
+  buildAnalysisSystemPrompt,
+  onLogout,
+  setStatusMessage
 }: SettingsViewProps) => {
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    try {
+      const result = await onLogout()
+      if (result.success) {
+        setStatusMessage("Signed out.")
+      } else {
+        setStatusMessage(result.error || "Sign out failed.")
+      }
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Sign out failed.")
+    } finally {
+      setIsLoggingOut(false)
+    }
+  }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       {/* Analysis System Prompt */}
@@ -208,6 +231,37 @@ export const SettingsView = ({
         <div style={{ fontSize: "11px", color: DARK_THEME.muted, marginTop: "6px" }}>
           Add JSON context about yourself that will be included in analysis prompts
         </div>
+      </div>
+
+      {/* Account Section */}
+      <div style={{ borderTop: `1px solid ${DARK_THEME.borderSubtle}`, paddingTop: "20px" }}>
+        <label
+          style={{
+            display: "block",
+            fontSize: "13px",
+            fontWeight: 600,
+            color: DARK_THEME.text,
+            marginBottom: "12px"
+          }}>
+          Account
+        </label>
+        <button
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+          style={{
+            width: "100%",
+            padding: "10px 16px",
+            borderRadius: "6px",
+            border: `1px solid ${DARK_THEME.borderSubtle}`,
+            background: DARK_THEME.surface,
+            color: DARK_THEME.text,
+            fontSize: "13px",
+            fontWeight: 500,
+            cursor: isLoggingOut ? "not-allowed" : "pointer",
+            opacity: isLoggingOut ? 0.6 : 1
+          }}>
+          {isLoggingOut ? "Signing out..." : "Log out"}
+        </button>
       </div>
     </div>
   )
