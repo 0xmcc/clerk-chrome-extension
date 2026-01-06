@@ -57,3 +57,31 @@ export const requestClerkSignOut = async (): Promise<{ success: boolean; error?:
     })
   })
 }
+
+/**
+ * Request a Clerk auth refresh from the background script.
+ * Forces Clerk client to reload and returns current session status.
+ *
+ * @returns Promise resolving to { success, hasSession, error? }
+ */
+export const requestClerkAuthRefresh = async (): Promise<{ success: boolean; hasSession: boolean; error?: string }> => {
+  return new Promise((resolve) => {
+    if (!chrome?.runtime?.sendMessage) {
+      resolve({ success: false, hasSession: false, error: "Chrome runtime unavailable" })
+      return
+    }
+
+    chrome.runtime.sendMessage({ action: "refreshClerkAuth" }, (response) => {
+      if (chrome.runtime.lastError) {
+        resolve({ success: false, hasSession: false, error: chrome.runtime.lastError.message })
+        return
+      }
+
+      resolve({
+        success: response?.success ?? false,
+        hasSession: response?.hasSession ?? false,
+        error: response?.error
+      })
+    })
+  })
+}

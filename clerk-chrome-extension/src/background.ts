@@ -330,6 +330,37 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true
   }
 
+  if (message.action === "openAuthTab") {
+    chrome.tabs.create({ url: "https://momentum.ubi.studio/extension/sign-in?source=extension" })
+    sendResponse({ success: true })
+    return true
+  }
+
+  if (message.action === "refreshClerkAuth") {
+    ;(async () => {
+      try {
+        const clerkClient = await getClerkClient()
+
+        // Hard refresh: if this fails, we must report failure (don't swallow)
+        await clerkClient.load({ standardBrowser: false })
+
+        sendResponse({
+          success: true,
+          hasSession: !!clerkClient.session
+        })
+      } catch (error) {
+        console.error("[Background] Manual auth refresh failed:", error)
+        sendResponse({
+          success: false,
+          hasSession: false,
+          error: error instanceof Error ? error.message : "Refresh failed"
+        })
+      }
+    })()
+
+    return true
+  }
+
   if (message.action === "getClerkToken") {
     getClerkClient()
       .then(async (clerkClient) => {

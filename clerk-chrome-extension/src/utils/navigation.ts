@@ -7,5 +7,5 @@
  * Sends a message to the background script to open the options page.
  */
 export const openSignInPage = (): void => {
-  chrome.runtime.sendMessage({ action: "openOptionsPage" })
+  chrome.runtime.sendMessage({ action: "openAuthTab" })
 }

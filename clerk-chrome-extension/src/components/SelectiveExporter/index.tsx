@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useCallback, useState } from "react"
 
 import { detectPlatform, getPlatformLabel } from "~utils/platform"
-import { requestClerkSignOut, requestClerkToken } from "~utils/clerk"
+import { requestClerkSignOut, requestClerkAuthRefresh } from "~utils/clerk"
 import { openSignInPage } from "~utils/navigation"
 
 import type { SelectiveExporterProps } from "./types"
@@ -19,7 +19,11 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
   const hasInitializedRef = useRef(false)
   const platformLabelRef = useRef(getPlatformLabel())
   const isLinkedIn = useMemo(() => detectPlatform() === "linkedin", [])
-  const [isSignedOut, setIsSignedOut] = useState<boolean | null>(null)
+  const [authStatus, setAuthStatus] = useState<"unknown" | "signedOut" | "signedIn">("unknown")
+  const [awaitingSignIn, setAwaitingSignIn] = useState(false)
+
+  // Derive isSignedOut for minimal churn (keeps existing prop names)
+  const isSignedOut = authStatus === "signedOut"
 
   // View state management (single enum - no boolean drift)
   const { view, goToExport, goToSettings } = useViewState()
@@ -138,19 +142,29 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
   useEffect(() => {
     if (!isOpen) return
 
-    requestClerkToken()
-      .then(() => setIsSignedOut(false))
-      .catch((error) => {
-        // Only set signed out for known missing-session error
-        if (error?.message?.toLowerCase().includes("sign in") ||
-            error?.message?.toLowerCase().includes("missing clerk session")) {
-          setIsSignedOut(true)
-        } else {
-          // For other errors (transient/network), don't show banner
-          setIsSignedOut(false)
-        }
+    requestClerkAuthRefresh()
+      .then((result) => {
+        setAuthStatus(result.hasSession ? "signedIn" : "signedOut")
       })
   }, [isOpen])
+
+  const handleSignInClick = useCallback(() => {
+    openSignInPage()
+    setAwaitingSignIn(true)
+  }, [])
+
+  const handleConfirmSignedIn = useCallback(async () => {
+    const result = await requestClerkAuthRefresh()
+    // Always derive state from what background reports
+    setAuthStatus(result.hasSession ? "signedIn" : "signedOut")
+    setAwaitingSignIn(false)
+
+    if (result.hasSession) {
+      handleSaveToDatabase() // Auto-save on success
+    } else {
+      setStatusMessage("Sign in not detected yet. Please try again in a moment.")
+    }
+  }, [handleSaveToDatabase, setStatusMessage])
 
   const handleHistoryMenuChange = (value: "markdown" | "json") => {
     setHistoryFormat(value)
@@ -179,8 +193,8 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
         messageCount={selectedCount}
         onSettingsClick={goToSettings}
         onClose={handleClose}
-        showAuthBanner={isSignedOut === true}
-        onSignInClick={openSignInPage}
+        showAuthBanner={isSignedOut}
+        onSignInClick={handleSignInClick}
       />
 
       <SubHeader view={view} onBack={goToExport} />
@@ -268,11 +282,14 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
         exportState={exportState}
         statusMessage={statusMessage}
         analysisInput={analysisInput}
-        isSignedOut={isSignedOut === true}
+        isSignedOut={isSignedOut}
+        awaitingSignIn={awaitingSignIn}
         onAnalysisInputChange={setAnalysisInput}
         onAnalysisSend={handleAnalysisSend}
         onBackToExport={goToExport}
         onSave={handleSaveToDatabase}
+        onSignInClick={handleSignInClick}
+        onConfirmSignedIn={handleConfirmSignedIn}
       />
     </div>
   )

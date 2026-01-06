@@ -1,6 +1,5 @@
 import type { ViewMode, ExportState } from "../types"
 import { DARK_THEME } from "../constants"
-import { openSignInPage } from "~utils/navigation"
 
 interface ActionAreaProps {
   view: ViewMode
@@ -9,10 +8,13 @@ interface ActionAreaProps {
   statusMessage: string
   analysisInput: string
   isSignedOut: boolean
+  awaitingSignIn: boolean
   onAnalysisInputChange: (value: string) => void
   onAnalysisSend: () => void
   onBackToExport: () => void
   onSave: () => void
+  onSignInClick: () => void
+  onConfirmSignedIn: () => void
 }
 
 const getSaveButtonText = (exportState: ExportState, isSignedOut: boolean): string => {
@@ -27,10 +29,13 @@ export const ActionArea = ({
   statusMessage,
   analysisInput,
   isSignedOut,
+  awaitingSignIn,
   onAnalysisInputChange,
   onAnalysisSend,
   onBackToExport,
-  onSave
+  onSave,
+  onSignInClick,
+  onConfirmSignedIn
 }: ActionAreaProps) => {
   // Settings view: only render status message if present
   if (view === "settings") {
@@ -80,17 +85,36 @@ export const ActionArea = ({
             <span>{getSaveButtonText(exportState, isSignedOut)}</span>
           </button>
           {isSignedOut && (
-            <div
-              onClick={openSignInPage}
-              style={{
-                marginTop: "12px",
-                textAlign: "center",
-                fontSize: "13px",
-                color: DARK_THEME.muted,
-                cursor: "pointer"
-              }}>
-              Sign in for full access
-            </div>
+            awaitingSignIn ? (
+              <button
+                onClick={onConfirmSignedIn}
+                style={{
+                  marginTop: "12px",
+                  width: "100%",
+                  padding: "10px 16px",
+                  borderRadius: "8px",
+                  border: `1px solid ${DARK_THEME.border}`,
+                  background: DARK_THEME.panel,
+                  color: DARK_THEME.text,
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: 500
+                }}>
+                I signed in
+              </button>
+            ) : (
+              <div
+                onClick={onSignInClick}
+                style={{
+                  marginTop: "12px",
+                  textAlign: "center",
+                  fontSize: "13px",
+                  color: DARK_THEME.muted,
+                  cursor: "pointer"
+                }}>
+                Sign in for full access
+              </div>
+            )
           )}
         </div>
         {statusMessage && (
@@ -104,7 +128,7 @@ export const ActionArea = ({
               <>
                 Missing Clerk session.{" "}
                 <span
-                  onClick={openSignInPage}
+                  onClick={onSignInClick}
                   style={{
                     color: DARK_THEME.accent,
                     cursor: "pointer",
