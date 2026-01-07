@@ -19,6 +19,7 @@ if (!syncHost) {
 }
 
 let clerkClientPromise: ReturnType<typeof createClerkClient> | null = null
+// Clerk stores session JWT with keys containing this fragment (e.g., "clerk.{instance}.session.__clerk_client_jwt")
 const CLERK_STORAGE_KEY_FRAGMENT = "__clerk_client_jwt"
 let refreshPromise: Promise<void> | null = null
 
@@ -45,6 +46,7 @@ const refreshClerkClient = async (reason: string) => {
       debug.any(["auth", "clerk", "background"], "Clerk refreshed", { reason, hasSession: !!clerkClient.session })
     } catch (error) {
       console.error("[Background] Failed to refresh Clerk:", error)
+      throw error
     }
   })()
 
@@ -58,6 +60,7 @@ const refreshClerkClient = async (reason: string) => {
 async function initializeClerk() {
   try {
     const clerkClient = await getClerkClient()
+    await clerkClient.load({ standardBrowser: false })
 
     debug.any(["auth", "clerk", "background"], "Clerk initialized", {
       isSignedIn: !!clerkClient.session,
@@ -383,9 +386,33 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
         if (!clerkClient.session) {
           debug.any(["auth", "clerk", "token"], "getClerkToken: invoking refresh")
-          await refreshClerkClient("token-request")
+          try {
+            await refreshClerkClient("token-request")
+          } catch (error) {
+            debug.any(["auth", "clerk", "token"], "getClerkToken: refresh failed", {
+              error: error instanceof Error ? error.message : String(error)
+            })
+            sendResponse({
+              success: false,
+              token: null,
+              error: error instanceof Error ? error.message : "Session refresh failed"
+            })
+            return
+          }
         }
-        const token = await clerkClient.session?.getToken()
+
+        // Re-check session after refresh - may still be null if user isn't signed in
+        if (!clerkClient.session) {
+          debug.any(["auth", "clerk", "token"], "getClerkToken: no session after refresh")
+          sendResponse({
+            success: false,
+            token: null,
+            error: "No active session. Please sign in."
+          })
+          return
+        }
+
+        const token = await clerkClient.session.getToken()
 
         debug.any(["auth", "clerk", "token"], "getClerkToken: result", {
           hasToken: !!token,
