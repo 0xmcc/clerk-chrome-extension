@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useCallback, useState } from "react"
 import { detectPlatform, getPlatformLabel } from "~utils/platform"
 import { requestClerkSignOut, requestClerkAuthRefresh } from "~utils/clerk"
 import { openSignInPage } from "~utils/navigation"
+import { debug } from "~utils/debug"
 
 import type { SelectiveExporterProps } from "./types"
 import { DARK_THEME } from "./constants"
@@ -142,9 +143,19 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
   useEffect(() => {
     if (!isOpen) return
 
+    debug.any(["auth", "clerk", "panel"], "authProbe: start")
     requestClerkAuthRefresh()
       .then((result) => {
+        debug.any(["auth", "clerk", "panel"], "authProbe: response", {
+          hasSession: result.hasSession,
+          error: result.error ?? null
+        })
         setAuthStatus(result.hasSession ? "signedIn" : "signedOut")
+      })
+      .catch((e) => {
+        debug.any(["auth", "clerk", "panel"], "authProbe: error", {
+          error: e instanceof Error ? e.message : String(e)
+        })
       })
   }, [isOpen])
 

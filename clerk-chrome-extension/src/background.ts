@@ -338,18 +338,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.action === "refreshClerkAuth") {
+    debug.any(["auth", "clerk", "background"], "refreshClerkAuth: start")
     ;(async () => {
       try {
         const clerkClient = await getClerkClient()
 
+        const hasSessionBefore = !!clerkClient.session
+        debug.any(["auth", "clerk", "background"], "refreshClerkAuth: before load", { hasSessionBefore })
+
         // Hard refresh: if this fails, we must report failure (don't swallow)
         await clerkClient.load({ standardBrowser: false })
 
+        const hasSessionAfter = !!clerkClient.session
+        debug.any(["auth", "clerk", "background"], "refreshClerkAuth: after load", {
+          hasSessionAfter,
+          sessionId: clerkClient.session?.id ?? null
+        })
+
         sendResponse({
           success: true,
-          hasSession: !!clerkClient.session
+          hasSession: hasSessionAfter
         })
       } catch (error) {
+        debug.any(["auth", "clerk", "background"], "refreshClerkAuth: error", {
+          error: error instanceof Error ? error.message : String(error)
+        })
         console.error("[Background] Manual auth refresh failed:", error)
         sendResponse({
           success: false,
@@ -365,16 +378,29 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "getClerkToken") {
     getClerkClient()
       .then(async (clerkClient) => {
+        const hasSessionInitially = !!clerkClient.session
+        debug.any(["auth", "clerk", "token"], "getClerkToken: entry", { hasSessionInitially })
+
         if (!clerkClient.session) {
+          debug.any(["auth", "clerk", "token"], "getClerkToken: invoking refresh")
           await refreshClerkClient("token-request")
         }
         const token = await clerkClient.session?.getToken()
+
+        debug.any(["auth", "clerk", "token"], "getClerkToken: result", {
+          hasToken: !!token,
+          tokenLength: token?.length ?? 0
+        })
+
         sendResponse({
           success: !!token,
           token: token || null
         })
       })
       .catch((error) => {
+        debug.any(["auth", "clerk", "token"], "getClerkToken: error", {
+          error: error instanceof Error ? error.message : String(error)
+        })
         console.error("[Background] Failed to fetch Clerk token:", error)
         sendResponse({
           success: false,
