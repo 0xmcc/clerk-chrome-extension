@@ -23,6 +23,22 @@ let clerkClientPromise: ReturnType<typeof createClerkClient> | null = null
 const CLERK_STORAGE_KEY_FRAGMENT = "__clerk_client_jwt"
 let refreshPromise: Promise<void> | null = null
 
+// Check if syncHost has Clerk session cookies (what load() should read)
+const hasClerkSyncCookies = async (): Promise<boolean> => {
+  try {
+    const url = new URL(syncHost)
+    const cookies = await chrome.cookies.getAll({ domain: url.hostname })
+    return cookies.some(c => c.name.includes("__clerk") || c.name.includes("__client"))
+  } catch {
+    return false
+  }
+}
+
+const invalidateClerkClient = () => {
+  debug.any(["auth", "clerk", "background"], "Invalidating Clerk client singleton")
+  clerkClientPromise = null
+}
+
 const getClerkClient = async () => {
   if (!clerkClientPromise) {
     clerkClientPromise = createClerkClient({
@@ -41,8 +57,20 @@ const refreshClerkClient = async (reason: string) => {
 
   refreshPromise = (async () => {
     try {
-      const clerkClient = await getClerkClient()
+      let clerkClient = await getClerkClient()
       await clerkClient.load({ standardBrowser: false })
+
+      // If no session but syncHost has cookies, client is stale - recreate and retry
+      if (!clerkClient.session) {
+        const hasCookies = await hasClerkSyncCookies()
+        if (hasCookies) {
+          debug.any(["auth", "clerk", "background"], "refreshClerkClient: recreating stale client", { reason })
+          invalidateClerkClient()
+          clerkClient = await getClerkClient()
+          await clerkClient.load({ standardBrowser: false })
+        }
+      }
+
       debug.any(["auth", "clerk", "background"], "Clerk refreshed", { reason, hasSession: !!clerkClient.session })
     } catch (error) {
       console.error("[Background] Failed to refresh Clerk:", error)
@@ -344,7 +372,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     debug.any(["auth", "clerk", "background"], "refreshClerkAuth: start")
     ;(async () => {
       try {
-        const clerkClient = await getClerkClient()
+        let clerkClient = await getClerkClient()
 
         const hasSessionBefore = !!clerkClient.session
         debug.any(["auth", "clerk", "background"], "refreshClerkAuth: before load", { hasSessionBefore })
@@ -352,7 +380,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // Hard refresh: if this fails, we must report failure (don't swallow)
         await clerkClient.load({ standardBrowser: false })
 
-        const hasSessionAfter = !!clerkClient.session
+        let hasSessionAfter = !!clerkClient.session
+
+        // If no session but syncHost has cookies, client is stale - recreate and retry
+        if (!hasSessionAfter) {
+          const hasCookies = await hasClerkSyncCookies()
+          debug.any(["auth", "clerk", "background"], "refreshClerkAuth: no session, checking cookies", { hasCookies })
+
+          if (hasCookies) {
+            debug.any(["auth", "clerk", "background"], "refreshClerkAuth: cookies present, recreating client")
+            invalidateClerkClient()
+            clerkClient = await getClerkClient()
+            await clerkClient.load({ standardBrowser: false })
+            hasSessionAfter = !!clerkClient.session
+            debug.any(["auth", "clerk", "background"], "refreshClerkAuth: after recreate", { hasSessionAfter })
+          }
+        }
+
         debug.any(["auth", "clerk", "background"], "refreshClerkAuth: after load", {
           hasSessionAfter,
           sessionId: clerkClient.session?.id ?? null
