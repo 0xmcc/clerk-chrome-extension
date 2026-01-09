@@ -1,8 +1,10 @@
 import { useState } from "react"
 
 import { DARK_THEME, DEFAULT_ANALYSIS_SYSTEM_PROMPT, DEFAULT_FOLLOWUP_SYSTEM_PROMPT } from "../constants"
+import { ConversationDepthIndicator } from "../components/ConversationDepthIndicator"
 
 interface SettingsViewProps {
+  messages: Array<{ text: string; role: string }>
   analysisSystemPrompt: string
   followupSystemPrompt: string
   personalContext: string
@@ -21,6 +23,7 @@ interface SettingsViewProps {
 }
 
 export const SettingsView = ({
+  messages,
   analysisSystemPrompt,
   followupSystemPrompt,
   personalContext,
@@ -57,8 +60,13 @@ export const SettingsView = ({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
+      {/* Conversation Depth Indicator */}
+      <div style={{ paddingBottom: "16px", borderBottom: `1px solid ${DARK_THEME.borderSubtle}` }}>
+        <ConversationDepthIndicator messages={messages} />
+      </div>
+
       {/* Account Section */}
-      <div style={{ borderTop: `1px solid ${DARK_THEME.borderSubtle}`, paddingTop: "20px" }}>
+      <div>
         <label
           style={{
             display: "block",
