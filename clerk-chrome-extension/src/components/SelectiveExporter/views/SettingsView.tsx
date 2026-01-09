@@ -16,6 +16,8 @@ interface SettingsViewProps {
   buildAnalysisSystemPrompt: () => string
   onLogout: () => Promise<{ success: boolean; error?: string }>
   setStatusMessage: (message: string) => void
+  isSignedOut: boolean
+  onSignInClick: () => void
 }
 
 export const SettingsView = ({
@@ -31,7 +33,9 @@ export const SettingsView = ({
   onFollowupLockToggle,
   buildAnalysisSystemPrompt,
   onLogout,
-  setStatusMessage
+  setStatusMessage,
+  isSignedOut,
+  onSignInClick
 }: SettingsViewProps) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
@@ -52,7 +56,61 @@ export const SettingsView = ({
   }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {/* Analysis System Prompt */}
+
+      {/* Account Section */}
+      <div style={{ borderTop: `1px solid ${DARK_THEME.borderSubtle}`, paddingTop: "20px" }}>
+        <label
+          style={{
+            display: "block",
+            fontSize: "13px",
+            fontWeight: 600,
+            color: DARK_THEME.text,
+            marginBottom: "12px"
+          }}>
+          Account
+        </label>
+        {isSignedOut ? (
+          <button
+            onClick={onSignInClick}
+            style={{
+              width: "100%",
+              padding: "10px 16px",
+              borderRadius: "6px",
+              border: `1px solid ${DARK_THEME.borderSubtle}`,
+              background: DARK_THEME.accent,
+              color: "#fff",
+              fontSize: "13px",
+              fontWeight: 500,
+              cursor: "pointer"
+            }}>
+            Sign in
+          </button>
+        ) : (
+          <button
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            style={{
+              width: "100%",
+              padding: "10px 16px",
+              borderRadius: "6px",
+              border: `1px solid ${DARK_THEME.borderSubtle}`,
+              background: DARK_THEME.surface,
+              color: DARK_THEME.text,
+              fontSize: "13px",
+              fontWeight: 500,
+              cursor: isLoggingOut ? "not-allowed" : "pointer",
+              opacity: isLoggingOut ? 0.6 : 1
+            }}>
+            {isLoggingOut ? "Signing out..." : "Log out"}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
+      {/* Analysis System Prompt
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
           <label
@@ -125,7 +183,7 @@ export const SettingsView = ({
         </div>
       </div>
 
-      {/* Follow-up System Prompt */}
+       Follow-up System Prompt 
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
           <label
@@ -198,7 +256,7 @@ export const SettingsView = ({
         </div>
       </div>
 
-      {/* Personal Context JSON */}
+       Personal Context JSON
       <div>
         <label
           style={{
@@ -231,38 +289,4 @@ export const SettingsView = ({
         <div style={{ fontSize: "11px", color: DARK_THEME.muted, marginTop: "6px" }}>
           Add JSON context about yourself that will be included in analysis prompts
         </div>
-      </div>
-
-      {/* Account Section */}
-      <div style={{ borderTop: `1px solid ${DARK_THEME.borderSubtle}`, paddingTop: "20px" }}>
-        <label
-          style={{
-            display: "block",
-            fontSize: "13px",
-            fontWeight: 600,
-            color: DARK_THEME.text,
-            marginBottom: "12px"
-          }}>
-          Account
-        </label>
-        <button
-          onClick={handleLogout}
-          disabled={isLoggingOut}
-          style={{
-            width: "100%",
-            padding: "10px 16px",
-            borderRadius: "6px",
-            border: `1px solid ${DARK_THEME.borderSubtle}`,
-            background: DARK_THEME.surface,
-            color: DARK_THEME.text,
-            fontSize: "13px",
-            fontWeight: 500,
-            cursor: isLoggingOut ? "not-allowed" : "pointer",
-            opacity: isLoggingOut ? 0.6 : 1
-          }}>
-          {isLoggingOut ? "Signing out..." : "Log out"}
-        </button>
-      </div>
-    </div>
-  )
-}
+      </div> */}

@@ -268,6 +268,8 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
                 buildAnalysisSystemPrompt={buildAnalysisSystemPrompt}
                 onLogout={handleLogout}
                 setStatusMessage={setStatusMessage}
+                isSignedOut={isSignedOut}
+                onSignInClick={handleSignInClick}
               />
             )}
           </div>
