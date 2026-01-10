@@ -1,15 +1,17 @@
 {
-  "name": "Universal Basic Intelligence",
-  "displayName": "Universal Basic Intelligence",
+  "name": "MomentumAI by UBI Studio",
+  "displayName": "MomentumAI by UBI Studio",
   "version": "0.0.1",
-  "description": "Export your personal data .",
-  "author": "Universal Basic Intelligence <markocalvocruz@gmail.com>",
+  "description": "Export & analyze your AI chats. Save chats to cloud, get AI-powered insights, copy as Markdown or JSON.",
+  "author": "UBI Studios <markocalvocruz@gmail.com>",
   "contributors": [
     "Marko Calvo Cruz <markocalvocruz@gmail.com>"
   ],
   "scripts": {
     "dev": "plasmo dev",
     "build": "plasmo build",
+    "build:store": "plasmo build && node -e \"const fs=require('fs');const m='build/chrome-mv3-prod/manifest.json';const j=JSON.parse(fs.readFileSync(m));delete j.key;fs.writeFileSync(m,JSON.stringify(j,null,2))\"",
+
     "package": "plasmo package",
     "web:dev": "vite --config vite.web.config.ts",
     "web:build": "vite build --config vite.web.config.ts",
