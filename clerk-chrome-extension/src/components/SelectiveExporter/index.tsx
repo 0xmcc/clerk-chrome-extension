@@ -255,6 +255,7 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
               />
             ) : (
               <SettingsView
+                messages={selectedMessages}
                 analysisSystemPrompt={analysisSystemPrompt}
                 followupSystemPrompt={followupSystemPrompt}
                 personalContext={personalContext}
