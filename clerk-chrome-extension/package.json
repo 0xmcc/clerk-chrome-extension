@@ -53,8 +53,11 @@
       "https://chatgpt.com/*",
       "https://claude.ai/*",
       "https://*.claude.ai/*",
+      "https://x.com/*",
+      "https://twitter.com/*",
       "$PLASMO_PUBLIC_CLERK_SYNC_HOST/*",
-      "$CLERK_FRONTEND_API/*"
+      "$CLERK_FRONTEND_API/*",
+      "$PLASMO_PUBLIC_SUPABASE_URL/*"
     ]
   }
 }
