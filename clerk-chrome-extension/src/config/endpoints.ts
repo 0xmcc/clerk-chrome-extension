@@ -318,15 +318,26 @@ export function extractChatGPTAuthToken(headers: Record<string, string> | Header
 export const HOST_PATTERNS = {
   CHATGPT: ["https://chat.openai.com/*", "https://chatgpt.com/*"],
   CLAUDE: ["https://claude.ai/*", "https://*.claude.ai/*"],
+  TWITTER: ["https://x.com/*", "https://twitter.com/*"],
 } as const
 
-export const ALL_HOST_PATTERNS = [...HOST_PATTERNS.CHATGPT, ...HOST_PATTERNS.CLAUDE] as const
+export const ALL_HOST_PATTERNS = [
+  ...HOST_PATTERNS.CHATGPT,
+  ...HOST_PATTERNS.CLAUDE,
+  ...HOST_PATTERNS.TWITTER,
+] as const
 
 /**
  * Check if a URL string matches target sites.
  */
 export function isTargetSite(url: string): boolean {
-  return url.includes("chat.openai.com") || url.includes("chatgpt.com") || url.includes("claude.ai")
+  return (
+    url.includes("chat.openai.com") ||
+    url.includes("chatgpt.com") ||
+    url.includes("claude.ai") ||
+    url.includes("x.com") ||
+    url.includes("twitter.com")
+  )
 }
 
 // =============================================================================
