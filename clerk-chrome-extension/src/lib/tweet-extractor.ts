@@ -96,6 +96,65 @@ function extractAuthorHandle(article: Element): string {
 }
 
 /**
+ * Extract the author's display name from the tweet header.
+ * Twitter shows the display name in a bold span near the user profile link.
+ */
+function extractAuthorDisplayName(article: Element): string {
+  // Twitter wraps the display name in div[data-testid="User-Name"]
+  const userNameContainer = article.querySelector('[data-testid="User-Name"]')
+  if (userNameContainer) {
+    // The display name is typically the first link's text content
+    const firstLink = userNameContainer.querySelector('a[role="link"]')
+    if (firstLink) {
+      // Get the text but exclude the @handle part
+      const spans = firstLink.querySelectorAll("span")
+      for (const span of spans) {
+        const text = span.textContent?.trim()
+        if (text && !text.startsWith("@")) {
+          return text
+        }
+      }
+    }
+  }
+
+  // Fallback: look for bold-styled span near the user link
+  const userLinks = article.querySelectorAll('a[href*="/"][role="link"]')
+  for (const link of userLinks) {
+    const href = (link as HTMLAnchorElement).pathname
+    if (href.match(/^\/@?[A-Za-z0-9_]+$/)) {
+      const span = link.querySelector("span")
+      if (span) {
+        const text = span.textContent?.trim()
+        if (text && !text.startsWith("@")) return text
+      }
+    }
+  }
+
+  return ""
+}
+
+/**
+ * Extract the author's profile avatar URL from the tweet.
+ * Twitter uses circular img elements with pbs.twimg.com/profile_images sources.
+ */
+function extractAuthorAvatarUrl(article: Element): string {
+  // Look for profile image within or near the article
+  const avatarImg = article.querySelector('img[src*="pbs.twimg.com/profile_images"]')
+  if (avatarImg) {
+    return (avatarImg as HTMLImageElement).src
+  }
+
+  // Fallback: look in the avatar container (data-testid="Tweet-User-Avatar")
+  const avatarContainer = article.querySelector('[data-testid="Tweet-User-Avatar"]')
+  if (avatarContainer) {
+    const img = avatarContainer.querySelector("img")
+    if (img) return img.src
+  }
+
+  return ""
+}
+
+/**
  * Extract tweet text from the article's tweetText div.
  */
 function extractTweetText(article: Element): string {
@@ -277,6 +336,8 @@ export function extractTweetData(article: Element): TweetData | null {
     tweet_id,
     tweet_text: extractTweetText(article),
     author_handle: extractAuthorHandle(article),
+    author_display_name: extractAuthorDisplayName(article),
+    author_avatar_url: extractAuthorAvatarUrl(article),
     timestamp: extractTimestamp(article),
     source_url: extractSourceUrl(article),
     media: extractMedia(article),

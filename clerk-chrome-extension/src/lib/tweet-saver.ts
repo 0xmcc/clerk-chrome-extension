@@ -74,6 +74,8 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
       tweet_id: tweetData.tweet_id,
       tweet_text: tweetData.tweet_text,
       author_handle: tweetData.author_handle,
+      author_display_name: tweetData.author_display_name,
+      author_avatar_url: tweetData.author_avatar_url,
       timestamp: tweetData.timestamp,
       source_url: tweetData.source_url,
       media: tweetData.media,

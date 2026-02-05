@@ -2,6 +2,8 @@
 -- Preserves existing data (tweet_id, tweet_text, author_handle, timestamp, media_urls, created_at)
 
 -- New columns
+ALTER TABLE public.tweets ADD COLUMN IF NOT EXISTS author_display_name text;
+ALTER TABLE public.tweets ADD COLUMN IF NOT EXISTS author_avatar_url text;
 ALTER TABLE public.tweets ADD COLUMN IF NOT EXISTS source_url text;
 ALTER TABLE public.tweets ADD COLUMN IF NOT EXISTS media jsonb DEFAULT '[]';
 ALTER TABLE public.tweets ADD COLUMN IF NOT EXISTS link_cards jsonb DEFAULT '[]';
