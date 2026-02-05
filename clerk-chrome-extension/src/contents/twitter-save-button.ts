@@ -382,49 +382,73 @@ function autoScrollAndSave(
     let lastScrollY = window.scrollY
     let stuckAtTopCount = 0
 
-    // Save all currently visible articles that haven't been saved yet
-    async function saveVisibleArticles() {
+    // Queue of tweet data to save (extracted immediately, saved async)
+    const saveQueue: { tweetData: ReturnType<typeof extractTweetData>, article: Element }[] = []
+    let savingInProgress = false
+
+    // Extract all currently visible articles into the save queue
+    function extractVisibleArticles() {
       const articles = document.querySelectorAll("article")
       for (const article of articles) {
-        if (signal.aborted) return
-
         const tweetId = getTweetIdFromArticle(article)
         if (!tweetId || savedTweetIds.has(tweetId)) continue
 
         savedTweetIds.add(tweetId)
 
-        try {
-          const tweetData = extractTweetData(article)
-          if (!tweetData) {
-            stats.skipped++
-            continue
-          }
+        const tweetData = extractTweetData(article)
+        if (!tweetData) {
+          stats.skipped++
+          continue
+        }
 
-          await saveTweet(tweetData)
+        console.log(`[TweetSaver] Queued tweet ${tweetId} (${tweetData.tweet_text?.slice(0, 40)}...)`)
+        saveQueue.push({ tweetData, article })
+      }
+    }
+
+    // Process the save queue without blocking scroll
+    async function processSaveQueue() {
+      if (savingInProgress) return
+      savingInProgress = true
+
+      while (saveQueue.length > 0) {
+        if (signal.aborted) break
+        const item = saveQueue.shift()!
+
+        try {
+          await saveTweet(item.tweetData)
           stats.saved++
 
-          // Update per-tweet button if it exists
-          const perBtn = article.querySelector(`[${BUTTON_ATTR}]`) as HTMLButtonElement | null
+          // Update per-tweet button if it still exists in DOM
+          const perBtn = item.article.querySelector?.(`[${BUTTON_ATTR}]`) as HTMLButtonElement | null
           if (perBtn) setButtonState(perBtn, "saved")
         } catch (err) {
           stats.failed++
           console.error("[TweetSaver] Scroll-save error:", err)
         }
       }
+
+      savingInProgress = false
     }
 
-    const timer = setInterval(async () => {
+    const timer = setInterval(() => {
       if (signal.aborted) {
         clearInterval(timer)
-        resolve(stats)
+        // Drain remaining queue before resolving
+        processSaveQueue().then(() => resolve(stats))
         return
       }
 
-      // Save whatever is currently visible BEFORE scrolling further
-      await saveVisibleArticles()
+      // Extract tweets from DOM immediately (fast, sync-ish)
+      extractVisibleArticles()
+
+      // Kick off async saves without blocking the scroll
+      processSaveQueue()
 
       // Update button with live stats
-      btn.textContent = `⏹ Stop (${stats.saved} saved)`
+      const queued = saveQueue.length
+      const queueLabel = queued > 0 ? ` (${queued} queued)` : ""
+      btn.textContent = `⏹ Stop (${stats.saved} saved${queueLabel})`
 
       // Scroll down
       window.scrollBy({ top: scrollStep, behavior: "smooth" })
@@ -436,7 +460,7 @@ function autoScrollAndSave(
         if (stuckAtTopCount >= 3) {
           console.log("[TweetSaver] Scroll reset detected, stopping auto-scroll")
           clearInterval(timer)
-          resolve(stats)
+          processSaveQueue().then(() => resolve(stats))
           return
         }
         window.scrollTo({ top: lastScrollY + scrollStep, behavior: "smooth" })
@@ -445,24 +469,23 @@ function autoScrollAndSave(
         lastScrollY = Math.max(lastScrollY, currentScrollY)
       }
 
-      // Check for new articles to detect end of list
-      const currentArticleCount = document.querySelectorAll("article").length
+      // Check for new unique tweets to detect end of list
       const uniqueCount = savedTweetIds.size
       if (uniqueCount > lastArticleCount) {
         lastArticleCount = uniqueCount
         idleStart = Date.now()
       } else if (Date.now() - idleStart >= idleMs) {
         // No new tweets found — we've reached the end
-        // Do one final save pass
-        await saveVisibleArticles()
+        console.log(`[TweetSaver] End of list detected. ${uniqueCount} unique tweets found.`)
+        extractVisibleArticles() // one final pass
         clearInterval(timer)
-        resolve(stats)
+        processSaveQueue().then(() => resolve(stats))
       }
     }, scrollInterval)
 
     signal.addEventListener("abort", () => {
       clearInterval(timer)
-      resolve(stats)
+      processSaveQueue().then(() => resolve(stats))
     })
   })
 }

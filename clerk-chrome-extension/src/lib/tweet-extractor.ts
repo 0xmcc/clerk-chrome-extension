@@ -171,12 +171,27 @@ function extractTweetText(article: Element): string {
 
 /**
  * Extract timestamp from the article.
+ * Tries the datetime attribute first, then falls back to parsing the text content.
  */
 function extractTimestamp(article: Element): string | null {
-  const timeEl = article.querySelector("time")
-  if (timeEl) {
-    return timeEl.getAttribute("datetime") || null
+  // Try all time elements (there can be multiple — retweet header vs actual tweet)
+  const timeEls = article.querySelectorAll("time")
+  for (const timeEl of timeEls) {
+    const dt = timeEl.getAttribute("datetime")
+    if (dt) return dt
   }
+
+  // Fallback: extract from the permalink URL's time element text
+  // Twitter sometimes shows "Jan 15" or "3h" — not ideal but better than null
+  for (const timeEl of timeEls) {
+    const text = timeEl.textContent?.trim()
+    if (text) {
+      // Try to parse relative/absolute date text
+      const parsed = Date.parse(text)
+      if (!isNaN(parsed)) return new Date(parsed).toISOString()
+    }
+  }
+
   return null
 }
 
