@@ -355,17 +355,22 @@ let scrollAbortController: AbortController | null = null
 /**
  * Auto-scrolls the page to load all tweets via infinite scroll.
  * Resolves when no new tweets appear for `idleMs` or when aborted.
+ *
+ * Twitter's virtual DOM can be slow to load — we use a generous idle
+ * timeout (8s) and track scroll position to detect if Twitter resets us.
  */
 function autoScrollToLoadAll(
   btn: HTMLButtonElement,
   signal: AbortSignal,
-  idleMs = 3000,
-  scrollStep = 600,
-  scrollInterval = 400
+  idleMs = 8000,
+  scrollStep = 1200,
+  scrollInterval = 500
 ): Promise<void> {
   return new Promise<void>((resolve) => {
     let lastCount = document.querySelectorAll("article").length
     let idleStart = Date.now()
+    let lastScrollY = window.scrollY
+    let stuckAtTopCount = 0
 
     const timer = setInterval(() => {
       if (signal.aborted) {
@@ -374,7 +379,26 @@ function autoScrollToLoadAll(
         return
       }
 
+      // Scroll down
       window.scrollBy({ top: scrollStep, behavior: "smooth" })
+
+      // Check if Twitter reset our scroll position to the top
+      const currentScrollY = window.scrollY
+      if (currentScrollY < lastScrollY && currentScrollY < 500) {
+        stuckAtTopCount++
+        if (stuckAtTopCount >= 3) {
+          // Twitter keeps pushing us back to top — stop gracefully
+          console.log("[TweetSaver] Scroll reset detected, stopping auto-scroll")
+          clearInterval(timer)
+          resolve()
+          return
+        }
+        // Scroll back down to where we were
+        window.scrollTo({ top: lastScrollY + scrollStep, behavior: "smooth" })
+      } else {
+        stuckAtTopCount = 0
+        lastScrollY = Math.max(lastScrollY, currentScrollY)
+      }
 
       const currentCount = document.querySelectorAll("article").length
       btn.textContent = `⏹ Stop (${currentCount} tweets)`
@@ -383,7 +407,7 @@ function autoScrollToLoadAll(
         lastCount = currentCount
         idleStart = Date.now()
       } else if (Date.now() - idleStart >= idleMs) {
-        // No new tweets for idleMs — we've reached the end
+        // No new tweets for idleMs — we've likely reached the end
         clearInterval(timer)
         resolve()
       }
