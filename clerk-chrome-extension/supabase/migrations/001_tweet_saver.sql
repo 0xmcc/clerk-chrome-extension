@@ -20,29 +20,11 @@ ALTER TABLE public.tweets ADD COLUMN IF NOT EXISTS user_id text;
 CREATE INDEX IF NOT EXISTS idx_tweets_user_id ON public.tweets (user_id);
 CREATE INDEX IF NOT EXISTS idx_tweets_conversation_id ON public.tweets (conversation_id);
 
--- Enable RLS
-ALTER TABLE public.tweets ENABLE ROW LEVEL SECURITY;
+-- Disable RLS for now (no auth yet — re-enable when Clerk JWT is wired up)
+ALTER TABLE public.tweets DISABLE ROW LEVEL SECURITY;
 
--- RLS policies: users can only see/insert/update their own tweets
--- Uses auth.jwt()->>'sub' which maps to the Clerk user ID
-
--- Drop existing policies if re-running migration
-DROP POLICY IF EXISTS "Users can view their own tweets" ON public.tweets;
-DROP POLICY IF EXISTS "Users can insert their own tweets" ON public.tweets;
-DROP POLICY IF EXISTS "Users can update their own tweets" ON public.tweets;
-
-CREATE POLICY "Users can view their own tweets"
-  ON public.tweets
-  FOR SELECT
-  USING (user_id = auth.jwt()->>'sub');
-
-CREATE POLICY "Users can insert their own tweets"
-  ON public.tweets
-  FOR INSERT
-  WITH CHECK (user_id = auth.jwt()->>'sub');
-
-CREATE POLICY "Users can update their own tweets"
-  ON public.tweets
-  FOR UPDATE
-  USING (user_id = auth.jwt()->>'sub')
-  WITH CHECK (user_id = auth.jwt()->>'sub');
+-- TODO: Re-enable RLS + policies once Clerk auth covers Twitter tabs
+-- ALTER TABLE public.tweets ENABLE ROW LEVEL SECURITY;
+-- CREATE POLICY "Users can view their own tweets" ON public.tweets FOR SELECT USING (user_id = auth.jwt()->>'sub');
+-- CREATE POLICY "Users can insert their own tweets" ON public.tweets FOR INSERT WITH CHECK (user_id = auth.jwt()->>'sub');
+-- CREATE POLICY "Users can update their own tweets" ON public.tweets FOR UPDATE USING (user_id = auth.jwt()->>'sub') WITH CHECK (user_id = auth.jwt()->>'sub');
