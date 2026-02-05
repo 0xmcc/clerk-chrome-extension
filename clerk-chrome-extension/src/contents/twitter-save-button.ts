@@ -353,70 +353,116 @@ async function bulkSaveArticles(
 let scrollAbortController: AbortController | null = null
 
 /**
- * Auto-scrolls the page to load all tweets via infinite scroll.
- * Resolves when no new tweets appear for `idleMs` or when aborted.
+ * Auto-scrolls the page, saving tweets AS THEY APPEAR in the viewport.
  *
- * Twitter's virtual DOM can be slow to load — we use a generous idle
- * timeout (8s) and track scroll position to detect if Twitter resets us.
+ * Twitter's virtual DOM only keeps ~20-30 tweets rendered at a time,
+ * recycling older ones as you scroll. So we must extract and save each
+ * tweet while it's still in the DOM, not after scrolling finishes.
+ *
+ * Returns stats about what was saved during the scroll.
  */
-function autoScrollToLoadAll(
+interface ScrollSaveStats {
+  saved: number
+  skipped: number
+  failed: number
+}
+
+function autoScrollAndSave(
   btn: HTMLButtonElement,
   signal: AbortSignal,
   idleMs = 8000,
   scrollStep = 1200,
-  scrollInterval = 500
-): Promise<void> {
-  return new Promise<void>((resolve) => {
-    let lastCount = document.querySelectorAll("article").length
+  scrollInterval = 600
+): Promise<ScrollSaveStats> {
+  return new Promise<ScrollSaveStats>((resolve) => {
+    const stats: ScrollSaveStats = { saved: 0, skipped: 0, failed: 0 }
+    const savedTweetIds = new Set<string>()
+    let lastArticleCount = 0
     let idleStart = Date.now()
     let lastScrollY = window.scrollY
     let stuckAtTopCount = 0
 
-    const timer = setInterval(() => {
+    // Save all currently visible articles that haven't been saved yet
+    async function saveVisibleArticles() {
+      const articles = document.querySelectorAll("article")
+      for (const article of articles) {
+        if (signal.aborted) return
+
+        const tweetId = getTweetIdFromArticle(article)
+        if (!tweetId || savedTweetIds.has(tweetId)) continue
+
+        savedTweetIds.add(tweetId)
+
+        try {
+          const tweetData = extractTweetData(article)
+          if (!tweetData) {
+            stats.skipped++
+            continue
+          }
+
+          await saveTweet(tweetData)
+          stats.saved++
+
+          // Update per-tweet button if it exists
+          const perBtn = article.querySelector(`[${BUTTON_ATTR}]`) as HTMLButtonElement | null
+          if (perBtn) setButtonState(perBtn, "saved")
+        } catch (err) {
+          stats.failed++
+          console.error("[TweetSaver] Scroll-save error:", err)
+        }
+      }
+    }
+
+    const timer = setInterval(async () => {
       if (signal.aborted) {
         clearInterval(timer)
-        resolve()
+        resolve(stats)
         return
       }
+
+      // Save whatever is currently visible BEFORE scrolling further
+      await saveVisibleArticles()
+
+      // Update button with live stats
+      btn.textContent = `⏹ Stop (${stats.saved} saved)`
 
       // Scroll down
       window.scrollBy({ top: scrollStep, behavior: "smooth" })
 
-      // Check if Twitter reset our scroll position to the top
+      // Check if Twitter reset scroll position to top
       const currentScrollY = window.scrollY
       if (currentScrollY < lastScrollY && currentScrollY < 500) {
         stuckAtTopCount++
         if (stuckAtTopCount >= 3) {
-          // Twitter keeps pushing us back to top — stop gracefully
           console.log("[TweetSaver] Scroll reset detected, stopping auto-scroll")
           clearInterval(timer)
-          resolve()
+          resolve(stats)
           return
         }
-        // Scroll back down to where we were
         window.scrollTo({ top: lastScrollY + scrollStep, behavior: "smooth" })
       } else {
         stuckAtTopCount = 0
         lastScrollY = Math.max(lastScrollY, currentScrollY)
       }
 
-      const currentCount = document.querySelectorAll("article").length
-      btn.textContent = `⏹ Stop (${currentCount} tweets)`
-
-      if (currentCount > lastCount) {
-        lastCount = currentCount
+      // Check for new articles to detect end of list
+      const currentArticleCount = document.querySelectorAll("article").length
+      const uniqueCount = savedTweetIds.size
+      if (uniqueCount > lastArticleCount) {
+        lastArticleCount = uniqueCount
         idleStart = Date.now()
       } else if (Date.now() - idleStart >= idleMs) {
-        // No new tweets for idleMs — we've likely reached the end
+        // No new tweets found — we've reached the end
+        // Do one final save pass
+        await saveVisibleArticles()
         clearInterval(timer)
-        resolve()
+        resolve(stats)
       }
     }, scrollInterval)
 
-    // Also resolve immediately if signal fires
     signal.addEventListener("abort", () => {
       clearInterval(timer)
-      resolve()
+      resolve(stats)
     })
   })
 }
@@ -477,22 +523,26 @@ function injectBulkButton(): void {
     // Listen for Escape key
     document.addEventListener("keydown", handleEscape)
 
-    // Auto-scroll
-    await autoScrollToLoadAll(scrollSaveBtn, signal)
+    // Auto-scroll AND save as we go (Twitter recycles DOM elements)
+    const stats = await autoScrollAndSave(scrollSaveBtn, signal)
 
     // Cleanup scroll state
     document.removeEventListener("keydown", handleEscape)
     scrollAbortController = null
     scrollSaveBtn.classList.remove("scrolling")
 
-    // Scroll back to top before saving
-    window.scrollTo({ top: 0, behavior: "smooth" })
-    await new Promise((r) => setTimeout(r, 600))
+    // Show results
+    const parts = [`✓ ${stats.saved} saved`]
+    if (stats.skipped) parts.push(`${stats.skipped} skipped`)
+    if (stats.failed) parts.push(`${stats.failed} failed`)
+    scrollSaveBtn.textContent = parts.join(", ")
 
-    // Now save everything
-    const totalFound = document.querySelectorAll("article").length
-    console.log(`[TweetSaver] Scroll complete. ${totalFound} tweets found. Starting save…`)
-    await bulkSaveArticles(scrollSaveBtn, "Scroll & Save All")
+    console.log(`[TweetSaver] Scroll & Save complete:`, stats)
+
+    // Reset button text after a few seconds
+    setTimeout(() => {
+      scrollSaveBtn.textContent = "Scroll & Save All"
+    }, 5000)
 
     // Re-enable the other button
     saveAllBtn.disabled = false
