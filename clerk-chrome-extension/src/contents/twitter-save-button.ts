@@ -22,10 +22,9 @@ export const config: PlasmoCSConfig = {
 // SVG icons
 // ---------------------------------------------------------------------------
 
-// Cloud-upload icon (distinct from Twitter's native bookmark icon)
-const SAVE_OUTLINE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V8m0 0l-3 3m3-3l3 3"/><path d="M20 16.7A4.5 4.5 0 0 0 17.5 8h-1.13A7 7 0 1 0 4 14.5"/></svg>`
+const BOOKMARK_OUTLINE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>`
 
-const SAVE_FILLED = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V8m0 0l-3 3m3-3l3 3"/><path d="M20 16.7A4.5 4.5 0 0 0 17.5 8h-1.13A7 7 0 1 0 4 14.5"/></svg>`
+const BOOKMARK_FILLED = `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>`
 
 // ---------------------------------------------------------------------------
 // CSS styles (injected once)
@@ -93,22 +92,22 @@ function setButtonState(btn: HTMLButtonElement, state: ButtonState): void {
 
   switch (state) {
     case "default":
-      btn.innerHTML = SAVE_OUTLINE
-      btn.title = "Save to Supabase"
+      btn.innerHTML = BOOKMARK_OUTLINE
+      btn.title = "Save tweet"
       break
     case "saving":
       btn.classList.add("saving")
-      btn.innerHTML = SAVE_OUTLINE
+      btn.innerHTML = BOOKMARK_OUTLINE
       btn.title = "Saving..."
       break
     case "saved":
       btn.classList.add("saved")
-      btn.innerHTML = SAVE_FILLED
-      btn.title = "Saved to Supabase"
+      btn.innerHTML = BOOKMARK_FILLED
+      btn.title = "Tweet saved"
       break
     case "error":
       btn.classList.add("error")
-      btn.innerHTML = SAVE_OUTLINE
+      btn.innerHTML = BOOKMARK_OUTLINE
       btn.title = "Save failed — click to retry"
       // Revert to default after animation
       setTimeout(() => {
@@ -295,209 +294,6 @@ function init(): void {
     processAllArticles()
     scheduleBatchCheck()
   }, 5000)
-}
-
-// ---------------------------------------------------------------------------
-// Bulk Save button for Bookmarks pages
-// ---------------------------------------------------------------------------
-
-const BULK_BTN_ID = "__tweet-saver-bulk-btn"
-const BULK_PROGRESS_ID = "__tweet-saver-bulk-progress"
-
-function injectBulkStyles(): void {
-  const id = "__tweet-saver-bulk-styles"
-  if (document.getElementById(id)) return
-
-  const style = document.createElement("style")
-  style.id = id
-  style.textContent = `
-    .tweet-saver-bulk-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      border: 1px solid rgba(29, 155, 240, 0.4);
-      border-radius: 9999px;
-      background: transparent;
-      color: rgb(29, 155, 240);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: background-color 0.2s, border-color 0.2s;
-      white-space: nowrap;
-    }
-    .tweet-saver-bulk-btn:hover {
-      background-color: rgba(29, 155, 240, 0.1);
-      border-color: rgb(29, 155, 240);
-    }
-    .tweet-saver-bulk-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .tweet-saver-bulk-btn.running {
-      border-color: rgba(29, 155, 240, 0.6);
-      background-color: rgba(29, 155, 240, 0.05);
-    }
-    .tweet-saver-bulk-progress {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 13px;
-      color: rgb(113, 118, 123);
-      margin-left: 8px;
-    }
-  `
-  document.head.appendChild(style)
-}
-
-function isBookmarksPage(): boolean {
-  return /\/(i\/bookmarks|[A-Za-z0-9_]+\/bookmarks)/.test(window.location.pathname)
-}
-
-function getAllVisibleArticles(): Element[] {
-  return Array.from(document.querySelectorAll("article"))
-}
-
-async function bulkSaveAllVisible(btn: HTMLButtonElement): Promise<void> {
-  btn.disabled = true
-  btn.classList.add("running")
-
-  let progressEl = document.getElementById(BULK_PROGRESS_ID)
-  if (!progressEl) {
-    progressEl = document.createElement("span")
-    progressEl.id = BULK_PROGRESS_ID
-    progressEl.className = "tweet-saver-bulk-progress"
-    btn.parentElement?.appendChild(progressEl)
-  }
-
-  const articles = getAllVisibleArticles()
-  const total = articles.length
-  let saved = 0
-  let skipped = 0
-  let failed = 0
-
-  progressEl.textContent = `0/${total}…`
-
-  for (const article of articles) {
-    try {
-      const tweetData = extractTweetData(article)
-      if (!tweetData) {
-        skipped++
-        continue
-      }
-
-      await saveTweet(tweetData)
-      saved++
-
-      // Update per-tweet button state if it exists
-      const perBtn = article.querySelector(`[${BUTTON_ATTR}]`) as HTMLButtonElement | null
-      if (perBtn) setButtonState(perBtn, "saved")
-    } catch (err) {
-      failed++
-      console.error("[TweetSaver] Bulk save error:", err)
-    }
-
-    progressEl.textContent = `${saved + skipped + failed}/${total}…`
-  }
-
-  progressEl.textContent = `✓ ${saved} saved` + (skipped ? `, ${skipped} skipped` : "") + (failed ? `, ${failed} failed` : "")
-  btn.textContent = "Save All ↑"
-  btn.disabled = false
-  btn.classList.remove("running")
-
-  // Clear progress after a few seconds
-  setTimeout(() => {
-    if (progressEl) progressEl.textContent = ""
-  }, 5000)
-}
-
-function injectBulkSaveButton(): void {
-  if (!isBookmarksPage()) return
-  if (document.getElementById(BULK_BTN_ID)) return
-
-  injectBulkStyles()
-
-  // Find the bookmarks header area — Twitter uses h2 for page titles
-  // We'll inject right after the header or at the top of the timeline
-  const header = document.querySelector('[data-testid="primaryColumn"] h2')
-    || document.querySelector('[data-testid="primaryColumn"] [role="heading"]')
-
-  if (!header) {
-    // Retry — page might still be loading
-    setTimeout(injectBulkSaveButton, 1000)
-    return
-  }
-
-  const headerContainer = header.closest('[data-testid="cellInnerDiv"]')
-    || header.parentElement?.parentElement
-
-  if (!headerContainer) return
-
-  const wrapper = document.createElement("div")
-  wrapper.style.display = "flex"
-  wrapper.style.alignItems = "center"
-  wrapper.style.padding = "8px 16px"
-  wrapper.style.borderBottom = "1px solid rgb(47, 51, 54)"
-
-  const btn = document.createElement("button")
-  btn.id = BULK_BTN_ID
-  btn.className = "tweet-saver-bulk-btn"
-  btn.textContent = "Save All ↑"
-  btn.title = "Save all visible tweets to Supabase"
-  btn.addEventListener("click", () => bulkSaveAllVisible(btn))
-
-  wrapper.appendChild(btn)
-
-  // Insert after the header
-  if (headerContainer.nextSibling) {
-    headerContainer.parentNode?.insertBefore(wrapper, headerContainer.nextSibling)
-  } else {
-    headerContainer.parentNode?.appendChild(wrapper)
-  }
-}
-
-function removeBulkSaveButton(): void {
-  const btn = document.getElementById(BULK_BTN_ID)
-  if (btn) btn.closest("div")?.remove()
-  const progress = document.getElementById(BULK_PROGRESS_ID)
-  if (progress) progress.remove()
-}
-
-// ---------------------------------------------------------------------------
-// Init
-// ---------------------------------------------------------------------------
-
-function init(): void {
-  console.log("[TweetSaver] Initializing tweet save buttons")
-  injectStyles()
-  processAllArticles()
-  startObserver()
-
-  // Bookmarks bulk save button
-  if (isBookmarksPage()) {
-    injectBulkSaveButton()
-  }
-
-  // Initial batch check after a short delay to let buttons render
-  setTimeout(batchCheckVisibleTweets, 2000)
-
-  // Periodic check for tweets that may have been loaded via infinite scroll
-  setInterval(() => {
-    processAllArticles()
-    scheduleBatchCheck()
-  }, 5000)
-
-  // Watch for SPA navigation (bookmarks page entry/exit)
-  let lastPath = window.location.pathname
-  setInterval(() => {
-    if (window.location.pathname !== lastPath) {
-      lastPath = window.location.pathname
-      if (isBookmarksPage()) {
-        setTimeout(injectBulkSaveButton, 500)
-      } else {
-        removeBulkSaveButton()
-      }
-    }
-  }, 1000)
 }
 
 // Start when DOM is ready
