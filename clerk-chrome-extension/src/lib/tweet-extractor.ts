@@ -26,6 +26,8 @@ export interface TweetData {
   tweet_id: string
   tweet_text: string
   author_handle: string
+  author_display_name: string
+  author_avatar_url: string
   timestamp: string | null
   source_url: string
   media: TweetMedia[]

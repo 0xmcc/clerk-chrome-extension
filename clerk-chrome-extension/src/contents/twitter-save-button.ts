@@ -103,9 +103,16 @@ function injectStyles(): void {
     .tweet-saver-bulk-btn.done {
       background-color: rgb(0, 186, 124);
     }
+    .tweet-saver-bulk-btn.scrolling {
+      background-color: rgb(249, 24, 128);
+    }
+    .tweet-saver-bulk-btn.scrolling:hover {
+      background-color: rgb(220, 20, 110);
+    }
     .tweet-saver-bulk-container {
       display: flex;
       justify-content: center;
+      gap: 8px;
       padding: 12px 16px;
       border-bottom: 1px solid rgb(47, 51, 54);
     }
@@ -280,6 +287,120 @@ function removeBulkButton(): void {
   document.getElementById(BULK_BTN_ID)?.remove()
 }
 
+// ---------------------------------------------------------------------------
+// Bulk save helper — saves all currently-loaded articles, updating a button
+// ---------------------------------------------------------------------------
+
+async function bulkSaveArticles(
+  btn: HTMLButtonElement,
+  resetLabel: string
+): Promise<void> {
+  btn.disabled = true
+
+  const articles = Array.from(document.querySelectorAll("article"))
+  const total = articles.length
+  let saved = 0
+  let skipped = 0
+  let failed = 0
+
+  btn.textContent = `0/${total}…`
+
+  for (const article of articles) {
+    const existingBtn = article.querySelector(`[${BUTTON_ATTR}]`) as HTMLButtonElement | null
+    if (existingBtn?.getAttribute("data-state") === "saved") {
+      skipped++
+      btn.textContent = `${saved + skipped + failed}/${total}…`
+      continue
+    }
+
+    try {
+      const tweetData = extractTweetData(article)
+      if (!tweetData) {
+        skipped++
+        btn.textContent = `${saved + skipped + failed}/${total}…`
+        continue
+      }
+
+      if (existingBtn) setButtonState(existingBtn, "saving")
+
+      await saveTweet(tweetData)
+      saved++
+
+      if (existingBtn) setButtonState(existingBtn, "saved")
+    } catch (err) {
+      console.error("[TweetSaver] Bulk save error for article:", err)
+      failed++
+      if (existingBtn) setButtonState(existingBtn, "error")
+    }
+
+    btn.textContent = `${saved + skipped + failed}/${total}…`
+  }
+
+  btn.textContent = `✓ ${saved} saved, ${skipped} skipped, ${failed} failed`
+  btn.classList.add("done")
+
+  setTimeout(() => {
+    btn.disabled = false
+    btn.classList.remove("done")
+    btn.textContent = resetLabel
+  }, 5000)
+}
+
+// ---------------------------------------------------------------------------
+// Auto-scroll logic
+// ---------------------------------------------------------------------------
+
+let scrollAbortController: AbortController | null = null
+
+/**
+ * Auto-scrolls the page to load all tweets via infinite scroll.
+ * Resolves when no new tweets appear for `idleMs` or when aborted.
+ */
+function autoScrollToLoadAll(
+  btn: HTMLButtonElement,
+  signal: AbortSignal,
+  idleMs = 3000,
+  scrollStep = 600,
+  scrollInterval = 400
+): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let lastCount = document.querySelectorAll("article").length
+    let idleStart = Date.now()
+
+    const timer = setInterval(() => {
+      if (signal.aborted) {
+        clearInterval(timer)
+        resolve()
+        return
+      }
+
+      window.scrollBy({ top: scrollStep, behavior: "smooth" })
+
+      const currentCount = document.querySelectorAll("article").length
+      btn.textContent = `⏹ Stop (${currentCount} tweets)`
+
+      if (currentCount > lastCount) {
+        lastCount = currentCount
+        idleStart = Date.now()
+      } else if (Date.now() - idleStart >= idleMs) {
+        // No new tweets for idleMs — we've reached the end
+        clearInterval(timer)
+        resolve()
+      }
+    }, scrollInterval)
+
+    // Also resolve immediately if signal fires
+    signal.addEventListener("abort", () => {
+      clearInterval(timer)
+      resolve()
+    })
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Inject bulk buttons (Save All + Scroll & Save All)
+// ---------------------------------------------------------------------------
+
 function injectBulkButton(): void {
   if (document.getElementById(BULK_BTN_ID)) return
   if (!isBookmarksPage()) return
@@ -288,70 +409,73 @@ function injectBulkButton(): void {
   container.id = BULK_BTN_ID
   container.className = "tweet-saver-bulk-container"
 
-  const btn = document.createElement("button")
-  btn.className = "tweet-saver-bulk-btn"
-  btn.textContent = "Save All ↑"
-  btn.title = "Save all visible tweets to Supabase"
+  // --- "Save All ↑" button (existing behavior — saves visible tweets) ---
+  const saveAllBtn = document.createElement("button")
+  saveAllBtn.className = "tweet-saver-bulk-btn"
+  saveAllBtn.textContent = "Save All ↑"
+  saveAllBtn.title = "Save currently loaded tweets to Supabase"
 
-  btn.addEventListener("click", async () => {
-    if (btn.disabled) return
-    btn.disabled = true
-
-    const articles = Array.from(document.querySelectorAll("article"))
-    const total = articles.length
-    let saved = 0
-    let skipped = 0
-    let failed = 0
-
-    btn.textContent = `0/${total}…`
-
-    for (const article of articles) {
-      // Skip already-saved tweets
-      const existingBtn = article.querySelector(`[${BUTTON_ATTR}]`) as HTMLButtonElement | null
-      if (existingBtn?.getAttribute("data-state") === "saved") {
-        skipped++
-        btn.textContent = `${saved + skipped + failed}/${total}…`
-        continue
-      }
-
-      try {
-        const tweetData = extractTweetData(article)
-        if (!tweetData) {
-          skipped++
-          btn.textContent = `${saved + skipped + failed}/${total}…`
-          continue
-        }
-
-        // Mark per-tweet button as saving
-        if (existingBtn) setButtonState(existingBtn, "saving")
-
-        await saveTweet(tweetData)
-        saved++
-
-        // Mark per-tweet button as saved
-        if (existingBtn) setButtonState(existingBtn, "saved")
-      } catch (err) {
-        console.error("[TweetSaver] Bulk save error for article:", err)
-        failed++
-        if (existingBtn) setButtonState(existingBtn, "error")
-      }
-
-      btn.textContent = `${saved + skipped + failed}/${total}…`
-    }
-
-    // Show summary
-    btn.textContent = `✓ ${saved} saved, ${skipped} skipped, ${failed} failed`
-    btn.classList.add("done")
-
-    // Re-enable after a delay so user can trigger again if they scrolled
-    setTimeout(() => {
-      btn.disabled = false
-      btn.classList.remove("done")
-      btn.textContent = "Save All ↑"
-    }, 5000)
+  saveAllBtn.addEventListener("click", async () => {
+    if (saveAllBtn.disabled) return
+    await bulkSaveArticles(saveAllBtn, "Save All ↑")
   })
 
-  container.appendChild(btn)
+  // --- "Scroll & Save All" button (auto-scroll then save) ---
+  const scrollSaveBtn = document.createElement("button")
+  scrollSaveBtn.className = "tweet-saver-bulk-btn"
+  scrollSaveBtn.textContent = "Scroll & Save All"
+  scrollSaveBtn.title = "Auto-scroll to load all tweets, then save everything"
+
+  const handleEscape = (e: KeyboardEvent) => {
+    if (e.key === "Escape" && scrollAbortController) {
+      scrollAbortController.abort()
+    }
+  }
+
+  scrollSaveBtn.addEventListener("click", async () => {
+    // If currently scrolling, abort
+    if (scrollAbortController) {
+      scrollAbortController.abort()
+      return
+    }
+
+    // Disable the other button while scrolling
+    saveAllBtn.disabled = true
+
+    scrollAbortController = new AbortController()
+    const { signal } = scrollAbortController
+
+    // Visual state: scrolling
+    scrollSaveBtn.classList.add("scrolling")
+    const articleCount = document.querySelectorAll("article").length
+    scrollSaveBtn.textContent = `⏹ Stop (${articleCount} tweets)`
+
+    // Listen for Escape key
+    document.addEventListener("keydown", handleEscape)
+
+    // Auto-scroll
+    await autoScrollToLoadAll(scrollSaveBtn, signal)
+
+    // Cleanup scroll state
+    document.removeEventListener("keydown", handleEscape)
+    scrollAbortController = null
+    scrollSaveBtn.classList.remove("scrolling")
+
+    // Scroll back to top before saving
+    window.scrollTo({ top: 0, behavior: "smooth" })
+    await new Promise((r) => setTimeout(r, 600))
+
+    // Now save everything
+    const totalFound = document.querySelectorAll("article").length
+    console.log(`[TweetSaver] Scroll complete. ${totalFound} tweets found. Starting save…`)
+    await bulkSaveArticles(scrollSaveBtn, "Scroll & Save All")
+
+    // Re-enable the other button
+    saveAllBtn.disabled = false
+  })
+
+  container.appendChild(saveAllBtn)
+  container.appendChild(scrollSaveBtn)
 
   // Insert after the primary column header (h2 area)
   const header = document.querySelector(
@@ -360,7 +484,6 @@ function injectBulkButton(): void {
   if (header && header.parentElement) {
     header.parentElement.insertBefore(container, header.nextSibling)
   } else {
-    // Fallback: prepend to primary column
     const primary = document.querySelector('[data-testid="primaryColumn"]')
     if (primary) {
       primary.insertBefore(container, primary.firstChild)
