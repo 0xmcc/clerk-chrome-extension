@@ -22,6 +22,17 @@ export interface TweetLinkCard {
   site_name: string
 }
 
+export interface QuotedTweetData {
+  tweet_id: string
+  tweet_text: string
+  author_handle: string
+  author_display_name: string
+  author_avatar_url: string
+  timestamp: string | null
+  source_url: string
+  media: TweetMedia[]
+}
+
 export interface TweetData {
   tweet_id: string
   tweet_text: string
@@ -34,6 +45,7 @@ export interface TweetData {
   link_cards: TweetLinkCard[]
   urls: string[]  // All URLs found in tweet (text + links)
   quoted_tweet_id: string | null
+  quoted_tweet: QuotedTweetData | null  // Full quoted tweet data for display
   in_reply_to_tweet_id: string | null
   conversation_id: string | null
   raw_json: Record<string, unknown>
@@ -403,6 +415,98 @@ function extractQuotedTweetId(article: Element): string | null {
 }
 
 /**
+ * Extract full quoted tweet data for inline display.
+ */
+function extractQuotedTweetData(article: Element): QuotedTweetData | null {
+  const quotedTweet = article.querySelector('[data-testid="quoteTweet"]')
+  if (!quotedTweet) return null
+
+  // Extract tweet ID from quoted tweet
+  let tweet_id = ""
+  const links = quotedTweet.querySelectorAll('a[href*="/status/"]')
+  for (const link of links) {
+    const match = (link as HTMLAnchorElement).href.match(/\/status\/(\d+)/)
+    if (match) {
+      tweet_id = match[1]
+      break
+    }
+  }
+  if (!tweet_id) return null
+
+  // Extract author handle from quoted tweet
+  let author_handle = ""
+  let source_url = ""
+  for (const link of links) {
+    const href = (link as HTMLAnchorElement).href
+    const match = href.match(/\/([A-Za-z0-9_]+)\/status\/(\d+)/)
+    if (match) {
+      author_handle = `@${match[1]}`
+      source_url = href
+      break
+    }
+  }
+
+  // Extract author display name from quoted tweet
+  let author_display_name = ""
+  const userNameEl = quotedTweet.querySelector('[data-testid="User-Name"]')
+  if (userNameEl) {
+    const firstLink = userNameEl.querySelector('a[role="link"]')
+    if (firstLink) {
+      const spans = firstLink.querySelectorAll("span")
+      for (const span of spans) {
+        const text = span.textContent?.trim()
+        if (text && !text.startsWith("@")) {
+          author_display_name = text
+          break
+        }
+      }
+    }
+  }
+
+  // Extract avatar from quoted tweet
+  let author_avatar_url = ""
+  const avatarImg = quotedTweet.querySelector('img[src*="pbs.twimg.com/profile_images"]')
+  if (avatarImg) {
+    author_avatar_url = (avatarImg as HTMLImageElement).src
+  }
+
+  // Extract tweet text from quoted tweet
+  let tweet_text = ""
+  const textEl = quotedTweet.querySelector('[data-testid="tweetText"]')
+  if (textEl) {
+    tweet_text = textEl.textContent?.trim() || ""
+  }
+
+  // Extract timestamp from quoted tweet
+  let timestamp: string | null = null
+  const timeEl = quotedTweet.querySelector("time")
+  if (timeEl) {
+    timestamp = timeEl.getAttribute("datetime")
+  }
+
+  // Extract media from quoted tweet
+  const media: TweetMedia[] = []
+  const images = quotedTweet.querySelectorAll('img[src*="pbs.twimg.com/media"]')
+  for (const img of images) {
+    const src = (img as HTMLImageElement).src
+    if (src) {
+      media.push({ type: "image", url: src })
+    }
+  }
+
+  return {
+    tweet_id,
+    tweet_text,
+    author_handle,
+    author_display_name,
+    author_avatar_url,
+    timestamp,
+    source_url,
+    media
+  }
+}
+
+/**
  * Extract in_reply_to tweet ID if this tweet is a reply.
  * Twitter shows "Replying to @user" with a link to the parent.
  */
@@ -469,6 +573,7 @@ export function extractTweetData(article: Element): TweetData | null {
     link_cards,
     urls: extractUrls(article, tweet_text, link_cards),
     quoted_tweet_id: extractQuotedTweetId(article),
+    quoted_tweet: extractQuotedTweetData(article),
     in_reply_to_tweet_id: extractInReplyToTweetId(article),
     conversation_id: extractConversationId(article),
     raw_json: {}
