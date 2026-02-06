@@ -68,6 +68,11 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
     }
   }
 
+  // Compute content type flags
+  const has_media = tweetData.media.length > 0
+  const has_article = tweetData.link_cards.length > 0
+  const has_quote = tweetData.quoted_tweet_id !== null
+
   // Upsert the main tweet
   const { error } = await supabase.from("tweets").upsert(
     {
@@ -84,7 +89,10 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
       in_reply_to_tweet_id: tweetData.in_reply_to_tweet_id,
       conversation_id: tweetData.conversation_id,
       raw_json: tweetData.raw_json,
-      saved_at: new Date().toISOString()
+      saved_at: new Date().toISOString(),
+      has_media,
+      has_article,
+      has_quote
     },
     { onConflict: "tweet_id" }
   )
