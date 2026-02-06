@@ -32,6 +32,7 @@ export interface TweetData {
   source_url: string
   media: TweetMedia[]
   link_cards: TweetLinkCard[]
+  urls: string[]  // All URLs found in tweet (text + links)
   quoted_tweet_id: string | null
   in_reply_to_tweet_id: string | null
   conversation_id: string | null
@@ -280,6 +281,47 @@ function extractLinkCards(article: Element): TweetLinkCard[] {
 }
 
 /**
+ * Extract all URLs from the tweet (from text and link elements).
+ * Excludes Twitter internal links (profiles, hashtags, status links).
+ */
+function extractUrls(article: Element, tweetText: string, linkCards: TweetLinkCard[]): string[] {
+  const urls = new Set<string>()
+
+  // Get URLs from link cards
+  for (const card of linkCards) {
+    if (card.url) urls.add(card.url)
+  }
+
+  // Extract URLs from actual link elements in tweet text area
+  const tweetTextEl = article.querySelector('[data-testid="tweetText"]')
+  if (tweetTextEl) {
+    const links = tweetTextEl.querySelectorAll('a[href]')
+    for (const link of links) {
+      const href = (link as HTMLAnchorElement).href
+      // Skip Twitter internal links
+      if (href.includes('twitter.com') || href.includes('x.com')) {
+        // But allow t.co links (these are external link redirects)
+        if (!href.includes('t.co/')) continue
+      }
+      urls.add(href)
+    }
+  }
+
+  // Also try regex extraction from text as fallback
+  const urlRegex = /https?:\/\/[^\s<>"{}|\\^`[\]]+/g
+  const textMatches = tweetText.match(urlRegex)
+  if (textMatches) {
+    for (const url of textMatches) {
+      // Clean trailing punctuation
+      const cleanUrl = url.replace(/[.,;:!?)]+$/, '')
+      urls.add(cleanUrl)
+    }
+  }
+
+  return Array.from(urls)
+}
+
+/**
  * Extract quoted tweet ID if this tweet quotes another.
  */
 function extractQuotedTweetId(article: Element): string | null {
@@ -347,16 +389,20 @@ export function extractTweetData(article: Element): TweetData | null {
   const tweet_id = extractTweetId(article)
   if (!tweet_id) return null
 
+  const tweet_text = extractTweetText(article)
+  const link_cards = extractLinkCards(article)
+
   const data: TweetData = {
     tweet_id,
-    tweet_text: extractTweetText(article),
+    tweet_text,
     author_handle: extractAuthorHandle(article),
     author_display_name: extractAuthorDisplayName(article),
     author_avatar_url: extractAuthorAvatarUrl(article),
     timestamp: extractTimestamp(article),
     source_url: extractSourceUrl(article),
     media: extractMedia(article),
-    link_cards: extractLinkCards(article),
+    link_cards,
+    urls: extractUrls(article, tweet_text, link_cards),
     quoted_tweet_id: extractQuotedTweetId(article),
     in_reply_to_tweet_id: extractInReplyToTweetId(article),
     conversation_id: extractConversationId(article),

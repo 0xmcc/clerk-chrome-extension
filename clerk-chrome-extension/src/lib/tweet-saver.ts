@@ -70,9 +70,13 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
 
   // Compute content type flags
   const has_media = tweetData.media.length > 0
-  const has_article = tweetData.link_cards.length > 0
+  const has_article = tweetData.link_cards.length > 0  // Has rich preview card
+  const has_link = tweetData.urls.length > 0  // Has any URL (card or plain)
   const has_quote = tweetData.quoted_tweet_id !== null
-  const article_url = tweetData.link_cards.length > 0 ? tweetData.link_cards[0].url : null
+  // First URL: prefer article card URL, fallback to first extracted URL
+  const article_url = tweetData.link_cards.length > 0 
+    ? tweetData.link_cards[0].url 
+    : (tweetData.urls.length > 0 ? tweetData.urls[0] : null)
 
   // Upsert the main tweet
   const { error } = await supabase.from("tweets").upsert(
@@ -93,8 +97,10 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
       saved_at: new Date().toISOString(),
       has_media,
       has_article,
+      has_link,
       has_quote,
-      article_url
+      article_url,
+      urls: tweetData.urls
     },
     { onConflict: "tweet_id" }
   )
