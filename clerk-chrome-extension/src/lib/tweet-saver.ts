@@ -72,6 +72,7 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
   const has_media = tweetData.media.length > 0
   const has_article = tweetData.link_cards.length > 0
   const has_quote = tweetData.quoted_tweet_id !== null
+  const article_url = tweetData.link_cards.length > 0 ? tweetData.link_cards[0].url : null
 
   // Upsert the main tweet
   const { error } = await supabase.from("tweets").upsert(
@@ -92,7 +93,8 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
       saved_at: new Date().toISOString(),
       has_media,
       has_article,
-      has_quote
+      has_quote,
+      article_url
     },
     { onConflict: "tweet_id" }
   )
