@@ -251,20 +251,25 @@ function extractMedia(article: Element): TweetMedia[] {
 
 /**
  * Extract link cards (URL previews) from the tweet.
+ * Handles regular link cards, X Articles, and quoted content with articles.
  */
 function extractLinkCards(article: Element): TweetLinkCard[] {
   const cards: TweetLinkCard[] = []
+  const seenUrls = new Set<string>()
 
-  // Twitter card containers
+  // 1. Standard Twitter card containers
   const cardLinks = article.querySelectorAll('[data-testid="card.wrapper"] a[href]')
   for (const link of cardLinks) {
     const anchor = link as HTMLAnchorElement
     const container = anchor.closest('[data-testid="card.wrapper"]')
     if (!container) continue
 
-    // Don't extract cards from quoted tweets
+    // Don't extract cards from quoted tweets (we handle those separately)
     const quotedTweet = article.querySelector('[data-testid="quoteTweet"]')
     if (quotedTweet?.contains(container)) continue
+
+    if (seenUrls.has(anchor.href)) continue
+    seenUrls.add(anchor.href)
 
     const card: TweetLinkCard = {
       url: anchor.href,
@@ -275,6 +280,66 @@ function extractLinkCards(article: Element): TweetLinkCard[] {
     }
 
     if (card.url) cards.push(card)
+  }
+
+  // 2. X Articles / Long-form content (often in quoted tweets)
+  const quotedTweet = article.querySelector('[data-testid="quoteTweet"]')
+  if (quotedTweet) {
+    // Look for article links in the quoted tweet
+    const articleLinks = quotedTweet.querySelectorAll('a[href*="/i/article/"], a[href*="/article/"]')
+    for (const link of articleLinks) {
+      const href = (link as HTMLAnchorElement).href
+      if (seenUrls.has(href)) continue
+      seenUrls.add(href)
+
+      // Try to extract article preview info from the quoted tweet
+      const titleEl = quotedTweet.querySelector('div[dir="ltr"] > span')
+      const card: TweetLinkCard = {
+        url: href,
+        title: titleEl?.textContent?.trim() || "X Article",
+        description: "",
+        image: (quotedTweet.querySelector("img") as HTMLImageElement)?.src || "",
+        site_name: "X Article"
+      }
+      cards.push(card)
+    }
+
+    // Also look for any card-like structure in quoted tweets
+    const quotedCardWrapper = quotedTweet.querySelector('[data-testid="card.wrapper"]')
+    if (quotedCardWrapper) {
+      const link = quotedCardWrapper.querySelector('a[href]') as HTMLAnchorElement
+      if (link && !seenUrls.has(link.href)) {
+        seenUrls.add(link.href)
+        const card: TweetLinkCard = {
+          url: link.href,
+          title: quotedCardWrapper.querySelector('[data-testid="card.layoutLarge.header"] span, [role="heading"]')?.textContent?.trim() || "",
+          description: quotedCardWrapper.querySelector('[data-testid="card.layoutLarge.body"]')?.textContent?.trim() || "",
+          image: (quotedCardWrapper.querySelector("img") as HTMLImageElement)?.src || "",
+          site_name: "X"
+        }
+        cards.push(card)
+      }
+    }
+  }
+
+  // 3. Standalone X Article cards (not in quoted tweets)
+  const articleCards = article.querySelectorAll('[data-testid="card.layoutLarge.media"], [data-testid="card.layoutSmall.media"]')
+  for (const card of articleCards) {
+    const container = card.closest('[data-testid="card.wrapper"]')
+    if (!container) continue
+    
+    const link = container.querySelector('a[href]') as HTMLAnchorElement
+    if (!link || seenUrls.has(link.href)) continue
+    seenUrls.add(link.href)
+
+    const cardData: TweetLinkCard = {
+      url: link.href,
+      title: container.querySelector('[role="heading"], [data-testid="card.layoutLarge.header"]')?.textContent?.trim() || "",
+      description: container.querySelector('[data-testid="card.layoutLarge.body"]')?.textContent?.trim() || "",
+      image: (container.querySelector("img") as HTMLImageElement)?.src || "",
+      site_name: "X Article"
+    }
+    cards.push(cardData)
   }
 
   return cards
