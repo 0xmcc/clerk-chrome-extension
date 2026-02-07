@@ -56,7 +56,8 @@
       "https://x.com/*",
       "https://twitter.com/*",
       "$PLASMO_PUBLIC_CLERK_SYNC_HOST/*",
-      "$CLERK_FRONTEND_API/*"
+      "$CLERK_FRONTEND_API/*",
+      "https://api.agentmail.to/*"
     ]
   }
 }
