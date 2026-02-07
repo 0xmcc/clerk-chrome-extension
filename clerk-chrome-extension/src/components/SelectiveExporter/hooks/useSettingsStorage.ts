@@ -7,6 +7,9 @@ interface SettingsState {
   analysisLocked: boolean
   followupLocked: boolean
   aiEmail: string
+  aiEmailFrom: string
+  aiEmailProvider: string
+  aiEmailApiKey: string
 }
 
 interface SettingsActions {
@@ -16,6 +19,9 @@ interface SettingsActions {
   toggleAnalysisLock: () => void
   toggleFollowupLock: () => void
   setAiEmail: (value: string) => void
+  setAiEmailFrom: (value: string) => void
+  setAiEmailProvider: (value: string) => void
+  setAiEmailApiKey: (value: string) => void
 }
 
 /**
@@ -29,14 +35,20 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
   const [analysisLocked, setAnalysisLocked] = useState(true)
   const [followupLocked, setFollowupLocked] = useState(true)
   const [aiEmail, setAiEmailState] = useState("")
+  const [aiEmailFrom, setAiEmailFromState] = useState("")
+  const [aiEmailProvider, setAiEmailProviderState] = useState("agentmail")
+  const [aiEmailApiKey, setAiEmailApiKeyState] = useState("")
 
   // Load from chrome.storage on mount
   useEffect(() => {
-    chrome.storage.local.get(['analysisSystemPrompt', 'followupSystemPrompt', 'personalContext', 'aiEmail'], (result) => {
+    chrome.storage.local.get(['analysisSystemPrompt', 'followupSystemPrompt', 'personalContext', 'aiEmail', 'aiEmailFrom', 'aiEmailProvider', 'aiEmailApiKey'], (result) => {
       if (result.analysisSystemPrompt) setAnalysisSystemPromptState(result.analysisSystemPrompt)
       if (result.followupSystemPrompt) setFollowupSystemPromptState(result.followupSystemPrompt)
       if (result.personalContext) setPersonalContextState(result.personalContext)
       if (result.aiEmail) setAiEmailState(result.aiEmail)
+      if (result.aiEmailFrom) setAiEmailFromState(result.aiEmailFrom)
+      if (result.aiEmailProvider) setAiEmailProviderState(result.aiEmailProvider)
+      if (result.aiEmailApiKey) setAiEmailApiKeyState(result.aiEmailApiKey)
     })
     // Default to locked
     setAnalysisLocked(true)
@@ -71,6 +83,21 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
     chrome.storage.local.set({ aiEmail: value })
   }
 
+  const setAiEmailFrom = (value: string) => {
+    setAiEmailFromState(value)
+    chrome.storage.local.set({ aiEmailFrom: value })
+  }
+
+  const setAiEmailProvider = (value: string) => {
+    setAiEmailProviderState(value)
+    chrome.storage.local.set({ aiEmailProvider: value })
+  }
+
+  const setAiEmailApiKey = (value: string) => {
+    setAiEmailApiKeyState(value)
+    chrome.storage.local.set({ aiEmailApiKey: value })
+  }
+
   return {
     analysisSystemPrompt,
     followupSystemPrompt,
@@ -83,6 +110,12 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
     toggleAnalysisLock,
     toggleFollowupLock,
     aiEmail,
-    setAiEmail
+    setAiEmail,
+    aiEmailFrom,
+    setAiEmailFrom,
+    aiEmailProvider,
+    setAiEmailProvider,
+    aiEmailApiKey,
+    setAiEmailApiKey
   }
 }

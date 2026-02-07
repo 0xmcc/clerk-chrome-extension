@@ -15,6 +15,9 @@ interface UseExportActionsParams {
   platformLabel: string
   conversationTitle?: string
   aiEmail?: string
+  aiEmailFrom?: string
+  aiEmailApiKey?: string
+  aiEmailProvider?: string
 }
 
 interface ExportActionsState {
@@ -45,7 +48,10 @@ export const useExportActions = ({
   historyFormat: initialHistoryFormat,
   platformLabel,
   conversationTitle,
-  aiEmail
+  aiEmail,
+  aiEmailFrom,
+  aiEmailApiKey,
+  aiEmailProvider
 }: UseExportActionsParams): ExportActionsState & ExportActions => {
   const [exportState, setExportState] = useState<ExportState>("idle")
   const [statusMessage, setStatusMessage] = useState("")
@@ -113,56 +119,57 @@ export const useExportActions = ({
     console.log(`[SelectiveExporter] Exported ${historyFormat} file: ${filename}`)
   }, [messages.length, historyFormat, generateMarkdown, generateJSON, conversationTitle])
 
-  const handleSendToAI = useCallback(() => {
+  const handleSendToAI = useCallback(async () => {
     if (messages.length === 0) return
 
-    const platform = detectPlatform()
-    const source = platform === "claude" ? "claude" : "chatgpt"
-    const platformName = getPlatformLabel(platform)
-    const now = new Date()
-    const timestamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "").slice(0, 15) + "Z"
-    const filename = `ai-handoff-${source}-${timestamp}.md`
+    // Check settings are configured
+    if (!aiEmail || !aiEmailFrom || !aiEmailApiKey) {
+      setExportState("error")
+      setStatusMessage("Configure your AI email in Settings first")
+      return
+    }
 
-    // Generate transcript markdown
-    const transcriptLines = [
-      "# AI Conversation Transcript",
-      "",
-      `- **Source:** ${window.location.href}`,
-      `- **Captured at:** ${now.toISOString()}`,
-      `- **Platform:** ${platformName}`,
-      `- **Messages:** ${messages.length}`,
-      "",
-      "---",
-      ""
-    ]
+    setExportState("loading")
+    setStatusMessage("Sending to your AI...")
 
-    messages.forEach((msg, index) => {
-      const fromLabel = msg.authorName || (msg.role === "user" ? "User" : "Assistant")
-      transcriptLines.push(`**${index + 1}. ${fromLabel}**`)
-      transcriptLines.push(msg.text)
-      transcriptLines.push("")
-    })
+    try {
+      const platform = detectPlatform()
+      const source = platform === "claude" ? "claude" : "chatgpt"
+      const platformName = getPlatformLabel(platform)
+      const now = new Date()
+      const timestamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "").slice(0, 15) + "Z"
+      const filename = `ai-handoff-${source}-${timestamp}.md`
 
-    const transcriptContent = transcriptLines.join("\n")
+      // Generate transcript markdown
+      const transcriptLines = [
+        "# AI Conversation Transcript",
+        "",
+        `- **Source:** ${window.location.href}`,
+        `- **Captured at:** ${now.toISOString()}`,
+        `- **Platform:** ${platformName}`,
+        `- **Messages:** ${messages.length}`,
+        "",
+        "---",
+        ""
+      ]
 
-    // Download the file
-    const blob = new Blob([transcriptContent], { type: "text/markdown" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+      messages.forEach((msg, index) => {
+        const fromLabel = msg.authorName || (msg.role === "user" ? "User" : "Assistant")
+        transcriptLines.push(`**${index + 1}. ${fromLabel}**`)
+        transcriptLines.push(msg.text)
+        transcriptLines.push("")
+      })
 
-    // Build subject
-    const titleText = conversationTitle || messages.find(m => m.role === "user")?.text || "Conversation"
-    const clippedTitle = titleText.length > 60 ? titleText.slice(0, 60) : titleText
-    const subject = `AI Handoff: ${clippedTitle}`
+      const transcriptContent = transcriptLines.join("\n")
+      const transcriptBase64 = btoa(unescape(encodeURIComponent(transcriptContent)))
 
-    // Build body
-    const body = `This email contains an AI conversation transcript as an attachment.
+      // Build subject
+      const titleText = conversationTitle || messages.find(m => m.role === "user")?.text || "Conversation"
+      const clippedTitle = titleText.length > 60 ? titleText.slice(0, 60) : titleText
+      const subject = `AI Handoff: ${clippedTitle}`
+
+      // Build body
+      const body = `This email contains an AI conversation transcript as an attachment.
 
 HANDOFF_PROMPT:
 This is a transcript of a real conversation between a user and an AI. Treat it as authoritative context. Use it to understand:
@@ -171,16 +178,45 @@ This is a transcript of a real conversation between a user and an AI. Treat it a
 - what decisions or conclusions were reached
 - what remains unresolved
 
-Do not repeat or summarize the conversation unless necessary. Continue from where it left off. If there is a clear next step, propose it. If there are multiple plausible next steps, list them. If the conversation is complete, say so.
+Do not repeat or summarize the conversation unless necessary. Continue from where it left off. If there is a clear next step, propose it. If there are multiple plausible next steps, list them. If the conversation is complete, say so.`
 
----
-⚠️ Please attach the downloaded file: ${filename}`
+      // Extract the local part of the from address for the API endpoint
+      const fromAddress = aiEmailFrom.trim()
 
-    const mailto = `mailto:${encodeURIComponent(aiEmail || "")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-    window.open(mailto, "_blank")
+      const response = await fetch(`https://api.agentmail.to/v0/inboxes/${encodeURIComponent(fromAddress)}/messages`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${aiEmailApiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          to: [aiEmail.trim()],
+          subject,
+          text: body,
+          attachments: [
+            {
+              filename,
+              content: transcriptBase64,
+              content_type: "text/markdown"
+            }
+          ]
+        })
+      })
 
-    console.log(`[SelectiveExporter] Send to AI: downloaded ${filename} and opened mailto`)
-  }, [messages, conversationTitle, aiEmail])
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null)
+        throw new Error(errorData?.message || errorData?.error || `Send failed (${response.status})`)
+      }
+
+      setExportState("success")
+      setStatusMessage("✅ Sent to your AI")
+      console.log(`[SelectiveExporter] Send to AI: sent ${filename} via AgentMail`)
+    } catch (error) {
+      console.error("[SelectiveExporter] Send to AI failed:", error)
+      setExportState("error")
+      setStatusMessage(error instanceof Error ? error.message : "Failed to send to AI")
+    }
+  }, [messages, conversationTitle, aiEmail, aiEmailFrom, aiEmailApiKey])
 
   const handleSaveToDatabase = useCallback(async () => {
     if (messages.length === 0 || exportState === "loading") return

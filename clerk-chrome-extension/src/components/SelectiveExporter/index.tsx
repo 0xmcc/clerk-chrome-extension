@@ -42,7 +42,13 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
     toggleAnalysisLock,
     toggleFollowupLock,
     aiEmail,
-    setAiEmail
+    setAiEmail,
+    aiEmailFrom,
+    setAiEmailFrom,
+    aiEmailProvider,
+    setAiEmailProvider,
+    aiEmailApiKey,
+    setAiEmailApiKey
   } = useSettingsStorage()
 
   // Get messages in order (must be before early return to maintain hook order)
@@ -68,7 +74,10 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
     historyFormat: "markdown",
     platformLabel: platformLabelRef.current,
     conversationTitle,
-    aiEmail
+    aiEmail,
+    aiEmailFrom,
+    aiEmailApiKey,
+    aiEmailProvider
   })
 
   // Analysis actions
@@ -273,6 +282,12 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
                 onFollowupLockToggle={toggleFollowupLock}
                 aiEmail={aiEmail}
                 onAiEmailChange={setAiEmail}
+                aiEmailFrom={aiEmailFrom}
+                onAiEmailFromChange={setAiEmailFrom}
+                aiEmailProvider={aiEmailProvider}
+                onAiEmailProviderChange={setAiEmailProvider}
+                aiEmailApiKey={aiEmailApiKey}
+                onAiEmailApiKeyChange={setAiEmailApiKey}
                 buildAnalysisSystemPrompt={buildAnalysisSystemPrompt}
                 onLogout={handleLogout}
                 setStatusMessage={setStatusMessage}
