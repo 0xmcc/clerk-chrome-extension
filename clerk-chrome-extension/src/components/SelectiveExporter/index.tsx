@@ -198,6 +198,9 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
 
   return (
     <div
+      onKeyDown={(e) => e.stopPropagation()}
+      onKeyUp={(e) => e.stopPropagation()}
+      onKeyPress={(e) => e.stopPropagation()}
       style={{
         position: "fixed",
         top: 0,
