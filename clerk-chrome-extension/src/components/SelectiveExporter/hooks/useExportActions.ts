@@ -183,7 +183,9 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
       // Extract the local part of the from address for the API endpoint
       const fromAddress = aiEmailFrom.trim()
 
-      const response = await fetch(`https://api.agentmail.to/v0/inboxes/${encodeURIComponent(fromAddress)}/messages`, {
+      const result = await chrome.runtime.sendMessage({
+        action: "proxyFetch",
+        url: `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(fromAddress)}/messages`,
         method: "POST",
         headers: {
           "Authorization": `Bearer ${aiEmailApiKey}`,
@@ -203,9 +205,8 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
         })
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null)
-        throw new Error(errorData?.message || errorData?.error || `Send failed (${response.status})`)
+      if (!result.success) {
+        throw new Error(result.error || result.data?.message || `Send failed (${result.status})`)
       }
 
       setExportState("success")

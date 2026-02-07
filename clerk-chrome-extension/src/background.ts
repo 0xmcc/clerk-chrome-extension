@@ -482,6 +482,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true
   }
 
+  if (message.action === "proxyFetch") {
+    ;(async () => {
+      try {
+        const response = await fetch(message.url, {
+          method: message.method || "GET",
+          headers: message.headers || {},
+          body: message.body || undefined
+        })
+        const text = await response.text()
+        let data
+        try { data = JSON.parse(text) } catch { data = text }
+        sendResponse({ success: response.ok, status: response.status, data })
+      } catch (error) {
+        sendResponse({ success: false, error: error instanceof Error ? error.message : "Fetch failed" })
+      }
+    })()
+    return true
+  }
+
   if (message.action === "clerkSignOut") {
     getClerkClient()
       .then(async (clerkClient) => {

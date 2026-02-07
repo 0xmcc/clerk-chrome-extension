@@ -194,7 +194,9 @@ export const SettingsView = ({
             }
             setIsTesting(true)
             try {
-              const response = await fetch(`https://api.agentmail.to/v0/inboxes/${encodeURIComponent(aiEmailFrom.trim())}/messages`, {
+              const result = await chrome.runtime.sendMessage({
+                action: "proxyFetch",
+                url: `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(aiEmailFrom.trim())}/messages`,
                 method: "POST",
                 headers: {
                   "Authorization": `Bearer ${aiEmailApiKey}`,
@@ -206,9 +208,8 @@ export const SettingsView = ({
                   text: "This is a test email from the Send to my AI extension. If your AI received this, the connection is working!"
                 })
               })
-              if (!response.ok) {
-                const errorData = await response.json().catch(() => null)
-                throw new Error(errorData?.message || errorData?.error || `Failed (${response.status})`)
+              if (!result.success) {
+                throw new Error(result.error || result.data?.message || `Failed (${result.status})`)
               }
               setStatusMessage("✅ Test email sent!")
             } catch (error) {
