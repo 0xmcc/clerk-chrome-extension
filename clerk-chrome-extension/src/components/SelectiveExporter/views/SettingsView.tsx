@@ -10,13 +10,11 @@ interface SettingsViewProps {
   personalContext: string
   analysisLocked: boolean
   followupLocked: boolean
-  aiEmail: string
   onAnalysisPromptChange: (value: string) => void
   onFollowupPromptChange: (value: string) => void
   onPersonalContextChange: (value: string) => void
   onAnalysisLockToggle: () => void
   onFollowupLockToggle: () => void
-  onAiEmailChange: (value: string) => void
   buildAnalysisSystemPrompt: () => string
   onLogout: () => Promise<{ success: boolean; error?: string }>
   setStatusMessage: (message: string) => void
@@ -31,13 +29,11 @@ export const SettingsView = ({
   personalContext,
   analysisLocked,
   followupLocked,
-  aiEmail,
   onAnalysisPromptChange,
   onFollowupPromptChange,
   onPersonalContextChange,
   onAnalysisLockToggle,
   onFollowupLockToggle,
-  onAiEmailChange,
   buildAnalysisSystemPrompt,
   onLogout,
   setStatusMessage,
@@ -67,39 +63,6 @@ export const SettingsView = ({
       {/* Conversation Depth Indicator */}
       <div style={{ paddingBottom: "16px", borderBottom: `1px solid ${DARK_THEME.borderSubtle}` }}>
         <ConversationDepthIndicator messages={messages} />
-      </div>
-
-      {/* My AI Email */}
-      <div>
-        <label
-          style={{
-            display: "block",
-            fontSize: "13px",
-            fontWeight: 600,
-            color: DARK_THEME.text,
-            marginBottom: "8px"
-          }}>
-          My AI Email
-        </label>
-        <input
-          type="email"
-          value={aiEmail}
-          onChange={(e) => onAiEmailChange(e.target.value)}
-          placeholder="e.g. my-ai@example.com"
-          style={{
-            width: "100%",
-            background: DARK_THEME.surface,
-            padding: "10px 12px",
-            borderRadius: "6px",
-            border: `1px solid ${DARK_THEME.borderSubtle}`,
-            fontSize: "13px",
-            color: DARK_THEME.text,
-            boxSizing: "border-box"
-          }}
-        />
-        <div style={{ fontSize: "11px", color: DARK_THEME.muted, marginTop: "6px" }}>
-          Pre-fills the "To" field when using "Send to my AI"
-        </div>
       </div>
 
       {/* Account Section */}

@@ -6,7 +6,6 @@ interface SettingsState {
   personalContext: string
   analysisLocked: boolean
   followupLocked: boolean
-  aiEmail: string
 }
 
 interface SettingsActions {
@@ -15,7 +14,6 @@ interface SettingsActions {
   setPersonalContext: (value: string) => void
   toggleAnalysisLock: () => void
   toggleFollowupLock: () => void
-  setAiEmail: (value: string) => void
 }
 
 /**
@@ -28,15 +26,13 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
   const [personalContext, setPersonalContextState] = useState("")
   const [analysisLocked, setAnalysisLocked] = useState(true)
   const [followupLocked, setFollowupLocked] = useState(true)
-  const [aiEmail, setAiEmailState] = useState("")
 
   // Load from chrome.storage on mount
   useEffect(() => {
-    chrome.storage.local.get(['analysisSystemPrompt', 'followupSystemPrompt', 'personalContext', 'aiEmail'], (result) => {
+    chrome.storage.local.get(['analysisSystemPrompt', 'followupSystemPrompt', 'personalContext'], (result) => {
       if (result.analysisSystemPrompt) setAnalysisSystemPromptState(result.analysisSystemPrompt)
       if (result.followupSystemPrompt) setFollowupSystemPromptState(result.followupSystemPrompt)
       if (result.personalContext) setPersonalContextState(result.personalContext)
-      if (result.aiEmail) setAiEmailState(result.aiEmail)
     })
     // Default to locked
     setAnalysisLocked(true)
@@ -66,11 +62,6 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
     setFollowupLocked((prev) => !prev)
   }
 
-  const setAiEmail = (value: string) => {
-    setAiEmailState(value)
-    chrome.storage.local.set({ aiEmail: value })
-  }
-
   return {
     analysisSystemPrompt,
     followupSystemPrompt,
@@ -81,8 +72,6 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
     setFollowupSystemPrompt,
     setPersonalContext,
     toggleAnalysisLock,
-    toggleFollowupLock,
-    aiEmail,
-    setAiEmail
+    toggleFollowupLock
   }
 }
