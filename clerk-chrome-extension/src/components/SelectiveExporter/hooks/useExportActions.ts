@@ -5,6 +5,8 @@ import { requestClerkToken } from "~utils/clerk"
 import { deriveConversationId, sanitizeFilename } from "~utils/conversation"
 import { API_BASE_URL } from "~config/api"
 
+import { detectPlatform, getPlatformLabel } from "~utils/platform"
+
 import type { ExportState, HistoryFormat } from "../types"
 
 interface UseExportActionsParams {
@@ -12,6 +14,7 @@ interface UseExportActionsParams {
   historyFormat: HistoryFormat
   platformLabel: string
   conversationTitle?: string
+  aiEmail?: string
 }
 
 interface ExportActionsState {
@@ -23,6 +26,7 @@ interface ExportActionsState {
 interface ExportActions {
   handleCopy: () => Promise<void>
   handleExport: () => void
+  handleSendToAI: () => void
   handleSaveToDatabase: () => Promise<void>
   setHistoryFormat: (format: HistoryFormat) => void
   setExportState: (state: ExportState) => void
@@ -40,7 +44,8 @@ export const useExportActions = ({
   messages,
   historyFormat: initialHistoryFormat,
   platformLabel,
-  conversationTitle
+  conversationTitle,
+  aiEmail
 }: UseExportActionsParams): ExportActionsState & ExportActions => {
   const [exportState, setExportState] = useState<ExportState>("idle")
   const [statusMessage, setStatusMessage] = useState("")
@@ -107,6 +112,75 @@ export const useExportActions = ({
 
     console.log(`[SelectiveExporter] Exported ${historyFormat} file: ${filename}`)
   }, [messages.length, historyFormat, generateMarkdown, generateJSON, conversationTitle])
+
+  const handleSendToAI = useCallback(() => {
+    if (messages.length === 0) return
+
+    const platform = detectPlatform()
+    const source = platform === "claude" ? "claude" : "chatgpt"
+    const platformName = getPlatformLabel(platform)
+    const now = new Date()
+    const timestamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "").slice(0, 15) + "Z"
+    const filename = `ai-handoff-${source}-${timestamp}.md`
+
+    // Generate transcript markdown
+    const transcriptLines = [
+      "# AI Conversation Transcript",
+      "",
+      `- **Source:** ${window.location.href}`,
+      `- **Captured at:** ${now.toISOString()}`,
+      `- **Platform:** ${platformName}`,
+      `- **Messages:** ${messages.length}`,
+      "",
+      "---",
+      ""
+    ]
+
+    messages.forEach((msg, index) => {
+      const fromLabel = msg.authorName || (msg.role === "user" ? "User" : "Assistant")
+      transcriptLines.push(`**${index + 1}. ${fromLabel}**`)
+      transcriptLines.push(msg.text)
+      transcriptLines.push("")
+    })
+
+    const transcriptContent = transcriptLines.join("\n")
+
+    // Download the file
+    const blob = new Blob([transcriptContent], { type: "text/markdown" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+
+    // Build subject
+    const titleText = conversationTitle || messages.find(m => m.role === "user")?.text || "Conversation"
+    const clippedTitle = titleText.length > 60 ? titleText.slice(0, 60) : titleText
+    const subject = `AI Handoff: ${clippedTitle}`
+
+    // Build body
+    const body = `This email contains an AI conversation transcript as an attachment.
+
+HANDOFF_PROMPT:
+This is a transcript of a real conversation between a user and an AI. Treat it as authoritative context. Use it to understand:
+- what the user was trying to accomplish
+- what has already been explored
+- what decisions or conclusions were reached
+- what remains unresolved
+
+Do not repeat or summarize the conversation unless necessary. Continue from where it left off. If there is a clear next step, propose it. If there are multiple plausible next steps, list them. If the conversation is complete, say so.
+
+---
+⚠️ Please attach the downloaded file: ${filename}`
+
+    const mailto = `mailto:${encodeURIComponent(aiEmail || "")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    window.open(mailto, "_blank")
+
+    console.log(`[SelectiveExporter] Send to AI: downloaded ${filename} and opened mailto`)
+  }, [messages, conversationTitle, aiEmail])
 
   const handleSaveToDatabase = useCallback(async () => {
     if (messages.length === 0 || exportState === "loading") return
@@ -176,6 +250,7 @@ export const useExportActions = ({
     historyFormat,
     handleCopy,
     handleExport,
+    handleSendToAI,
     handleSaveToDatabase,
     setHistoryFormat,
     setExportState,
