@@ -235,6 +235,21 @@ export const SettingsView = ({
         <div style={{ fontSize: "11px", color: DARK_THEME.muted }}>
           Sends emails directly via API when you click "Send to AI"
         </div>
+        <a
+          href="https://agentmail.to"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-block",
+            marginTop: "8px",
+            fontSize: "12px",
+            color: DARK_THEME.accent,
+            textDecoration: "none"
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.textDecoration = "underline" }}
+          onMouseLeave={(e) => { e.currentTarget.style.textDecoration = "none" }}>
+          🔑 Get your AgentMail API key →
+        </a>
       </div>
 
       {/* Account Section */}
