@@ -82,6 +82,23 @@ function ProfileRoute() {
       <SignedOut>
         <div className="plasmo-space-y-2">
           <p className="plasmo-text-sm plasmo-text-slate-700">Sign in to view your profile details.</p>
+          {/* #region agent log */}
+          {(() => {
+            fetch("http://127.0.0.1:7248/ingest/06466d14-b0e3-48cd-8a4e-d324fcfcd858", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                runId: "pre-fix",
+                hypothesisId: "H2",
+                location: "popup.tsx:ProfileRoute",
+                message: "Rendering SignedOut ProfileRoute with SignInButton",
+                data: {},
+                timestamp: Date.now()
+              })
+            }).catch(() => {})
+            return null
+          })()}
+          {/* #endregion */}
           <SignInButton mode="modal" />
         </div>
       </SignedOut>
@@ -103,6 +120,26 @@ function RoutedClerkProvider({ refreshKey }: { refreshKey: number }) {
       routerPush={(to) => navigate(to)}
       routerReplace={(to) => navigate(to, { replace: true })}
     >
+      {/* #region agent log */}
+      {(() => {
+        fetch("http://127.0.0.1:7248/ingest/06466d14-b0e3-48cd-8a4e-d324fcfcd858", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            runId: "pre-fix",
+            hypothesisId: "H1",
+            location: "popup.tsx:RoutedClerkProvider",
+            message: "RoutedClerkProvider mounted with ClerkProvider",
+            data: {
+              hasRouterPush: !!navigate,
+              popUpUrlDefined: !!POPUP_URL
+            },
+            timestamp: Date.now()
+          })
+        }).catch(() => {})
+        return null
+      })()}
+      {/* #endregion */}
       <AuthDebugger />
       <div className="plasmo-flex plasmo-items-center plasmo-justify-center plasmo-h-[600px] plasmo-w-[800px] plasmo-flex-col">
         <ClerkLoading>
@@ -120,6 +157,23 @@ function RoutedClerkProvider({ refreshKey }: { refreshKey: number }) {
             </nav>
             <div>
               <SignedOut>
+                {/* #region agent log */}
+                {(() => {
+                  fetch("http://127.0.0.1:7248/ingest/06466d14-b0e3-48cd-8a4e-d324fcfcd858", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      runId: "pre-fix",
+                      hypothesisId: "H3",
+                      location: "popup.tsx:Header",
+                      message: "Rendering SignedOut header with SignInButton",
+                      data: {},
+                      timestamp: Date.now()
+                    })
+                  }).catch(() => {})
+                  return null
+                })()}
+                {/* #endregion */}
                 <SignInButton mode="modal" />
               </SignedOut>
               <SignedIn>

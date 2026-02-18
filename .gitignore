@@ -1,0 +1,6 @@
+# IDE / tooling
+.cursorindexingignore
+.specstory/
+
+# misc
+.DS_Store

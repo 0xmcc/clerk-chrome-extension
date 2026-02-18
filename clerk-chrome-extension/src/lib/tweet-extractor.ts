@@ -402,7 +402,7 @@ function extractUrls(article: Element, tweetText: string, linkCards: TweetLinkCa
  * Extract quoted tweet ID if this tweet quotes another.
  */
 function extractQuotedTweetId(article: Element): string | null {
-  const quotedTweet = article.querySelector('[data-testid="quoteTweet"]')
+  const quotedTweet = findQuotedTweetElement(article)
   if (!quotedTweet) return null
 
   const links = quotedTweet.querySelectorAll('a[href*="/status/"]')
@@ -418,7 +418,7 @@ function extractQuotedTweetId(article: Element): string | null {
  * Extract full quoted tweet data for inline display.
  */
 function extractQuotedTweetData(article: Element): QuotedTweetData | null {
-  const quotedTweet = article.querySelector('[data-testid="quoteTweet"]')
+  const quotedTweet = findQuotedTweetElement(article)
   if (!quotedTweet) return null
 
   // Extract tweet ID from quoted tweet
@@ -504,6 +504,27 @@ function extractQuotedTweetData(article: Element): QuotedTweetData | null {
     source_url,
     media
   }
+}
+
+/**
+ * Find the quoted tweet container inside a tweet article.
+ * Supports legacy [data-testid="quoteTweet"] and the newer "Quote" label + link layout.
+ */
+function findQuotedTweetElement(article: Element): Element | null {
+  const legacyQuote = article.querySelector('[data-testid="quoteTweet"]')
+  if (legacyQuote) return legacyQuote
+
+  const quoteLabel = Array.from(article.querySelectorAll("span"))
+    .find((span) => span.textContent?.trim() === "Quote")
+  if (!quoteLabel) return null
+
+  const labelContainer = quoteLabel.closest("div")
+  const candidate = labelContainer?.nextElementSibling
+  if (candidate && candidate.getAttribute("role") === "link") {
+    return candidate
+  }
+
+  return null
 }
 
 /**

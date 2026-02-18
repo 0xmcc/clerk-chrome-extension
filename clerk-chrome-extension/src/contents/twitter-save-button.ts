@@ -545,6 +545,79 @@ function createSaveButton(article: Element): HTMLButtonElement | null {
         return
       }
 
+      // Debug quote extraction: X frequently changes the quote DOM.
+      const legacyQuote = article.querySelector('[data-testid="quoteTweet"]')
+      const quoteLabelSpans = Array.from(article.querySelectorAll("span"))
+        .filter((span) => span.textContent?.trim() === "Quote")
+
+      const labelContainer = quoteLabelSpans[0]?.closest("div") ?? null
+      const siblings = labelContainer?.parentElement ? Array.from(labelContainer.parentElement.children) : []
+      const labelIndex = labelContainer && siblings.length > 0 ? siblings.indexOf(labelContainer) : -1
+      const siblingAfterLabel = labelIndex >= 0 ? (siblings[labelIndex + 1] ?? null) : null
+
+      const candidateQuoteContainers: Array<Element | null> = [
+        legacyQuote,
+        siblingAfterLabel,
+        labelContainer?.nextElementSibling ?? null,
+        // Fallback: sometimes the quote preview is nested within the same container as the label.
+        labelContainer?.parentElement?.querySelector('div[role="link"]') ?? null
+      ]
+
+      const quoteContainer = candidateQuoteContainers.find((el) => el?.getAttribute("role") === "link") ?? legacyQuote
+      const quoteStatusLinks = quoteContainer
+        ? Array.from(quoteContainer.querySelectorAll('a[href*="/status/"]'))
+            .map((a) => (a as HTMLAnchorElement).href)
+            .filter(Boolean)
+        : []
+
+      const timeAnchorHrefs = Array.from(article.querySelectorAll("time"))
+        .map((t) => t.closest("a")?.href)
+        .filter((href): href is string => Boolean(href))
+
+      const allStatusLinksInArticle = Array.from(article.querySelectorAll('a[href*="/status/"]'))
+        .map((a) => (a as HTMLAnchorElement).href)
+        .filter(Boolean)
+
+      const quoteDebug = {
+        has_legacy_quote_testid: Boolean(legacyQuote),
+        quote_label_count: quoteLabelSpans.length,
+        quote_label_texts: Array.from(
+          new Set(
+            (labelContainer?.parentElement ?? labelContainer ?? article)
+              ? Array.from((labelContainer?.parentElement ?? labelContainer ?? article).querySelectorAll("span"))
+                  .map((s) => s.textContent?.trim() || "")
+                  .filter((t) => t.length > 0 && t.length <= 40)
+                  .slice(0, 10)
+              : []
+          )
+        ).slice(0, 3),
+        quote_container_found: Boolean(quoteContainer),
+        quote_container_role: quoteContainer?.getAttribute("role") ?? null,
+        quote_status_links: Array.from(new Set(quoteStatusLinks)).slice(0, 5),
+        quote_html_snippet: quoteContainer ? quoteContainer.outerHTML.slice(0, 3000) : null
+      }
+
+      const articleSummary = {
+        tweet_text_length: tweetData.tweet_text?.length ?? 0,
+        media_count: tweetData.media?.length ?? 0,
+        link_card_count: tweetData.link_cards?.length ?? 0,
+        urls_count: tweetData.urls?.length ?? 0,
+        time_anchor_hrefs: Array.from(new Set(timeAnchorHrefs)).slice(0, 5),
+        status_links_in_article: Array.from(new Set(allStatusLinksInArticle)).slice(0, 5)
+      }
+
+      console.log("[TweetSaver] Extracted tweet data:", {
+        tweet_id: tweetData.tweet_id,
+        quoted_tweet_id: tweetData.quoted_tweet_id,
+        has_quote: tweetData.quoted_tweet_id !== null,
+        quoted_tweet: tweetData.quoted_tweet,
+        in_reply_to_tweet_id: tweetData.in_reply_to_tweet_id,
+        conversation_id: tweetData.conversation_id,
+        source_url: tweetData.source_url,
+        article_summary: articleSummary,
+        quote_debug: quoteDebug
+      })
+
       await saveTweet(tweetData)
       setButtonState(btn, "saved")
     } catch (err) {
