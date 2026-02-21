@@ -22,6 +22,7 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
   const isLinkedIn = useMemo(() => detectPlatform() === "linkedin", [])
   const [authStatus, setAuthStatus] = useState<"unknown" | "signedOut" | "signedIn">("unknown")
   const [awaitingSignIn, setAwaitingSignIn] = useState(false)
+  const [includeHiddenMessages, setIncludeHiddenMessages] = useState(false)
 
   // Derive isSignedOut for minimal churn (keeps existing prop names)
   const isSignedOut = authStatus === "signedOut"
@@ -52,7 +53,9 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
   } = useSettingsStorage()
 
   // Get messages in order (must be before early return to maintain hook order)
-  const selectedMessages = messages
+  const selectedMessages = useMemo(() => {
+    return messages.filter(m => includeHiddenMessages || (m.role !== "system" && m.role !== "tool"))
+  }, [messages, includeHiddenMessages])
   const selectedCount = selectedMessages.length
 
   // Export actions
@@ -229,11 +232,11 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
       {/* Preview Area */}
       <div
         style={{
-        flex: 1,
-        overflow: "auto",
-        padding: "20px",
-        backgroundColor: DARK_THEME.panel
-      }}>
+          flex: 1,
+          overflow: "auto",
+          padding: "20px",
+          backgroundColor: DARK_THEME.panel
+        }}>
         <style>{`
           .analysis-markdown h1 { font-size: 18px; margin: 10px 0 6px; font-weight: 700; }
           .analysis-markdown h2 { font-size: 16px; margin: 8px 0 4px; font-weight: 700; }
@@ -296,6 +299,8 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
                 setStatusMessage={setStatusMessage}
                 isSignedOut={isSignedOut}
                 onSignInClick={handleSignInClick}
+                includeHidden={includeHiddenMessages}
+                onIncludeHiddenChange={setIncludeHiddenMessages}
               />
             )}
           </div>

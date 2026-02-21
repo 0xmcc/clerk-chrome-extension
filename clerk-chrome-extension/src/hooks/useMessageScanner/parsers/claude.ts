@@ -1,14 +1,14 @@
 import { getPlatformLabel } from "~utils/platform"
 import type { Conversation, Message } from "../types"
-import { toMillis, normalizeText, createDetachedNode } from "../utils"
+import { toMillis, normalizeText, createDetachedNode, generateStableMessageId } from "../utils"
 
 export const parseClaudeList = (orgId: string, json: unknown): Array<Pick<Conversation, "id" | "title" | "createdAt" | "updatedAt" | "orgId">> => {
   const data = json as Record<string, unknown> | unknown[] | null
   const items =
     Array.isArray((data as Record<string, unknown>)?.chat_conversations) ? (data as Record<string, unknown>).chat_conversations as unknown[] :
-    Array.isArray((data as Record<string, unknown>)?.conversations) ? (data as Record<string, unknown>).conversations as unknown[] :
-    Array.isArray(data) ? data :
-    []
+      Array.isArray((data as Record<string, unknown>)?.conversations) ? (data as Record<string, unknown>).conversations as unknown[] :
+        Array.isArray(data) ? data :
+          []
 
   return items
     .map((c: unknown) => {
@@ -26,18 +26,20 @@ export const parseClaudeList = (orgId: string, json: unknown): Array<Pick<Conver
     .filter(Boolean) as Array<Pick<Conversation, "id" | "title" | "createdAt" | "updatedAt" | "orgId">>
 }
 
-export const roleFromClaudeMessage = (m: unknown): "user" | "assistant" => {
+export const roleFromClaudeMessage = (m: unknown): "user" | "assistant" | "system" | "tool" => {
   const msg = m as Record<string, unknown>
   const author = msg?.author as Record<string, unknown> | undefined
   const raw =
     (typeof msg?.sender === "string" ? msg.sender :
-    typeof msg?.role === "string" ? msg.role :
-    typeof msg?.author === "string" ? msg.author :
-    typeof author?.role === "string" ? author.role :
-    "") || ""
+      typeof msg?.role === "string" ? msg.role :
+        typeof msg?.author === "string" ? msg.author :
+          typeof author?.role === "string" ? author.role :
+            "") || ""
 
   const r = raw.toLowerCase()
   if (r.includes("human") || r.includes("user") || r.includes("you")) return "user"
+  if (r.includes("system") || r.includes("instruction") || r.includes("prompt")) return "system"
+  if (r.includes("tool") || r.includes("function") || r.includes("observation")) return "tool"
   return "assistant"
 }
 
@@ -90,17 +92,17 @@ export const parseClaudeDetail = (orgId: string, uuid: string, json: unknown): P
   const data = json as Record<string, unknown>
   const title =
     typeof data?.name === "string" ? data.name :
-    typeof data?.title === "string" ? data.title :
-    undefined
+      typeof data?.title === "string" ? data.title :
+        undefined
 
   const createdAt = toMillis(data?.created_at) ?? toMillis(data?.createdAt)
   const updatedAt = toMillis(data?.updated_at) ?? toMillis(data?.updatedAt)
 
   const arr =
     Array.isArray(data?.chat_messages) ? data.chat_messages as unknown[] :
-    Array.isArray(data?.messages) ? data.messages as unknown[] :
-    Array.isArray(data?.turns) ? data.turns as unknown[] :
-    []
+      Array.isArray(data?.messages) ? data.messages as unknown[] :
+        Array.isArray(data?.turns) ? data.turns as unknown[] :
+          []
 
   const platformLabel = getPlatformLabel("claude")
 
@@ -117,11 +119,12 @@ export const parseClaudeDetail = (orgId: string, uuid: string, json: unknown): P
     })
   }
 
+  let validIndex = 0
   const messages: Message[] = arr
     .map((m: unknown, idx: number) => {
       const msg = m as Record<string, unknown>
       const text = extractClaudeText(m)
-      
+
       // ADD THIS: Log when text extraction fails
       if (!text && idx < 3) { // Only log first 3 to avoid spam
         console.log(`[parseClaudeDetail] Failed to extract text from message ${idx}:`, {
@@ -132,14 +135,11 @@ export const parseClaudeDetail = (orgId: string, uuid: string, json: unknown): P
           messageField: msg?.message
         })
       }
-      
+
       if (!text) return null
       const role = roleFromClaudeMessage(m)
-      const id =
-        typeof msg?.uuid === "string" ? msg.uuid :
-        typeof msg?.id === "string" ? msg.id :
-        `claude-${uuid}-${idx}`
-      const authorName = role === "user" ? "You" : platformLabel
+      const id = generateStableMessageId(uuid, validIndex++)
+      const authorName = role === "user" ? "You" : role === "system" ? "System" : role === "tool" ? "Tool" : platformLabel
       return {
         id,
         role,

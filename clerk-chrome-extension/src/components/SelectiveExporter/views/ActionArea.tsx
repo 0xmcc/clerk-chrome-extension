@@ -241,7 +241,7 @@ export const ActionArea = ({
             <>
               Missing Clerk session.{" "}
               <span
-                onClick={openSignInPage}
+                onClick={onSignInClick}
                 style={{
                   color: DARK_THEME.accent,
                   cursor: "pointer",

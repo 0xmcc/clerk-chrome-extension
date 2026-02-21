@@ -69,6 +69,14 @@ export const getActiveConversationIdFromUrl = (platform: CapturedPlatform): stri
     return result
   }
 
+  // No URL match
   debug.any(["messages", "scanner"], "No URL match", { platform, path })
   return null
+}
+
+export const generateStableMessageId = (conversationId: string, index: number): string => {
+  const safeId = conversationId.replace(/[^a-zA-Z0-9]/g, "");
+  const prefix = safeId.length >= 4 ? safeId.substring(0, 4).toLowerCase() : safeId.padEnd(4, "0").toLowerCase();
+  const indexStr = String(index).padStart(4, "0");
+  return `conv_${prefix}::m_${indexStr}`;
 }

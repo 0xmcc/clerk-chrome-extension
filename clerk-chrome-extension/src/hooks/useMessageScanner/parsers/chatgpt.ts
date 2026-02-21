@@ -1,6 +1,6 @@
 import { getPlatformLabel } from "~utils/platform"
 import type { Conversation, Message } from "../types"
-import { toMillis, normalizeText, createDetachedNode } from "../utils"
+import { toMillis, normalizeText, createDetachedNode, generateStableMessageId } from "../utils"
 
 export const parseChatGPTList = (json: unknown): Array<Pick<Conversation, "id" | "title" | "createdAt" | "updatedAt">> => {
   const data = json as Record<string, unknown> | unknown[] | null
@@ -55,10 +55,12 @@ export const extractChatGPTText = (message: unknown): string => {
   return ""
 }
 
-export const roleFromChatGPTAuthor = (authorRole: unknown): "user" | "assistant" => {
+export const roleFromChatGPTAuthor = (authorRole: unknown): "user" | "assistant" | "system" | "tool" => {
   const r = typeof authorRole === "string" ? authorRole.toLowerCase() : ""
-  if (r === "user") return "user"
-  // Treat system/tool as assistant for export compatibility
+  if (r === "user" || r === "human") return "user"
+  if (r === "system") return "system"
+  if (r === "tool") return "tool"
+  // Treat unknown as assistant for export compatibility
   return "assistant"
 }
 
@@ -83,6 +85,7 @@ const parseTree = (
 
   const platformLabel = getPlatformLabel("chatgpt")
   const messages: Message[] = []
+  let validIndex = 0
 
   for (let i = 0; i < chain.length; i++) {
     const node = chain[i]
@@ -94,8 +97,8 @@ const parseTree = (
 
     const author = msg?.author as Record<string, unknown>
     const role = roleFromChatGPTAuthor(author?.role)
-    const id = typeof msg?.id === "string" ? msg.id : typeof node?.id === "string" ? node.id as string : `chatgpt-${conversationId}-${i}`
-    const authorName = role === "user" ? "You" : platformLabel
+    const id = generateStableMessageId(conversationId, validIndex++)
+    const authorName = role === "user" ? "You" : role === "system" ? "System" : role === "tool" ? "Tool" : platformLabel
 
     messages.push({
       id,
@@ -124,7 +127,7 @@ const parseLinear = (
     if (!msg) continue // Skip nodes without messages (internal/system nodes)
 
     const authorRole = (msg?.author as Record<string, unknown>)?.role
-    if (authorRole !== "user" && authorRole !== "assistant") continue // Skip system messages
+    // Removed strict filtering of system/tool messages
 
     const text = extractChatGPTText(msg)
     if (!text) continue // Skip empty messages
@@ -160,8 +163,8 @@ const parseLinear = (
     const author = msg?.author as Record<string, unknown>
     const role = roleFromChatGPTAuthor(author?.role)
     const text = extractChatGPTText(msg)
-    const id = typeof msg?.id === "string" ? msg.id : typeof node?.id === "string" ? node.id as string : `chatgpt-${conversationId}-${idx}`
-    const authorName = role === "user" ? "You" : platformLabel
+    const id = generateStableMessageId(conversationId, idx)
+    const authorName = role === "user" ? "You" : role === "system" ? "System" : role === "tool" ? "Tool" : platformLabel
 
     return {
       id,
@@ -186,7 +189,7 @@ export const parseChatGPTDetail = (conversationId: string, json: unknown): Pick<
   // Tier 1 (Speed): Try tree traversal first
   try {
     messages = parseTree(conversationId, mapping, currentNode)
-    
+
     // Tier 2 (Safety): If tree returns 0 messages, fallback to linear
     if (messages.length === 0) {
       console.warn("[parseChatGPTDetail] Tree traversal returned 0 messages, falling back to linear parser", { conversationId })

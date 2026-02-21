@@ -1,6 +1,6 @@
 export interface Message {
   id: string
-  role: "user" | "assistant"
+  role: "user" | "assistant" | "system" | "tool"
   text: string
   authorName: string
   // Kept for backward-compatibility with existing consumers/types.

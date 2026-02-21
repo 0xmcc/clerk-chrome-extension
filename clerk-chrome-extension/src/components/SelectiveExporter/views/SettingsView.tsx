@@ -28,6 +28,8 @@ interface SettingsViewProps {
   setStatusMessage: (message: string) => void
   isSignedOut: boolean
   onSignInClick: () => void
+  includeHidden: boolean
+  onIncludeHiddenChange: (value: boolean) => void
 }
 
 export const SettingsView = ({
@@ -54,7 +56,9 @@ export const SettingsView = ({
   onLogout,
   setStatusMessage,
   isSignedOut,
-  onSignInClick
+  onSignInClick,
+  includeHidden,
+  onIncludeHiddenChange
 }: SettingsViewProps) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
@@ -184,21 +188,21 @@ export const SettingsView = ({
             }}
           />
         </div>
-              <a
-                href="https://console.agentmail.to/dashboard/api-keys"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: "inline-block",
-                  marginTop: "2px",
-                  fontSize: "12px",
-                  color: DARK_THEME.accent,
-                  textDecoration: "none"
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.textDecoration = "underline" }}
-                onMouseLeave={(e) => { e.currentTarget.style.textDecoration = "none" }}>
-                🔑 Get your AgentMail API key →
-              </a>
+        <a
+          href="https://console.agentmail.to/dashboard/api-keys"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-block",
+            marginTop: "2px",
+            fontSize: "12px",
+            color: DARK_THEME.accent,
+            textDecoration: "none"
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.textDecoration = "underline" }}
+          onMouseLeave={(e) => { e.currentTarget.style.textDecoration = "none" }}>
+          🔑 Get your AgentMail API key →
+        </a>
 
         {/* Test button */}
         <button
@@ -250,6 +254,38 @@ export const SettingsView = ({
 
         <div style={{ fontSize: "11px", color: DARK_THEME.muted }}>
           Sends emails directly via API when you click "Send to AI"
+        </div>
+      </div>
+
+      {/* Export Settings */}
+      <div>
+        <label
+          style={{
+            display: "block",
+            fontSize: "13px",
+            fontWeight: 600,
+            color: DARK_THEME.text,
+            marginBottom: "12px"
+          }}>
+          Export Behavior
+        </label>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <input
+            type="checkbox"
+            id="settingsIncludeHiddenToggle"
+            checked={includeHidden}
+            onChange={(e) => onIncludeHiddenChange(e.target.checked)}
+            style={{ cursor: "pointer", accentColor: DARK_THEME.accent }}
+          />
+          <label
+            htmlFor="settingsIncludeHiddenToggle"
+            style={{ fontSize: "13px", color: DARK_THEME.text, cursor: "pointer", userSelect: "none" }}
+          >
+            Include hidden system prompts and tool usage
+          </label>
+        </div>
+        <div style={{ fontSize: "11px", color: DARK_THEME.muted, marginTop: "6px" }}>
+          When active, exports include background AI mechanics.
         </div>
       </div>
 
@@ -306,7 +342,7 @@ export const SettingsView = ({
 }
 
 
-      {/* Analysis System Prompt
+{/* Analysis System Prompt
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
           <label

@@ -163,17 +163,42 @@ export const ExportView = ({
           {exportState === "loading" ? "Sending..." : "Send to AI"}
         </button>
       </div>
+
       {historyFormat === "markdown" ? (
-        <pre
-          style={{
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-            fontFamily: "inherit",
-            margin: 0,
-            color: DARK_THEME.text
-          }}>
-          {generateHistory()}
-        </pre>
+        (() => {
+          const text = generateHistory()
+          const headerEndMatch = text.indexOf("--- END HEADER ---")
+
+          if (text.startsWith("--- BEGIN HEADER ---") && headerEndMatch !== -1) {
+            const splitIndex = headerEndMatch + "--- END HEADER ---".length
+            const body = text.slice(splitIndex).trimStart()
+            return (
+              <pre
+                style={{
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  fontFamily: "inherit",
+                  margin: 0,
+                  color: DARK_THEME.text
+                }}>
+                {body}
+              </pre>
+            )
+          }
+
+          return (
+            <pre
+              style={{
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                fontFamily: "inherit",
+                margin: 0,
+                color: DARK_THEME.text
+              }}>
+              {text}
+            </pre>
+          )
+        })()
       ) : (
         <pre
           style={{
