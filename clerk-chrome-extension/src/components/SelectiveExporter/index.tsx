@@ -1,27 +1,41 @@
-import { useEffect, useMemo, useRef, useCallback, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import { detectPlatform, getPlatformLabel } from "~utils/platform"
-import { requestClerkSignOut, requestClerkAuthRefresh } from "~utils/clerk"
-import { openSignInPage } from "~utils/navigation"
-import { debug } from "~utils/debug"
 import { ENABLE_SEND_TO_MY_AI } from "~config/features"
+import { requestClerkAuthRefresh, requestClerkSignOut } from "~utils/clerk"
+import { debug } from "~utils/debug"
+import { openSignInPage } from "~utils/navigation"
+import { detectPlatform, getPlatformLabel } from "~utils/platform"
 
-import type { SelectiveExporterProps } from "./types"
 import { DARK_THEME } from "./constants"
-import { Header } from "./views/Header"
-import { SubHeader } from "./views/SubHeader"
+import {
+  useAnalysisActions,
+  useExportActions,
+  usePromptContainers,
+  useSettingsStorage,
+  useViewState
+} from "./hooks"
+import type { SelectiveExporterProps } from "./types"
 import { ActionArea } from "./views/ActionArea"
-import { SettingsView } from "./views/SettingsView"
 import { AnalysisView } from "./views/AnalysisView"
 import { ExportView } from "./views/ExportView"
+import { Header } from "./views/Header"
 import { LinkedInHelperView } from "./views/LinkedInHelperView"
-import { useSettingsStorage, useExportActions, useAnalysisActions, useViewState, usePromptContainers } from "./hooks"
+import { SettingsView } from "./views/SettingsView"
+import { SubHeader } from "./views/SubHeader"
 
-export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, conversationTitle }: SelectiveExporterProps) => {
+export const SelectiveExporter = ({
+  isOpen,
+  onClose,
+  messages,
+  conversationKey,
+  conversationTitle
+}: SelectiveExporterProps) => {
   const hasInitializedRef = useRef(false)
   const platformLabelRef = useRef(getPlatformLabel())
   const isLinkedIn = useMemo(() => detectPlatform() === "linkedin", [])
-  const [authStatus, setAuthStatus] = useState<"unknown" | "signedOut" | "signedIn">("unknown")
+  const [authStatus, setAuthStatus] = useState<
+    "unknown" | "signedOut" | "signedIn"
+  >("unknown")
   const [awaitingSignIn, setAwaitingSignIn] = useState(false)
   const [includeHiddenMessages, setIncludeHiddenMessages] = useState(false)
 
@@ -36,13 +50,6 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
     analysisSystemPrompt,
     followupSystemPrompt,
     personalContext,
-    analysisLocked,
-    followupLocked,
-    setAnalysisSystemPrompt,
-    setFollowupSystemPrompt,
-    setPersonalContext,
-    toggleAnalysisLock,
-    toggleFollowupLock,
     aiEmail,
     setAiEmail,
     aiEmailFrom,
@@ -55,7 +62,9 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
 
   // Get messages in order (must be before early return to maintain hook order)
   const selectedMessages = useMemo(() => {
-    return messages.filter(m => includeHiddenMessages || (m.role !== "system" && m.role !== "tool"))
+    return messages.filter(
+      (m) => includeHiddenMessages || (m.role !== "system" && m.role !== "tool")
+    )
   }, [messages, includeHiddenMessages])
   const selectedCount = selectedMessages.length
 
@@ -91,7 +100,6 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
     handleAnalysisSend,
     setAnalysisInput,
     formatAnalysisText,
-    buildAnalysisSystemPrompt,
     resetAnalysisState
   } = useAnalysisActions({
     messages: selectedMessages,
@@ -190,7 +198,9 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
     if (result.hasSession) {
       handleSaveToDatabase() // Auto-save on success
     } else {
-      setStatusMessage("Sign in not detected yet. Please try again in a moment.")
+      setStatusMessage(
+        "Sign in not detected yet. Please try again in a moment."
+      )
     }
   }, [handleSaveToDatabase, setStatusMessage])
 
@@ -217,7 +227,8 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
         zIndex: 9999,
         display: "flex",
         flexDirection: "column",
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+        fontFamily:
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
       }}>
       <Header
         title={conversationTitle || `${platformLabelRef.current} Conversation`}
@@ -248,7 +259,12 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
           .analysis-markdown strong { font-weight: 700; }
         `}</style>
         {selectedCount === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px 20px", color: DARK_THEME.muted }}>
+          <div
+            style={{
+              textAlign: "center",
+              padding: "40px 20px",
+              color: DARK_THEME.muted
+            }}>
             <div style={{ fontSize: "48px", marginBottom: "16px" }}>📋</div>
             <p style={{ margin: 0, fontSize: "14px" }}>
               No messages found yet.
@@ -257,7 +273,12 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
             </p>
           </div>
         ) : (
-          <div style={{ fontSize: "14px", lineHeight: 1.6, color: DARK_THEME.text }}>
+          <div
+            style={{
+              fontSize: "14px",
+              lineHeight: 1.6,
+              color: DARK_THEME.text
+            }}>
             {view === "analysis" ? (
               <AnalysisView
                 analysisMessages={analysisMessages}
@@ -278,16 +299,6 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
             ) : (
               <SettingsView
                 messages={selectedMessages}
-                analysisSystemPrompt={analysisSystemPrompt}
-                followupSystemPrompt={followupSystemPrompt}
-                personalContext={personalContext}
-                analysisLocked={analysisLocked}
-                followupLocked={followupLocked}
-                onAnalysisPromptChange={setAnalysisSystemPrompt}
-                onFollowupPromptChange={setFollowupSystemPrompt}
-                onPersonalContextChange={setPersonalContext}
-                onAnalysisLockToggle={toggleAnalysisLock}
-                onFollowupLockToggle={toggleFollowupLock}
                 aiEmail={aiEmail}
                 onAiEmailChange={setAiEmail}
                 aiEmailFrom={aiEmailFrom}
@@ -296,7 +307,6 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
                 onAiEmailProviderChange={setAiEmailProvider}
                 aiEmailApiKey={aiEmailApiKey}
                 onAiEmailApiKeyChange={setAiEmailApiKey}
-                buildAnalysisSystemPrompt={buildAnalysisSystemPrompt}
                 onLogout={handleLogout}
                 setStatusMessage={setStatusMessage}
                 isSignedOut={isSignedOut}

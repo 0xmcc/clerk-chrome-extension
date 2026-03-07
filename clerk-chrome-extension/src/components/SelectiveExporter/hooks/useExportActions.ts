@@ -1,19 +1,26 @@
-import { useState, useCallback } from "react"
+import { useCallback, useState } from "react"
 
+import { API_BASE_URL } from "~config/api"
+import { ENABLE_SEND_TO_MY_AI } from "~config/features"
 import type { Message } from "~hooks/useMessageScanner/types"
 import { requestClerkToken } from "~utils/clerk"
 import { deriveConversationId, sanitizeFilename } from "~utils/conversation"
-import { API_BASE_URL } from "~config/api"
-import { ENABLE_SEND_TO_MY_AI } from "~config/features"
-
 import { detectPlatform, getPlatformLabel } from "~utils/platform"
 
+import { sendAgentMailMessage } from "../services/agentmail"
 import type { ExportState, HistoryFormat } from "../types"
 
-const buildDeterministicHeader = (messages: Message[], platformLabel: string): string => {
-  const conversationId = messages.length > 0 ? (messages[0].id.split("::")[0] || deriveConversationId()) : deriveConversationId()
+const buildDeterministicHeader = (
+  messages: Message[],
+  platformLabel: string
+): string => {
+  const conversationId =
+    messages.length > 0
+      ? messages[0].id.split("::")[0] || deriveConversationId()
+      : deriveConversationId()
   const platformName = platformLabel || "unknown"
-  const canonicalUrlOrUnknown = typeof window !== "undefined" ? window.location.href : "unknown"
+  const canonicalUrlOrUnknown =
+    typeof window !== "undefined" ? window.location.href : "unknown"
   const startTimestamp = "unknown"
   const endTimestamp = "unknown"
 
@@ -31,11 +38,11 @@ const buildDeterministicHeader = (messages: Message[], platformLabel: string): s
   let truncatedRanges = "none"
   if (messages.length > 0) {
     const ids = messages
-      .map(m => {
+      .map((m) => {
         const match = m.id.match(/m_(\d+)$/)
         return match ? parseInt(match[1], 10) : -1
       })
-      .filter(id => id !== -1)
+      .filter((id) => id !== -1)
       .sort((a, b) => a - b)
 
     if (ids.length > 0) {
@@ -57,11 +64,13 @@ const buildDeterministicHeader = (messages: Message[], platformLabel: string): s
       }
 
       if (missingRanges.length > 0) {
-        truncatedRanges = missingRanges.map(([start, end]) => {
-          const s = `m_${String(start).padStart(4, "0")}`
-          const e = `m_${String(end).padStart(4, "0")}`
-          return start === end ? s : `${s}–${e}`
-        }).join(", ")
+        truncatedRanges = missingRanges
+          .map(([start, end]) => {
+            const s = `m_${String(start).padStart(4, "0")}`
+            const e = `m_${String(end).padStart(4, "0")}`
+            return start === end ? s : `${s}–${e}`
+          })
+          .join(", ")
       }
     }
   }
@@ -155,13 +164,15 @@ export const useExportActions = ({
 }: UseExportActionsParams): ExportActionsState & ExportActions => {
   const [exportState, setExportState] = useState<ExportState>("idle")
   const [statusMessage, setStatusMessage] = useState("")
-  const [historyFormat, setHistoryFormat] = useState<HistoryFormat>(initialHistoryFormat)
+  const [historyFormat, setHistoryFormat] =
+    useState<HistoryFormat>(initialHistoryFormat)
 
   const generateMarkdown = useCallback(() => {
     const header = buildDeterministicHeader(messages, platformLabel)
     const body = messages
       .map((msg, index) => {
-        const fromLabel = msg.authorName || (msg.role === "user" ? "User" : "Assistant")
+        const fromLabel =
+          msg.authorName || (msg.role === "user" ? "User" : "Assistant")
         const msgIdMatch = msg.id.match(/m_\d+$/)
         const refId = msgIdMatch ? `[${msgIdMatch[0]}] ` : ""
         return `**${refId}${fromLabel}**\n${msg.text}\n`
@@ -188,9 +199,10 @@ export const useExportActions = ({
   }, [historyFormat, generateJSON, generateMarkdown])
 
   const handleCopy = useCallback(async () => {
-    const content = historyFormat === "markdown"
-      ? generateMarkdown()
-      : JSON.stringify(generateJSON(), null, 2)
+    const content =
+      historyFormat === "markdown"
+        ? generateMarkdown()
+        : JSON.stringify(generateJSON(), null, 2)
     try {
       await navigator.clipboard.writeText(content)
       console.log("[SelectiveExporter] Copied to clipboard")
@@ -202,13 +214,17 @@ export const useExportActions = ({
   const handleExport = useCallback(() => {
     if (messages.length === 0) return
 
-    const content = historyFormat === "markdown"
-      ? generateMarkdown()
-      : JSON.stringify(generateJSON(), null, 2)
+    const content =
+      historyFormat === "markdown"
+        ? generateMarkdown()
+        : JSON.stringify(generateJSON(), null, 2)
     const ext = historyFormat === "markdown" ? "md" : "json"
-    const base = sanitizeFilename(conversationTitle) || `conversation-${deriveConversationId()}`
+    const base =
+      sanitizeFilename(conversationTitle) ||
+      `conversation-${deriveConversationId()}`
     const filename = `${base}.${ext}`
-    const mimeType = historyFormat === "markdown" ? "text/markdown" : "application/json"
+    const mimeType =
+      historyFormat === "markdown" ? "text/markdown" : "application/json"
 
     const blob = new Blob([content], { type: mimeType })
     const url = URL.createObjectURL(blob)
@@ -220,8 +236,16 @@ export const useExportActions = ({
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
 
-    console.log(`[SelectiveExporter] Exported ${historyFormat} file: ${filename}`)
-  }, [messages.length, historyFormat, generateMarkdown, generateJSON, conversationTitle])
+    console.log(
+      `[SelectiveExporter] Exported ${historyFormat} file: ${filename}`
+    )
+  }, [
+    messages.length,
+    historyFormat,
+    generateMarkdown,
+    generateJSON,
+    conversationTitle
+  ])
 
   const handleSendToAI = useCallback(async () => {
     if (messages.length === 0) return
@@ -246,7 +270,12 @@ export const useExportActions = ({
       const source = platform === "claude" ? "claude" : "chatgpt"
       const platformName = getPlatformLabel(platform)
       const now = new Date()
-      const timestamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "").slice(0, 15) + "Z"
+      const timestamp =
+        now
+          .toISOString()
+          .replace(/[-:]/g, "")
+          .replace(/\.\d{3}/, "")
+          .slice(0, 15) + "Z"
       const filename = `ai-handoff-${source}-${timestamp}.md`
 
       // Generate transcript markdown
@@ -265,7 +294,8 @@ export const useExportActions = ({
       ]
 
       messages.forEach((msg, index) => {
-        const fromLabel = msg.authorName || (msg.role === "user" ? "User" : "Assistant")
+        const fromLabel =
+          msg.authorName || (msg.role === "user" ? "User" : "Assistant")
         const msgIdMatch = msg.id.match(/m_\d+$/)
         const refId = msgIdMatch ? `[${msgIdMatch[0]}] ` : ""
         transcriptLines.push(`**${refId}${fromLabel}**`)
@@ -274,11 +304,17 @@ export const useExportActions = ({
       })
 
       const transcriptContent = transcriptLines.join("\n")
-      const transcriptBase64 = btoa(unescape(encodeURIComponent(transcriptContent)))
+      const transcriptBase64 = btoa(
+        unescape(encodeURIComponent(transcriptContent))
+      )
 
       // Build subject
-      const titleText = conversationTitle || messages.find(m => m.role === "user")?.text || "Conversation"
-      const clippedTitle = titleText.length > 60 ? titleText.slice(0, 60) : titleText
+      const titleText =
+        conversationTitle ||
+        messages.find((m) => m.role === "user")?.text ||
+        "Conversation"
+      const clippedTitle =
+        titleText.length > 60 ? titleText.slice(0, 60) : titleText
       const subject = `AI Handoff: ${clippedTitle}`
 
       // Build body
@@ -296,39 +332,32 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
       // Extract the local part of the from address for the API endpoint
       const fromAddress = aiEmailFrom.trim()
 
-      const result = await chrome.runtime.sendMessage({
-        action: "proxyFetch",
-        url: `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(fromAddress)}/messages`,
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${aiEmailApiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          to: [aiEmail.trim()],
-          subject,
-          text: body,
-          attachments: [
-            {
-              filename,
-              content: transcriptBase64,
-              content_type: "text/markdown"
-            }
-          ]
-        })
+      await sendAgentMailMessage({
+        fromAddress,
+        apiKey: aiEmailApiKey,
+        to: [aiEmail.trim()],
+        subject,
+        text: body,
+        attachments: [
+          {
+            filename,
+            content: transcriptBase64,
+            content_type: "text/markdown"
+          }
+        ]
       })
-
-      if (!result.success) {
-        throw new Error(result.error || result.data?.message || `Send failed (${result.status})`)
-      }
 
       setExportState("success")
       setStatusMessage("✅ Sent to your AI")
-      console.log(`[SelectiveExporter] Send to AI: sent ${filename} via AgentMail`)
+      console.log(
+        `[SelectiveExporter] Send to AI: sent ${filename} via AgentMail`
+      )
     } catch (error) {
       console.error("[SelectiveExporter] Send to AI failed:", error)
       setExportState("error")
-      setStatusMessage(error instanceof Error ? error.message : "Failed to send to AI")
+      setStatusMessage(
+        error instanceof Error ? error.message : "Failed to send to AI"
+      )
     }
   }, [messages, conversationTitle, aiEmail, aiEmailFrom, aiEmailApiKey])
 
@@ -376,7 +405,11 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
       const result = await response.json().catch(() => null)
 
       if (!response.ok) {
-        throw new Error(result?.error || result?.message || `Save failed with status ${response.status}`)
+        throw new Error(
+          result?.error ||
+            result?.message ||
+            `Save failed with status ${response.status}`
+        )
       }
 
       setExportState("success")
@@ -385,7 +418,9 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
     } catch (error) {
       console.error("[SelectiveExporter] Save failed:", error)
       setExportState("error")
-      setStatusMessage(error instanceof Error ? error.message : "Failed to save conversation.")
+      setStatusMessage(
+        error instanceof Error ? error.message : "Failed to save conversation."
+      )
     }
   }, [messages, exportState, platformLabel])
 

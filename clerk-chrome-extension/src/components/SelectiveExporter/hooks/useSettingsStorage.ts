@@ -4,8 +4,6 @@ interface SettingsState {
   analysisSystemPrompt: string
   followupSystemPrompt: string
   personalContext: string
-  analysisLocked: boolean
-  followupLocked: boolean
   aiEmail: string
   aiEmailFrom: string
   aiEmailProvider: string
@@ -16,8 +14,6 @@ interface SettingsActions {
   setAnalysisSystemPrompt: (value: string) => void
   setFollowupSystemPrompt: (value: string) => void
   setPersonalContext: (value: string) => void
-  toggleAnalysisLock: () => void
-  toggleFollowupLock: () => void
   setAiEmail: (value: string) => void
   setAiEmailFrom: (value: string) => void
   setAiEmailProvider: (value: string) => void
@@ -26,14 +22,12 @@ interface SettingsActions {
 
 /**
  * Hook for managing settings state and persistence to chrome.storage.local.
- * Handles: analysisSystemPrompt, followupSystemPrompt, personalContext, lock toggles.
+ * Handles analysis prompts, personal context, and Send to My AI configuration.
  */
 export const useSettingsStorage = (): SettingsState & SettingsActions => {
   const [analysisSystemPrompt, setAnalysisSystemPromptState] = useState("")
   const [followupSystemPrompt, setFollowupSystemPromptState] = useState("")
   const [personalContext, setPersonalContextState] = useState("")
-  const [analysisLocked, setAnalysisLocked] = useState(true)
-  const [followupLocked, setFollowupLocked] = useState(true)
   const [aiEmail, setAiEmailState] = useState("")
   const [aiEmailFrom, setAiEmailFromState] = useState("")
   const [aiEmailProvider, setAiEmailProviderState] = useState("agentmail")
@@ -41,18 +35,30 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
 
   // Load from chrome.storage on mount
   useEffect(() => {
-    chrome.storage.local.get(['analysisSystemPrompt', 'followupSystemPrompt', 'personalContext', 'aiEmail', 'aiEmailFrom', 'aiEmailProvider', 'aiEmailApiKey'], (result) => {
-      if (result.analysisSystemPrompt) setAnalysisSystemPromptState(result.analysisSystemPrompt)
-      if (result.followupSystemPrompt) setFollowupSystemPromptState(result.followupSystemPrompt)
-      if (result.personalContext) setPersonalContextState(result.personalContext)
-      if (result.aiEmail) setAiEmailState(result.aiEmail)
-      if (result.aiEmailFrom) setAiEmailFromState(result.aiEmailFrom)
-      if (result.aiEmailProvider) setAiEmailProviderState(result.aiEmailProvider)
-      if (result.aiEmailApiKey) setAiEmailApiKeyState(result.aiEmailApiKey)
-    })
-    // Default to locked
-    setAnalysisLocked(true)
-    setFollowupLocked(true)
+    chrome.storage.local.get(
+      [
+        "analysisSystemPrompt",
+        "followupSystemPrompt",
+        "personalContext",
+        "aiEmail",
+        "aiEmailFrom",
+        "aiEmailProvider",
+        "aiEmailApiKey"
+      ],
+      (result) => {
+        if (result.analysisSystemPrompt)
+          setAnalysisSystemPromptState(result.analysisSystemPrompt)
+        if (result.followupSystemPrompt)
+          setFollowupSystemPromptState(result.followupSystemPrompt)
+        if (result.personalContext)
+          setPersonalContextState(result.personalContext)
+        if (result.aiEmail) setAiEmailState(result.aiEmail)
+        if (result.aiEmailFrom) setAiEmailFromState(result.aiEmailFrom)
+        if (result.aiEmailProvider)
+          setAiEmailProviderState(result.aiEmailProvider)
+        if (result.aiEmailApiKey) setAiEmailApiKeyState(result.aiEmailApiKey)
+      }
+    )
   }, [])
 
   const setAnalysisSystemPrompt = (value: string) => {
@@ -68,14 +74,6 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
   const setPersonalContext = (value: string) => {
     setPersonalContextState(value)
     chrome.storage.local.set({ personalContext: value })
-  }
-
-  const toggleAnalysisLock = () => {
-    setAnalysisLocked((prev) => !prev)
-  }
-
-  const toggleFollowupLock = () => {
-    setFollowupLocked((prev) => !prev)
   }
 
   const setAiEmail = (value: string) => {
@@ -102,13 +100,9 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
     analysisSystemPrompt,
     followupSystemPrompt,
     personalContext,
-    analysisLocked,
-    followupLocked,
     setAnalysisSystemPrompt,
     setFollowupSystemPrompt,
     setPersonalContext,
-    toggleAnalysisLock,
-    toggleFollowupLock,
     aiEmail,
     setAiEmail,
     aiEmailFrom,
