@@ -30,6 +30,7 @@ interface SettingsViewProps {
   onSignInClick: () => void
   includeHidden: boolean
   onIncludeHiddenChange: (value: boolean) => void
+  showSendToMyAI: boolean
 }
 
 export const SettingsView = ({
@@ -58,7 +59,8 @@ export const SettingsView = ({
   isSignedOut,
   onSignInClick,
   includeHidden,
-  onIncludeHiddenChange
+  onIncludeHiddenChange,
+  showSendToMyAI
 }: SettingsViewProps) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
@@ -86,176 +88,177 @@ export const SettingsView = ({
         <ConversationDepthIndicator messages={messages} />
       </div>
 
-      {/* Send to AI Settings */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        <label
-          style={{
-            display: "block",
-            fontSize: "13px",
-            fontWeight: 600,
-            color: DARK_THEME.text
-          }}>
-          Send to My AI
-        </label>
-
-        {/* My AI Email (To) */}
-        <div>
-          <label style={{ display: "block", fontSize: "12px", color: DARK_THEME.textSecondary, marginBottom: "4px" }}>
-            My AI Email (To)
-          </label>
-          <input
-            type="email"
-            value={aiEmail}
-            onChange={(e) => onAiEmailChange(e.target.value)}
-            placeholder="your-ai@agentmail.to"
+      {showSendToMyAI && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <label
             style={{
-              width: "100%",
-              background: DARK_THEME.surface,
-              padding: "10px 12px",
-              borderRadius: "6px",
-              border: `1px solid ${DARK_THEME.borderSubtle}`,
+              display: "block",
               fontSize: "13px",
-              color: DARK_THEME.text,
-              boxSizing: "border-box"
-            }}
-          />
-        </div>
-
-        {/* From Email */}
-        <div>
-          <label style={{ display: "block", fontSize: "12px", color: DARK_THEME.textSecondary, marginBottom: "4px" }}>
-            From Email
-          </label>
-          <input
-            type="email"
-            value={aiEmailFrom}
-            onChange={(e) => onAiEmailFromChange(e.target.value)}
-            placeholder="you@agentmail.to"
-            style={{
-              width: "100%",
-              background: DARK_THEME.surface,
-              padding: "10px 12px",
-              borderRadius: "6px",
-              border: `1px solid ${DARK_THEME.borderSubtle}`,
-              fontSize: "13px",
-              color: DARK_THEME.text,
-              boxSizing: "border-box"
-            }}
-          />
-        </div>
-
-        {/* Provider */}
-        <div>
-          <label style={{ display: "block", fontSize: "12px", color: DARK_THEME.textSecondary, marginBottom: "4px" }}>
-            Provider
-          </label>
-          <select
-            value={aiEmailProvider}
-            onChange={(e) => onAiEmailProviderChange(e.target.value)}
-            style={{
-              width: "100%",
-              background: DARK_THEME.surface,
-              padding: "10px 12px",
-              borderRadius: "6px",
-              border: `1px solid ${DARK_THEME.borderSubtle}`,
-              fontSize: "13px",
-              color: DARK_THEME.text,
-              boxSizing: "border-box"
+              fontWeight: 600,
+              color: DARK_THEME.text
             }}>
-            <option value="agentmail">AgentMail</option>
-          </select>
-        </div>
-
-        {/* API Key */}
-        <div>
-          <label style={{ display: "block", fontSize: "12px", color: DARK_THEME.textSecondary, marginBottom: "4px" }}>
-            API Key
+            Send to My AI
           </label>
-          <input
-            type="password"
-            value={aiEmailApiKey}
-            onChange={(e) => onAiEmailApiKeyChange(e.target.value)}
-            placeholder="am_xxx..."
+
+          {/* My AI Email (To) */}
+          <div>
+            <label style={{ display: "block", fontSize: "12px", color: DARK_THEME.textSecondary, marginBottom: "4px" }}>
+              My AI Email (To)
+            </label>
+            <input
+              type="email"
+              value={aiEmail}
+              onChange={(e) => onAiEmailChange(e.target.value)}
+              placeholder="your-ai@agentmail.to"
+              style={{
+                width: "100%",
+                background: DARK_THEME.surface,
+                padding: "10px 12px",
+                borderRadius: "6px",
+                border: `1px solid ${DARK_THEME.borderSubtle}`,
+                fontSize: "13px",
+                color: DARK_THEME.text,
+                boxSizing: "border-box"
+              }}
+            />
+          </div>
+
+          {/* From Email */}
+          <div>
+            <label style={{ display: "block", fontSize: "12px", color: DARK_THEME.textSecondary, marginBottom: "4px" }}>
+              From Email
+            </label>
+            <input
+              type="email"
+              value={aiEmailFrom}
+              onChange={(e) => onAiEmailFromChange(e.target.value)}
+              placeholder="you@agentmail.to"
+              style={{
+                width: "100%",
+                background: DARK_THEME.surface,
+                padding: "10px 12px",
+                borderRadius: "6px",
+                border: `1px solid ${DARK_THEME.borderSubtle}`,
+                fontSize: "13px",
+                color: DARK_THEME.text,
+                boxSizing: "border-box"
+              }}
+            />
+          </div>
+
+          {/* Provider */}
+          <div>
+            <label style={{ display: "block", fontSize: "12px", color: DARK_THEME.textSecondary, marginBottom: "4px" }}>
+              Provider
+            </label>
+            <select
+              value={aiEmailProvider}
+              onChange={(e) => onAiEmailProviderChange(e.target.value)}
+              style={{
+                width: "100%",
+                background: DARK_THEME.surface,
+                padding: "10px 12px",
+                borderRadius: "6px",
+                border: `1px solid ${DARK_THEME.borderSubtle}`,
+                fontSize: "13px",
+                color: DARK_THEME.text,
+                boxSizing: "border-box"
+              }}>
+              <option value="agentmail">AgentMail</option>
+            </select>
+          </div>
+
+          {/* API Key */}
+          <div>
+            <label style={{ display: "block", fontSize: "12px", color: DARK_THEME.textSecondary, marginBottom: "4px" }}>
+              API Key
+            </label>
+            <input
+              type="password"
+              value={aiEmailApiKey}
+              onChange={(e) => onAiEmailApiKeyChange(e.target.value)}
+              placeholder="am_xxx..."
+              style={{
+                width: "100%",
+                background: DARK_THEME.surface,
+                padding: "10px 12px",
+                borderRadius: "6px",
+                border: `1px solid ${DARK_THEME.borderSubtle}`,
+                fontSize: "13px",
+                color: DARK_THEME.text,
+                boxSizing: "border-box"
+              }}
+            />
+          </div>
+          <a
+            href="https://console.agentmail.to/dashboard/api-keys"
+            target="_blank"
+            rel="noopener noreferrer"
             style={{
-              width: "100%",
-              background: DARK_THEME.surface,
-              padding: "10px 12px",
+              display: "inline-block",
+              marginTop: "2px",
+              fontSize: "12px",
+              color: DARK_THEME.accent,
+              textDecoration: "none"
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.textDecoration = "underline" }}
+            onMouseLeave={(e) => { e.currentTarget.style.textDecoration = "none" }}>
+            🔑 Get your AgentMail API key →
+          </a>
+
+          {/* Test button */}
+          <button
+            onClick={async () => {
+              if (!aiEmail || !aiEmailFrom || !aiEmailApiKey) {
+                setStatusMessage("Fill in all email settings first")
+                return
+              }
+              setIsTesting(true)
+              try {
+                const result = await chrome.runtime.sendMessage({
+                  action: "proxyFetch",
+                  url: `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(aiEmailFrom.trim())}/messages`,
+                  method: "POST",
+                  headers: {
+                    "Authorization": `Bearer ${aiEmailApiKey}`,
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({
+                    to: [aiEmail.trim()],
+                    subject: "AI Handoff Test",
+                    text: "This is a test email from the Send to my AI extension. If your AI received this, the connection is working!"
+                  })
+                })
+                if (!result.success) {
+                  throw new Error(result.error || result.data?.message || `Failed (${result.status})`)
+                }
+                setStatusMessage("✅ Test email sent!")
+              } catch (error) {
+                setStatusMessage(error instanceof Error ? error.message : "Test failed")
+              } finally {
+                setIsTesting(false)
+              }
+            }}
+            disabled={isTesting}
+            style={{
+              alignSelf: "flex-start",
+              padding: "6px 14px",
               borderRadius: "6px",
               border: `1px solid ${DARK_THEME.borderSubtle}`,
-              fontSize: "13px",
+              background: DARK_THEME.surface,
               color: DARK_THEME.text,
-              boxSizing: "border-box"
-            }}
-          />
-        </div>
-        <a
-          href="https://console.agentmail.to/dashboard/api-keys"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline-block",
-            marginTop: "2px",
-            fontSize: "12px",
-            color: DARK_THEME.accent,
-            textDecoration: "none"
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.textDecoration = "underline" }}
-          onMouseLeave={(e) => { e.currentTarget.style.textDecoration = "none" }}>
-          🔑 Get your AgentMail API key →
-        </a>
+              fontSize: "12px",
+              cursor: isTesting ? "not-allowed" : "pointer",
+              opacity: isTesting ? 0.6 : 1
+            }}>
+            {isTesting ? "Sending..." : "🧪 Test"}
+          </button>
 
-        {/* Test button */}
-        <button
-          onClick={async () => {
-            if (!aiEmail || !aiEmailFrom || !aiEmailApiKey) {
-              setStatusMessage("Fill in all email settings first")
-              return
-            }
-            setIsTesting(true)
-            try {
-              const result = await chrome.runtime.sendMessage({
-                action: "proxyFetch",
-                url: `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(aiEmailFrom.trim())}/messages`,
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${aiEmailApiKey}`,
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                  to: [aiEmail.trim()],
-                  subject: "AI Handoff Test",
-                  text: "This is a test email from the Send to my AI extension. If your AI received this, the connection is working!"
-                })
-              })
-              if (!result.success) {
-                throw new Error(result.error || result.data?.message || `Failed (${result.status})`)
-              }
-              setStatusMessage("✅ Test email sent!")
-            } catch (error) {
-              setStatusMessage(error instanceof Error ? error.message : "Test failed")
-            } finally {
-              setIsTesting(false)
-            }
-          }}
-          disabled={isTesting}
-          style={{
-            alignSelf: "flex-start",
-            padding: "6px 14px",
-            borderRadius: "6px",
-            border: `1px solid ${DARK_THEME.borderSubtle}`,
-            background: DARK_THEME.surface,
-            color: DARK_THEME.text,
-            fontSize: "12px",
-            cursor: isTesting ? "not-allowed" : "pointer",
-            opacity: isTesting ? 0.6 : 1
-          }}>
-          {isTesting ? "Sending..." : "🧪 Test"}
-        </button>
-
-        <div style={{ fontSize: "11px", color: DARK_THEME.muted }}>
-          Sends emails directly via API when you click "Send to AI"
+          <div style={{ fontSize: "11px", color: DARK_THEME.muted }}>
+            Sends emails directly via API when you click "Send to AI"
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Export Settings */}
       <div>

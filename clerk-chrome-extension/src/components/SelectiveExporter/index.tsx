@@ -4,6 +4,7 @@ import { detectPlatform, getPlatformLabel } from "~utils/platform"
 import { requestClerkSignOut, requestClerkAuthRefresh } from "~utils/clerk"
 import { openSignInPage } from "~utils/navigation"
 import { debug } from "~utils/debug"
+import { ENABLE_SEND_TO_MY_AI } from "~config/features"
 
 import type { SelectiveExporterProps } from "./types"
 import { DARK_THEME } from "./constants"
@@ -271,6 +272,7 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
                 onCopy={handleCopy}
                 onExport={handleExport}
                 onSendToAI={handleSendToAI}
+                showSendToMyAI={ENABLE_SEND_TO_MY_AI}
                 generateHistory={generateHistory}
               />
             ) : (
@@ -301,6 +303,7 @@ export const SelectiveExporter = ({ isOpen, onClose, messages, conversationKey, 
                 onSignInClick={handleSignInClick}
                 includeHidden={includeHiddenMessages}
                 onIncludeHiddenChange={setIncludeHiddenMessages}
+                showSendToMyAI={ENABLE_SEND_TO_MY_AI}
               />
             )}
           </div>

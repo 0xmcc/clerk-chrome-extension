@@ -4,6 +4,7 @@ import type { Message } from "~hooks/useMessageScanner/types"
 import { requestClerkToken } from "~utils/clerk"
 import { deriveConversationId, sanitizeFilename } from "~utils/conversation"
 import { API_BASE_URL } from "~config/api"
+import { ENABLE_SEND_TO_MY_AI } from "~config/features"
 
 import { detectPlatform, getPlatformLabel } from "~utils/platform"
 
@@ -224,6 +225,11 @@ export const useExportActions = ({
 
   const handleSendToAI = useCallback(async () => {
     if (messages.length === 0) return
+    if (!ENABLE_SEND_TO_MY_AI) {
+      setExportState("error")
+      setStatusMessage("Send to My AI is disabled in production builds")
+      return
+    }
 
     // Check settings are configured
     if (!aiEmail || !aiEmailFrom || !aiEmailApiKey) {

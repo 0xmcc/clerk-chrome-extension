@@ -9,6 +9,7 @@
 import type { PlasmoCSConfig } from "plasmo"
 import { extractTweetData } from "~lib/tweet-extractor"
 import { saveTweet, checkSavedTweets } from "~lib/tweet-saver"
+import { ENABLE_TWEET_BOOKMARK } from "~config/features"
 
 // ---------------------------------------------------------------------------
 // Plasmo config
@@ -1170,6 +1171,11 @@ function startObserver(): void {
 // ---------------------------------------------------------------------------
 
 function init(): void {
+  if (!ENABLE_TWEET_BOOKMARK) {
+    console.log("[TweetSaver] Disabled in production build")
+    return
+  }
+
   console.log("[TweetSaver] Initializing tweet save buttons")
   injectStyles()
   processAllArticles()

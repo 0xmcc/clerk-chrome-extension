@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "plasmo dev",
     "build": "plasmo build",
-    "build:store": "plasmo build && node -e \"const fs=require('fs');const m='build/chrome-mv3-prod/manifest.json';const j=JSON.parse(fs.readFileSync(m));delete j.key;fs.writeFileSync(m,JSON.stringify(j,null,2))\"",
+    "build:store": "plasmo build && node scripts/prepare-prod-manifest.js",
     "package": "plasmo package",
     "web:dev": "vite --config vite.web.config.ts",
     "web:build": "vite build --config vite.web.config.ts",
