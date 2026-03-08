@@ -4,6 +4,7 @@ import { DARK_THEME } from "../constants"
 interface ActionAreaProps {
   view: ViewMode
   selectedCount: number
+  canSave: boolean
   exportState: ExportState
   statusMessage: string
   analysisInput: string
@@ -25,6 +26,7 @@ const getSaveButtonText = (exportState: ExportState, isSignedOut: boolean): stri
 export const ActionArea = ({
   view,
   selectedCount,
+  canSave,
   exportState,
   statusMessage,
   analysisInput,
@@ -64,19 +66,19 @@ export const ActionArea = ({
           }}>
           <button
             onClick={onSave}
-            disabled={selectedCount === 0 || exportState === "loading"}
+            disabled={!canSave || selectedCount === 0 || exportState === "loading"}
             style={{
               width: "100%",
               padding: "12px 16px",
               borderRadius: "8px",
               border: "none",
-              background: selectedCount === 0 || exportState === "loading" ? DARK_THEME.border : "#ffffff",
-              color: selectedCount === 0 || exportState === "loading" ? DARK_THEME.muted : "#0a0a0a",
-              cursor: selectedCount === 0 || exportState === "loading" ? "not-allowed" : "pointer",
+              background: !canSave || selectedCount === 0 || exportState === "loading" ? DARK_THEME.border : "#ffffff",
+              color: !canSave || selectedCount === 0 || exportState === "loading" ? DARK_THEME.muted : "#0a0a0a",
+              cursor: !canSave || selectedCount === 0 || exportState === "loading" ? "not-allowed" : "pointer",
               fontSize: "15px",
               fontWeight: 600,
               boxShadow: DARK_THEME.glow,
-              opacity: selectedCount === 0 || exportState === "loading" ? 0.7 : 1,
+              opacity: !canSave || selectedCount === 0 || exportState === "loading" ? 0.7 : 1,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",

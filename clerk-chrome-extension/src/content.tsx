@@ -4,6 +4,7 @@ import type { PlasmoCSConfig } from "plasmo"
 
 import { FloatingButton } from "~features/floating-button"
 import { SelectiveExporter } from "~components/SelectiveExporter"
+import { useCaptureSource } from "~hooks/useCaptureSource"
 import { useMessageScanner } from "~hooks/useMessageScanner"
 import { debug } from "~utils/debug"
 
@@ -14,10 +15,8 @@ function logRescanOnOpen(step: string, details?: Record<string, unknown>) {
 
 export const config: PlasmoCSConfig = {
   matches: [
-    "https://chat.openai.com/*",
-    "https://chatgpt.com/*",
-    "https://claude.ai/*",
-    "https://*.claude.ai/*"
+    "http://*/*",
+    "https://*/*"
   ]
 }
 
@@ -62,6 +61,12 @@ const PlasmoOverlay = () => {
 
   // Always-on scanner - no props, returns stable activeConvoKey and activeMessageCount for guards
   const { messages, conversationTitle, conversationKey, rescan, activeConvoKey, activeMessageCount } = useMessageScanner()
+  const { capture, emptyStateMessage } = useCaptureSource({
+    isOpen: isExporterOpen,
+    messages,
+    conversationKey,
+    conversationTitle
+  })
 
   // Guarded rescan-on-open: uses store-based activeMessageCount and cooldown retry
   useEffect(() => {
@@ -131,9 +136,9 @@ const PlasmoOverlay = () => {
       <SelectiveExporter
         isOpen={isExporterOpen}
         onClose={() => setIsExporterOpen(false)}
-        messages={messages}
+        capture={capture}
         conversationKey={conversationKey}
-        conversationTitle={conversationTitle}
+        emptyStateMessage={emptyStateMessage}
       />
     </>
   )

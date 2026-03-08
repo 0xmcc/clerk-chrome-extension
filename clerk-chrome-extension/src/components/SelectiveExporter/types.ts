@@ -1,4 +1,4 @@
-import type { Message } from "~hooks/useMessageScanner/types"
+import type { ExportCapture } from "~lib/capture"
 
 /**
  * Props for the SelectiveExporter component.
@@ -6,9 +6,9 @@ import type { Message } from "~hooks/useMessageScanner/types"
 export interface SelectiveExporterProps {
   isOpen: boolean
   onClose: () => void
-  messages: Message[]
+  capture: ExportCapture | null
   conversationKey: string
-  conversationTitle?: string
+  emptyStateMessage: string
 }
 
 /**

@@ -2,7 +2,7 @@ import { DARK_THEME } from "../constants"
 
 interface HeaderProps {
   title: string
-  messageCount: number
+  summaryText: string
   onSettingsClick: () => void
   onClose: () => void
   showAuthBanner?: boolean
@@ -11,7 +11,7 @@ interface HeaderProps {
 
 export const Header = ({
   title,
-  messageCount,
+  summaryText,
   onSettingsClick,
   onClose,
   showAuthBanner = false,
@@ -110,7 +110,7 @@ export const Header = ({
           </div>
         </div>
         <div style={{ marginTop: "8px", fontSize: "12px", color: DARK_THEME.muted }}>
-          {messageCount} messages detected
+          {summaryText}
         </div>
       </div>
     </div>

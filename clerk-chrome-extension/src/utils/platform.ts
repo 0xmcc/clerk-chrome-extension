@@ -12,5 +12,5 @@ export const getPlatformLabel = (platform: Platform = detectPlatform()) => {
   if (platform === "linkedin") return "LinkedIn"
   if (platform === "claude") return "Claude"
   if (platform === "chatgpt") return "ChatGPT"
-  return "Conversation"
+  return "Web Page"
 }

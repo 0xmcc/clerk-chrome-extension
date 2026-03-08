@@ -70,7 +70,7 @@ export const FloatingButton = ({ onOpenExporter }: FloatingButtonProps) => {
       <div
         onClick={handleClick}
         onContextMenu={handleRightClick}
-        title="Text Tools - Click for options"
+        title="Capture this page for AI"
         style={{
           position: "fixed",
           bottom: "20px",

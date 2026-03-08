@@ -1,8 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react"
 
 import { ENABLE_SEND_TO_MY_AI } from "~config/features"
 import { requestClerkAuthRefresh, requestClerkSignOut } from "~utils/clerk"
 import { debug } from "~utils/debug"
+import type { HistoryFormat } from "./types"
 import { openSignInPage } from "~utils/navigation"
 import { detectPlatform, getPlatformLabel } from "~utils/platform"
 
@@ -26,9 +34,9 @@ import { SubHeader } from "./views/SubHeader"
 export const SelectiveExporter = ({
   isOpen,
   onClose,
-  messages,
+  capture,
   conversationKey,
-  conversationTitle
+  emptyStateMessage
 }: SelectiveExporterProps) => {
   const hasInitializedRef = useRef(false)
   const platformLabelRef = useRef(getPlatformLabel())
@@ -39,8 +47,12 @@ export const SelectiveExporter = ({
   const [awaitingSignIn, setAwaitingSignIn] = useState(false)
   const [includeHiddenMessages, setIncludeHiddenMessages] = useState(false)
 
+  const isStructuredCapture = capture?.captureMode === "structured_conversation"
+  const captureTitle =
+    capture?.title || capture?.metadata.pageTitle || `${platformLabelRef.current} Conversation`
+
   // Derive isSignedOut for minimal churn (keeps existing prop names)
-  const isSignedOut = authStatus === "signedOut"
+  const isSignedOut = authStatus === "signedOut" && isStructuredCapture
 
   // View state management (single enum - no boolean drift)
   const { view, goToExport, goToSettings } = useViewState()
@@ -62,11 +74,23 @@ export const SelectiveExporter = ({
 
   // Get messages in order (must be before early return to maintain hook order)
   const selectedMessages = useMemo(() => {
-    return messages.filter(
+    const transcriptMessages =
+      capture?.captureMode === "structured_conversation" ? capture.messages : []
+    return transcriptMessages.filter(
       (m) => includeHiddenMessages || (m.role !== "system" && m.role !== "tool")
     )
-  }, [messages, includeHiddenMessages])
-  const selectedCount = selectedMessages.length
+  }, [capture, includeHiddenMessages])
+  const selectedCount =
+    capture?.captureMode === "page_markdown" ? 1 : selectedMessages.length
+  const summaryText =
+    capture?.captureMode === "page_markdown"
+      ? "Page markdown capture ready"
+      : `${selectedCount} messages detected`
+  const availableHistoryFormats: HistoryFormat[] =
+    capture?.captureMode === "page_markdown"
+      ? ["markdown"]
+      : ["markdown", "json"]
+  const canSave = isStructuredCapture
 
   // Export actions
   const {
@@ -83,10 +107,12 @@ export const SelectiveExporter = ({
     generateHistory,
     resetExportState
   } = useExportActions({
-    messages: selectedMessages,
+    capture: capture?.captureMode === "structured_conversation"
+      ? { ...capture, messages: selectedMessages }
+      : capture,
     historyFormat: "markdown",
     platformLabel: platformLabelRef.current,
-    conversationTitle,
+    conversationTitle: captureTitle,
     aiEmail,
     aiEmailFrom,
     aiEmailApiKey,
@@ -131,13 +157,13 @@ export const SelectiveExporter = ({
 
   // Track initialization state
   useEffect(() => {
-    if (isOpen && messages.length > 0 && !hasInitializedRef.current) {
+    if (isOpen && selectedCount > 0 && !hasInitializedRef.current) {
       hasInitializedRef.current = true
     }
     if (!isOpen) {
       hasInitializedRef.current = false
     }
-  }, [isOpen, messages.length])
+  }, [isOpen, selectedCount])
 
   const handleClose = () => {
     onClose()
@@ -231,8 +257,8 @@ export const SelectiveExporter = ({
           "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
       }}>
       <Header
-        title={conversationTitle || `${platformLabelRef.current} Conversation`}
-        messageCount={selectedCount}
+        title={captureTitle}
+        summaryText={summaryText}
         onSettingsClick={goToSettings}
         onClose={handleClose}
         showAuthBanner={isSignedOut}
@@ -258,7 +284,7 @@ export const SelectiveExporter = ({
           .analysis-markdown li { list-style: disc; margin: 4px 0; }
           .analysis-markdown strong { font-weight: 700; }
         `}</style>
-        {selectedCount === 0 ? (
+        {!capture ? (
           <div
             style={{
               textAlign: "center",
@@ -267,9 +293,12 @@ export const SelectiveExporter = ({
             }}>
             <div style={{ fontSize: "48px", marginBottom: "16px" }}>📋</div>
             <p style={{ margin: 0, fontSize: "14px" }}>
-              No messages found yet.
-              <br />
-              Once messages load, they'll appear here automatically.
+              {emptyStateMessage.split("\n").map((line, index) => (
+                <Fragment key={`${line}-${index}`}>
+                  {index > 0 && <br />}
+                  {line}
+                </Fragment>
+              ))}
             </p>
           </div>
         ) : (
@@ -287,13 +316,14 @@ export const SelectiveExporter = ({
             ) : view === "export" ? (
               <ExportView
                 historyFormat={historyFormat}
+                availableHistoryFormats={availableHistoryFormats}
                 selectedCount={selectedCount}
                 exportState={exportState}
                 onHistoryFormatChange={handleHistoryMenuChange}
                 onCopy={handleCopy}
                 onExport={handleExport}
                 onSendToAI={handleSendToAI}
-                showSendToMyAI={ENABLE_SEND_TO_MY_AI}
+                showSendToMyAI={ENABLE_SEND_TO_MY_AI && isStructuredCapture}
                 generateHistory={generateHistory}
               />
             ) : (
@@ -336,6 +366,7 @@ export const SelectiveExporter = ({
       <ActionArea
         view={view}
         selectedCount={selectedCount}
+        canSave={canSave}
         exportState={exportState}
         statusMessage={statusMessage}
         analysisInput={analysisInput}

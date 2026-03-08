@@ -3,6 +3,7 @@ import { DARK_THEME, HISTORY_FORMAT_OPTIONS } from "../constants"
 
 interface ExportViewProps {
   historyFormat: HistoryFormat
+  availableHistoryFormats: HistoryFormat[]
   selectedCount: number
   exportState: "idle" | "loading" | "success" | "error"
   showSendToMyAI: boolean
@@ -15,6 +16,7 @@ interface ExportViewProps {
 
 export const ExportView = ({
   historyFormat,
+  availableHistoryFormats,
   selectedCount,
   exportState,
   showSendToMyAI,
@@ -34,24 +36,30 @@ export const ExportView = ({
           gap: "8px",
           flexWrap: "wrap"
         }}>
-        <select
-          value={historyFormat}
-          onChange={(e) => onHistoryFormatChange(e.target.value as HistoryFormat)}
-          style={{
-            border: `1px solid ${DARK_THEME.border}`,
-            borderRadius: "10px",
-            padding: "6px 12px",
-            fontSize: "12px",
-            background: DARK_THEME.surface,
-            color: DARK_THEME.text,
-            minWidth: "140px"
-          }}>
-          {HISTORY_FORMAT_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        {availableHistoryFormats.length > 1 && (
+          <select
+            value={historyFormat}
+            onChange={(e) =>
+              onHistoryFormatChange(e.target.value as HistoryFormat)
+            }
+            style={{
+              border: `1px solid ${DARK_THEME.border}`,
+              borderRadius: "10px",
+              padding: "6px 12px",
+              fontSize: "12px",
+              background: DARK_THEME.surface,
+              color: DARK_THEME.text,
+              minWidth: "140px"
+            }}>
+            {HISTORY_FORMAT_OPTIONS.filter((opt) =>
+              availableHistoryFormats.includes(opt.value)
+            ).map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        )}
 
         {/* Copy button */}
         <button

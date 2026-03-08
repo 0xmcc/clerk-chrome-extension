@@ -1,8 +1,8 @@
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 import { API_BASE_URL } from "~config/api"
 import { ENABLE_SEND_TO_MY_AI } from "~config/features"
-import type { Message } from "~hooks/useMessageScanner/types"
+import type { ExportCapture, StructuredConversationCapture } from "~lib/capture"
 import { requestClerkToken } from "~utils/clerk"
 import { deriveConversationId, sanitizeFilename } from "~utils/conversation"
 import { detectPlatform, getPlatformLabel } from "~utils/platform"
@@ -11,18 +11,18 @@ import { sendAgentMailMessage } from "../services/agentmail"
 import type { ExportState, HistoryFormat } from "../types"
 
 const buildDeterministicHeader = (
-  messages: Message[],
+  capture: StructuredConversationCapture,
   platformLabel: string
 ): string => {
+  const { messages, metadata } = capture
   const conversationId =
     messages.length > 0
       ? messages[0].id.split("::")[0] || deriveConversationId()
       : deriveConversationId()
   const platformName = platformLabel || "unknown"
-  const canonicalUrlOrUnknown =
-    typeof window !== "undefined" ? window.location.href : "unknown"
-  const startTimestamp = "unknown"
-  const endTimestamp = "unknown"
+  const canonicalUrlOrUnknown = metadata.sourceUrl || "unknown"
+  const startTimestamp = metadata.capturedAt || "unknown"
+  const endTimestamp = metadata.capturedAt || "unknown"
 
   let extensionName = "unknown"
   let extensionVersion = "unknown"
@@ -119,7 +119,7 @@ Exporter: ${extensionName} v${extensionVersion}
 }
 
 interface UseExportActionsParams {
-  messages: Message[]
+  capture: ExportCapture | null
   historyFormat: HistoryFormat
   platformLabel: string
   conversationTitle?: string
@@ -153,7 +153,7 @@ interface ExportActions {
  * Hook for managing export actions: copy, export file, save to database.
  */
 export const useExportActions = ({
-  messages,
+  capture,
   historyFormat: initialHistoryFormat,
   platformLabel,
   conversationTitle,
@@ -167,10 +167,48 @@ export const useExportActions = ({
   const [historyFormat, setHistoryFormat] =
     useState<HistoryFormat>(initialHistoryFormat)
 
+  useEffect(() => {
+    if (capture?.captureMode === "page_markdown" && historyFormat !== "markdown") {
+      setHistoryFormat("markdown")
+    }
+  }, [capture, historyFormat])
+
+  const setHistoryFormatSafe = useCallback(
+    (format: HistoryFormat) => {
+      if (capture?.captureMode === "page_markdown" && format === "json") {
+        setHistoryFormat("markdown")
+        return
+      }
+
+      setHistoryFormat(format)
+    },
+    [capture]
+  )
+
   const generateMarkdown = useCallback(() => {
-    const header = buildDeterministicHeader(messages, platformLabel)
-    const body = messages
-      .map((msg, index) => {
+    if (!capture) {
+      return ""
+    }
+
+    if (capture.captureMode === "page_markdown") {
+      const { metadata } = capture
+      return [
+        "---",
+        `sourceUrl: ${metadata.sourceUrl}`,
+        `pageTitle: ${metadata.pageTitle}`,
+        `capturedAt: ${metadata.capturedAt}`,
+        `platform: ${metadata.platform}`,
+        `surface: ${metadata.surface}`,
+        "captureMode: page_markdown",
+        "---",
+        "",
+        capture.markdown
+      ].join("\n")
+    }
+
+    const header = buildDeterministicHeader(capture, platformLabel)
+    const body = capture.messages
+      .map((msg) => {
         const fromLabel =
           msg.authorName || (msg.role === "user" ? "User" : "Assistant")
         const msgIdMatch = msg.id.match(/m_\d+$/)
@@ -179,28 +217,32 @@ export const useExportActions = ({
       })
       .join("\n")
     return `${header}\n\n${body}`
-  }, [messages, platformLabel])
+  }, [capture, platformLabel])
 
   const generateJSON = useCallback(() => {
-    return messages.map((msg, index) => ({
+    if (!capture || capture.captureMode !== "structured_conversation") {
+      return []
+    }
+
+    return capture.messages.map((msg, index) => ({
       index: index + 1,
       id: msg.id,
       role: msg.role,
       from: msg.authorName,
       text: msg.text
     }))
-  }, [messages])
+  }, [capture])
 
   const generateHistory = useCallback(() => {
-    if (historyFormat === "json") {
+    if (historyFormat === "json" && capture?.captureMode === "structured_conversation") {
       return JSON.stringify(generateJSON(), null, 2)
     }
     return generateMarkdown()
-  }, [historyFormat, generateJSON, generateMarkdown])
+  }, [capture, historyFormat, generateJSON, generateMarkdown])
 
   const handleCopy = useCallback(async () => {
     const content =
-      historyFormat === "markdown"
+      historyFormat === "markdown" || capture?.captureMode !== "structured_conversation"
         ? generateMarkdown()
         : JSON.stringify(generateJSON(), null, 2)
     try {
@@ -209,22 +251,32 @@ export const useExportActions = ({
     } catch (error) {
       console.error("[SelectiveExporter] Failed to copy:", error)
     }
-  }, [historyFormat, generateMarkdown, generateJSON])
+  }, [capture, historyFormat, generateMarkdown, generateJSON])
 
   const handleExport = useCallback(() => {
-    if (messages.length === 0) return
+    if (!capture) return
 
     const content =
-      historyFormat === "markdown"
+      historyFormat === "markdown" || capture.captureMode !== "structured_conversation"
         ? generateMarkdown()
         : JSON.stringify(generateJSON(), null, 2)
-    const ext = historyFormat === "markdown" ? "md" : "json"
+    const exportedFormat =
+      capture.captureMode === "page_markdown" ? "markdown" : historyFormat
+    const ext =
+      capture.captureMode === "page_markdown" || historyFormat === "markdown"
+        ? "md"
+        : "json"
     const base =
-      sanitizeFilename(conversationTitle) ||
-      `conversation-${deriveConversationId()}`
+      capture.captureMode === "page_markdown"
+        ? sanitizeFilename(`page-${conversationTitle}`) ||
+          `page-${deriveConversationId()}`
+        : sanitizeFilename(conversationTitle) ||
+          `conversation-${deriveConversationId()}`
     const filename = `${base}.${ext}`
     const mimeType =
-      historyFormat === "markdown" ? "text/markdown" : "application/json"
+      capture.captureMode === "page_markdown" || historyFormat === "markdown"
+        ? "text/markdown"
+        : "application/json"
 
     const blob = new Blob([content], { type: mimeType })
     const url = URL.createObjectURL(blob)
@@ -237,10 +289,10 @@ export const useExportActions = ({
     URL.revokeObjectURL(url)
 
     console.log(
-      `[SelectiveExporter] Exported ${historyFormat} file: ${filename}`
+      `[SelectiveExporter] Exported ${exportedFormat} file: ${filename}`
     )
   }, [
-    messages.length,
+    capture,
     historyFormat,
     generateMarkdown,
     generateJSON,
@@ -248,7 +300,7 @@ export const useExportActions = ({
   ])
 
   const handleSendToAI = useCallback(async () => {
-    if (messages.length === 0) return
+    if (!capture || capture.captureMode !== "structured_conversation") return
     if (!ENABLE_SEND_TO_MY_AI) {
       setExportState("error")
       setStatusMessage("Send to My AI is disabled in production builds")
@@ -280,20 +332,20 @@ export const useExportActions = ({
 
       // Generate transcript markdown
       const transcriptLines = [
-        buildDeterministicHeader(messages, platformName),
+        buildDeterministicHeader(capture, platformName),
         "",
         "# AI Conversation Transcript",
         "",
         `- **Source:** ${window.location.href}`,
         `- **Captured at:** ${now.toISOString()}`,
         `- **Platform:** ${platformName}`,
-        `- **Messages:** ${messages.length}`,
+        `- **Messages:** ${capture.messages.length}`,
         "",
         "---",
         ""
       ]
 
-      messages.forEach((msg, index) => {
+      capture.messages.forEach((msg) => {
         const fromLabel =
           msg.authorName || (msg.role === "user" ? "User" : "Assistant")
         const msgIdMatch = msg.id.match(/m_\d+$/)
@@ -311,7 +363,7 @@ export const useExportActions = ({
       // Build subject
       const titleText =
         conversationTitle ||
-        messages.find((m) => m.role === "user")?.text ||
+        capture.messages.find((m) => m.role === "user")?.text ||
         "Conversation"
       const clippedTitle =
         titleText.length > 60 ? titleText.slice(0, 60) : titleText
@@ -359,10 +411,11 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
         error instanceof Error ? error.message : "Failed to send to AI"
       )
     }
-  }, [messages, conversationTitle, aiEmail, aiEmailFrom, aiEmailApiKey])
+  }, [capture, conversationTitle, aiEmail, aiEmailFrom, aiEmailApiKey])
 
   const handleSaveToDatabase = useCallback(async () => {
-    if (messages.length === 0 || exportState === "loading") return
+    if (!capture || capture.captureMode !== "structured_conversation") return
+    if (capture.messages.length === 0 || exportState === "loading") return
 
     setExportState("loading")
     setStatusMessage("Saving conversation...")
@@ -374,8 +427,8 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
         conversationId,
         title: document.title || "Conversation",
         model: platformLabel.toLowerCase(),
-        selectedMessageIds: messages.map((m) => m.id),
-        messages: messages.map((msg) => ({
+        selectedMessageIds: capture.messages.map((m) => m.id),
+        messages: capture.messages.map((msg) => ({
           id: msg.id,
           role: msg.role,
           from: msg.authorName,
@@ -422,7 +475,7 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
         error instanceof Error ? error.message : "Failed to save conversation."
       )
     }
-  }, [messages, exportState, platformLabel])
+  }, [capture, exportState, platformLabel])
 
   const resetExportState = useCallback(() => {
     setExportState("idle")
@@ -437,7 +490,7 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
     handleExport,
     handleSendToAI,
     handleSaveToDatabase,
-    setHistoryFormat,
+    setHistoryFormat: setHistoryFormatSafe,
     setExportState,
     setStatusMessage,
     generateHistory,
