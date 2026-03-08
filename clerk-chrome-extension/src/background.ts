@@ -6,6 +6,7 @@ import {
   CLAUDE_ENDPOINTS,
 } from "./config/endpoints"
 import { IS_DEVELOPMENT } from "./config/features"
+import { handleProxyFetchMessage } from "./utils/proxyFetch"
 import { debug } from "./utils/debug"
 
 const publishableKey = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY
@@ -23,22 +24,6 @@ let clerkClientPromise: ReturnType<typeof createClerkClient> | null = null
 // Clerk stores session JWT with keys containing this fragment (e.g., "clerk.{instance}.session.__clerk_client_jwt")
 const CLERK_STORAGE_KEY_FRAGMENT = "__clerk_client_jwt"
 let refreshPromise: Promise<void> | null = null
-const PROXY_FETCH_DEV_ALLOWED_HOSTS = new Set(["api.agentmail.to"])
-
-const parseProxyFetchUrl = (rawUrl: string): URL | null => {
-  try {
-    return new URL(rawUrl)
-  } catch {
-    return null
-  }
-}
-
-const isProxyFetchAllowed = (url: URL): boolean => {
-  if (url.protocol !== "https:") return false
-  if (!IS_DEVELOPMENT) return false
-
-  return PROXY_FETCH_DEV_ALLOWED_HOSTS.has(url.hostname)
-}
 
 // Check if syncHost has Clerk session cookies (what load() should read)
 const hasClerkSyncCookies = async (): Promise<boolean> => {
@@ -501,33 +486,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.action === "proxyFetch") {
     ;(async () => {
-      const requestUrl = typeof message.url === "string" ? message.url : ""
-      const parsedUrl = parseProxyFetchUrl(requestUrl)
-      if (!parsedUrl) {
-        sendResponse({ success: false, status: 400, error: "Invalid proxyFetch URL" })
-        return
-      }
-      if (!isProxyFetchAllowed(parsedUrl)) {
-        const reason = !IS_DEVELOPMENT
-          ? "proxyFetch is disabled in production builds"
-          : `proxyFetch host not allowed: ${parsedUrl.hostname}`
-        sendResponse({ success: false, status: 403, error: reason })
-        return
-      }
-
-      try {
-        const response = await fetch(parsedUrl.toString(), {
-          method: message.method || "GET",
-          headers: message.headers || {},
-          body: message.body || undefined
-        })
-        const text = await response.text()
-        let data
-        try { data = JSON.parse(text) } catch { data = text }
-        sendResponse({ success: response.ok, status: response.status, data })
-      } catch (error) {
-        sendResponse({ success: false, error: error instanceof Error ? error.message : "Fetch failed" })
-      }
+      const result = await handleProxyFetchMessage(message, {
+        isDevelopment: IS_DEVELOPMENT
+      })
+      sendResponse(result)
     })()
     return true
   }

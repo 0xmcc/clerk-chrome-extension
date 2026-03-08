@@ -26,7 +26,7 @@ type ProxyFetchResult = {
 }
 
 const buildAgentMailMessageUrl = (fromAddress: string) =>
-  `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(fromAddress.trim())}/messages`
+  `https://api.agentmail.to/v0/inboxes/${encodeURIComponent(fromAddress.trim().toLowerCase())}/messages/send`
 
 export const sendAgentMailMessage = async ({
   fromAddress,
@@ -45,10 +45,18 @@ export const sendAgentMailMessage = async ({
   })) as ProxyFetchResult
 
   if (!result?.success) {
+    const rawMessage =
+      result?.error || result?.data?.message || ""
+    const isInboxNotFound =
+      typeof rawMessage === "string" &&
+      /inbox\s*not\s*found/i.test(rawMessage)
+    if (isInboxNotFound) {
+      throw new Error(
+        `Inbox not found for your "From" address (${fromAddress}). Create an inbox for this address at AgentMail (console.agentmail.to) and use an API key for that inbox.`
+      )
+    }
     throw new Error(
-      result?.error ||
-        result?.data?.message ||
-        `Request failed (${result?.status ?? "unknown"})`
+      rawMessage || `Request failed (${result?.status ?? "unknown"})`
     )
   }
 }

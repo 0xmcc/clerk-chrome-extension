@@ -17,7 +17,7 @@ describe("agentmail service", () => {
 
     expect(sendMessage).toHaveBeenCalledWith({
       action: "proxyFetch",
-      url: "https://api.agentmail.to/v0/inboxes/sender%40example.com/messages",
+      url: "https://api.agentmail.to/v0/inboxes/sender%40example.com/messages/send",
       method: "POST",
       headers: {
         Authorization: "Bearer secret-key",
@@ -65,6 +65,45 @@ describe("agentmail service", () => {
         text: "Body text"
       })
     ).rejects.toThrow("Mailbox not found")
+  })
+
+  it("normalizes From address to lowercase in the inbox URL (API is case-sensitive)", async () => {
+    const sendMessage = vi.fn().mockResolvedValue({ success: true })
+    chrome.runtime.sendMessage = sendMessage
+
+    await sendAgentMailMessage({
+      fromAddress: "Markobot@agentmail.to",
+      apiKey: "secret-key",
+      to: ["other@example.com"],
+      subject: "Subject",
+      text: "Body"
+    })
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "https://api.agentmail.to/v0/inboxes/markobot%40agentmail.to/messages/send"
+      })
+    )
+  })
+
+  it("throws a friendly error when the API returns Inbox not found", async () => {
+    chrome.runtime.sendMessage = vi.fn().mockResolvedValue({
+      success: false,
+      error: "Inbox not found",
+      status: 404
+    })
+
+    await expect(
+      sendAgentMailMessage({
+        fromAddress: "me@agentmail.to",
+        apiKey: "secret-key",
+        to: ["markobot@agentmail.to"],
+        subject: "Subject",
+        text: "Body"
+      })
+    ).rejects.toThrow(
+      /Inbox not found for your "From" address \(me@agentmail\.to\)/
+    )
   })
 
   it("sends the standard test email payload and trims the recipient address", async () => {
