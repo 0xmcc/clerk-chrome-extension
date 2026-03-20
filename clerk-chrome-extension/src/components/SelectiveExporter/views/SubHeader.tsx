@@ -1,6 +1,13 @@
 import type { ViewMode } from "../types"
 import { DARK_THEME } from "../constants"
 
+const VIEW_LABELS: Record<ViewMode, string> = {
+  export: "Export",
+  settings: "Settings",
+  analysis: "AI Analysis",
+  conversation_index: "Conversations",
+}
+
 interface SubHeaderProps {
   view: ViewMode
   onBack: () => void
@@ -32,7 +39,7 @@ export const SubHeader = ({ view, onBack }: SubHeaderProps) => {
         ←
       </button>
       <div style={{ fontWeight: 700, color: DARK_THEME.text }}>
-        {view === "analysis" ? "AI Analysis" : "Settings"}
+        {VIEW_LABELS[view]}
       </div>
     </div>
   )

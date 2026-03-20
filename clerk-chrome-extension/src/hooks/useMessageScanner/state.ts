@@ -2,7 +2,7 @@ import { useCallback, useState } from "react"
 import type { Conversation, Message, ScannerStats, CapturedPlatform } from "./types"
 import { mergeConversation, computeStats } from "./mergers"
 import { getActiveConversationIdFromUrl } from "./utils"
-import { storeRef } from "./store"
+import { storeRef, persistConversationsMeta } from "./store"
 import { debug } from "~utils/debug"
 
 // Instrumentation helper for state flow tracking
@@ -63,6 +63,7 @@ export const useConversationStore = () => {
     setConversations(next)
     const newStats = computeStats(next)
     setStats(newStats)
+    persistConversationsMeta()
 
     logFlow("UPSERT_STATE_SET", {
       totalConversations: newStats.totalConversations,

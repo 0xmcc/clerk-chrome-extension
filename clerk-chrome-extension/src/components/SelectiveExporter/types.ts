@@ -1,4 +1,5 @@
 import type { ExportCapture } from "~lib/capture"
+import type { Conversation } from "~hooks/useMessageScanner/types"
 
 /**
  * Props for the SelectiveExporter component.
@@ -9,6 +10,9 @@ export interface SelectiveExporterProps {
   capture: ExportCapture | null
   conversationKey: string
   emptyStateMessage: string
+  conversations?: Conversation[]
+  activeConvoKey?: string
+  onSelectConversation?: (convoKey: string) => void
 }
 
 /**
@@ -43,8 +47,9 @@ export type ExportState = "idle" | "loading" | "success" | "error"
  * - "export": Main export view with markdown/json preview
  * - "settings": Settings view for prompts and personal context
  * - "analysis": AI analysis chat view
+ * - "conversation_index": Conversation list view for switching between captured conversations
  */
-export type ViewMode = "export" | "settings" | "analysis"
+export type ViewMode = "export" | "settings" | "analysis" | "conversation_index"
 
 /**
  * History format options for export.

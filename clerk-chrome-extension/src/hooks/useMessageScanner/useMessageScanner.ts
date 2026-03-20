@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react"
+import { createIngestionPipeline } from "./ingestion"
+import { getChatGPTAuthToken, loadPersistedState } from "./store"
 import { detectPlatform } from "~utils/platform"
 import { debug } from "~utils/debug"
 
@@ -53,12 +55,22 @@ export const useMessageScanner = () => {
     updateActiveMessagesFromStore()
   }, [updateConversationListFromStore, updateActiveMessagesFromStore])
 
+  // Ingestion pipeline — created once per platform, chatgpt only
+  const ingestionPipelineRef = useRef<ReturnType<typeof createIngestionPipeline> | null>(null)
+  if (!ingestionPipelineRef.current && capturedPlatform === "chatgpt") {
+    ingestionPipelineRef.current = createIngestionPipeline({
+      upsertMany,
+      getAuthToken: getChatGPTAuthToken,
+    })
+  }
+
   // Create interceptor handler ONCE with useMemo (not per-event)
   const interceptorHandler = useMemo(
     () => createInterceptorEventHandler({
       capturedPlatform,
       upsertMany,
-      updateActiveMessagesFromStore
+      updateActiveMessagesFromStore,
+      onChatGPTListIntercepted: () => ingestionPipelineRef.current?.trigger(),
     }),
     [capturedPlatform, upsertMany, updateActiveMessagesFromStore]
   )
@@ -80,6 +92,18 @@ export const useMessageScanner = () => {
     })
     await handler()
   }, [capturedPlatform, updateAllDerivedState, handleInterceptorEvent, storeRef])
+
+  // Effect: Restore persisted conversations and auth token on mount (survives page refresh)
+  useEffect(() => {
+    loadPersistedState().then(({ authTokenRestored, conversations }) => {
+      if (conversations.length > 0) {
+        upsertMany(conversations)
+      }
+      if (authTokenRestored && capturedPlatform === "chatgpt" && ingestionPipelineRef.current) {
+        ingestionPipelineRef.current.trigger()
+      }
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Effect: Message listener - always active
   useEffect(() => {
@@ -145,6 +169,7 @@ export const useMessageScanner = () => {
     return () => {
       logFlow("LISTENER_CLEANUP")
       window.removeEventListener("message", listener)
+      ingestionPipelineRef.current?.cancel()
     }
   }, [handleInterceptorEvent, updateAllDerivedState])
 

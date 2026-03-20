@@ -17,10 +17,11 @@ export interface InterceptorEventHandlerDeps {
   capturedPlatform: CapturedPlatform | null
   upsertMany: (conversations: Conversation[]) => void
   updateActiveMessagesFromStore: () => void
+  onChatGPTListIntercepted?: () => void
 }
 
 export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps) => {
-  const { capturedPlatform, upsertMany, updateActiveMessagesFromStore } = deps
+  const { capturedPlatform, upsertMany, updateActiveMessagesFromStore, onChatGPTListIntercepted } = deps
 
   return (evt: InterceptorEvent) => {
     logFlow("HANDLER_ENTRY", { url: evt?.url, hasData: !!evt?.data })
@@ -88,6 +89,7 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
         logFlow("UPSERT_MANY_START", { platform: "chatgpt", type: "list", count: convos.length })
         upsertMany(convos)
         logFlow("UPSERT_MANY_COMPLETE", { platform: "chatgpt", type: "list" })
+        onChatGPTListIntercepted?.()
         return
       }
 

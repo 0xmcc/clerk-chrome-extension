@@ -3,7 +3,7 @@ import { useState, useCallback } from "react"
 import type { ViewMode } from "../types"
 
 interface ViewStateReturn {
-  /** Current view: "export" | "settings" | "analysis" */
+  /** Current view: "export" | "settings" | "analysis" | "message_index" */
   view: ViewMode
   /** Navigate to export view */
   goToExport: () => void
@@ -11,6 +11,8 @@ interface ViewStateReturn {
   goToSettings: () => void
   /** Navigate to analysis view */
   goToAnalysis: () => void
+  /** Navigate to conversation index view */
+  goToConversationIndex: () => void
   /** Set view directly */
   setView: (view: ViewMode) => void
 }
@@ -34,11 +36,16 @@ export const useViewState = (): ViewStateReturn => {
     setView("analysis")
   }, [])
 
+  const goToConversationIndex = useCallback(() => {
+    setView("conversation_index")
+  }, [])
+
   return {
     view,
     goToExport,
     goToSettings,
     goToAnalysis,
+    goToConversationIndex,
     setView
   }
 }

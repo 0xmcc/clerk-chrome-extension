@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import cssText from "data-text:~style.css"
 import type { PlasmoCSConfig } from "plasmo"
 
@@ -55,17 +55,33 @@ const RESCAN_ON_OPEN_COOLDOWN_MS = 10000
 
 const PlasmoOverlay = () => {
   const [isExporterOpen, setIsExporterOpen] = useState(false)
+  const [selectedConvoKey, setSelectedConvoKey] = useState<string | null>(null)
 
   // Track rescan-on-open attempts with timestamp for cooldown-based retry
   const rescanOnOpenAttemptsRef = useRef<Map<string, number>>(new Map())
 
   // Always-on scanner - no props, returns stable activeConvoKey and activeMessageCount for guards
-  const { messages, conversationTitle, conversationKey, rescan, activeConvoKey, activeMessageCount } = useMessageScanner()
+  const { messages, conversationTitle, conversationKey, rescan, activeConvoKey, activeMessageCount, conversations } = useMessageScanner()
+
+  // Clear selected conversation when the URL changes
+  useEffect(() => {
+    setSelectedConvoKey(null)
+  }, [conversationKey])
+
+  // When a conversation is selected from the index, show its data in the panel
+  const selectedConvo = useMemo(
+    () => selectedConvoKey ? conversations.find(c => `${c.platform}:${c.id}` === selectedConvoKey) ?? null : null,
+    [selectedConvoKey, conversations]
+  )
+  const displayMessages = selectedConvo ? selectedConvo.messages : messages
+  const displayTitle = selectedConvo ? selectedConvo.title : conversationTitle
+  const displayConvoKey = selectedConvoKey ?? conversationKey
+
   const { capture, emptyStateMessage } = useCaptureSource({
     isOpen: isExporterOpen,
-    messages,
-    conversationKey,
-    conversationTitle
+    messages: displayMessages,
+    conversationKey: displayConvoKey,
+    conversationTitle: displayTitle
   })
 
   // Guarded rescan-on-open: uses store-based activeMessageCount and cooldown retry
@@ -137,8 +153,11 @@ const PlasmoOverlay = () => {
         isOpen={isExporterOpen}
         onClose={() => setIsExporterOpen(false)}
         capture={capture}
-        conversationKey={conversationKey}
+        conversationKey={displayConvoKey}
         emptyStateMessage={emptyStateMessage}
+        conversations={conversations}
+        activeConvoKey={selectedConvoKey ?? activeConvoKey}
+        onSelectConversation={setSelectedConvoKey}
       />
     </>
   )
