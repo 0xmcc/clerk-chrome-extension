@@ -1,3 +1,4 @@
+import type React from "react"
 import type { HistoryFormat } from "../types"
 import { DARK_THEME, HISTORY_FORMAT_OPTIONS } from "../constants"
 
@@ -12,6 +13,29 @@ interface ExportViewProps {
   onExport: () => void
   onSendToAI: () => void
   generateHistory: () => string
+}
+
+const ANCHOR_PREFIX = "clerk-ext-msg-"
+
+/** Parse markdown body into segments keyed by short message ID */
+function parseMessageSegments(text: string): Array<{ id: string | null; text: string }> {
+  const msgStarts: Array<{ index: number; id: string }> = []
+  const re = /\*\*\[m_(\d+)\]/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    msgStarts.push({ index: m.index, id: `m_${m[1]}` })
+  }
+  if (msgStarts.length === 0) return [{ id: null, text }]
+
+  const segments: Array<{ id: string | null; text: string }> = []
+  if (msgStarts[0].index > 0) {
+    segments.push({ id: null, text: text.slice(0, msgStarts[0].index) })
+  }
+  msgStarts.forEach((start, i) => {
+    const end = msgStarts[i + 1]?.index ?? text.length
+    segments.push({ id: start.id, text: text.slice(start.index, end) })
+  })
+  return segments
 }
 
 export const ExportView = ({
@@ -179,35 +203,34 @@ export const ExportView = ({
         (() => {
           const text = generateHistory()
           const headerEndMatch = text.indexOf("--- END HEADER ---")
-
-          if (text.startsWith("--- BEGIN HEADER ---") && headerEndMatch !== -1) {
-            const splitIndex = headerEndMatch + "--- END HEADER ---".length
-            const body = text.slice(splitIndex).trimStart()
-            return (
-              <pre
-                style={{
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  fontFamily: "inherit",
-                  margin: 0,
-                  color: DARK_THEME.text
-                }}>
-                {body}
-              </pre>
-            )
+          const preStyle: React.CSSProperties = {
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            fontFamily: "inherit",
+            margin: 0,
+            color: DARK_THEME.text
           }
 
+          const body = (text.startsWith("--- BEGIN HEADER ---") && headerEndMatch !== -1)
+            ? text.slice(headerEndMatch + "--- END HEADER ---".length).trimStart()
+            : text
+
+          const segments = parseMessageSegments(body)
           return (
-            <pre
-              style={{
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                fontFamily: "inherit",
-                margin: 0,
-                color: DARK_THEME.text
-              }}>
-              {text}
-            </pre>
+            <div>
+              {segments.map((seg, i) =>
+                seg.id ? (
+                  <div
+                    key={seg.id}
+                    id={`${ANCHOR_PREFIX}${seg.id}`}
+                    style={{ scrollMarginTop: "8px" }}>
+                    <pre style={preStyle}>{seg.text}</pre>
+                  </div>
+                ) : (
+                  <pre key={`preamble-${i}`} style={preStyle}>{seg.text}</pre>
+                )
+              )}
+            </div>
           )
         })()
       ) : (

@@ -28,6 +28,7 @@ import { AnalysisView } from "./views/AnalysisView"
 import { ExportView } from "./views/ExportView"
 import { Header } from "./views/Header"
 import { LinkedInHelperView } from "./views/LinkedInHelperView"
+import { MessageIndexView } from "./views/MessageIndexView"
 import { SettingsView } from "./views/SettingsView"
 import { SubHeader } from "./views/SubHeader"
 
@@ -36,7 +37,10 @@ export const SelectiveExporter = ({
   onClose,
   capture,
   conversationKey,
-  emptyStateMessage
+  emptyStateMessage,
+  conversations = [],
+  activeConvoKey,
+  onSelectConversation
 }: SelectiveExporterProps) => {
   const hasInitializedRef = useRef(false)
   const platformLabelRef = useRef(getPlatformLabel())
@@ -55,7 +59,7 @@ export const SelectiveExporter = ({
   const isSignedOut = authStatus === "signedOut" && isStructuredCapture
 
   // View state management (single enum - no boolean drift)
-  const { view, goToExport, goToSettings } = useViewState()
+  const { view, goToExport, goToSettings, goToConversationIndex } = useViewState()
 
   // Settings storage
   const {
@@ -260,6 +264,7 @@ export const SelectiveExporter = ({
         title={captureTitle}
         summaryText={summaryText}
         onSettingsClick={goToSettings}
+        onIndexClick={goToConversationIndex}
         onClose={handleClose}
         showAuthBanner={isSignedOut}
         onSignInClick={handleSignInClick}
@@ -312,6 +317,15 @@ export const SelectiveExporter = ({
               <AnalysisView
                 analysisMessages={analysisMessages}
                 formatAnalysisText={formatAnalysisText}
+              />
+            ) : view === "conversation_index" ? (
+              <MessageIndexView
+                conversations={conversations}
+                activeConvoKey={activeConvoKey}
+                onSelect={(key) => {
+                  onSelectConversation?.(key)
+                  goToExport()
+                }}
               />
             ) : view === "export" ? (
               <ExportView

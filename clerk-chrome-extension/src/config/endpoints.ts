@@ -341,6 +341,34 @@ export function isTargetSite(url: string): boolean {
 }
 
 // =============================================================================
+// CHATGPT AUTH UTILITIES
+// =============================================================================
+
+/**
+ * Strip any "Bearer " prefix so the cached token is always the raw JWT.
+ * Prevents double-prefix bugs when callers construct `Bearer ${token}`.
+ */
+export function normalizeChatGPTAuthToken(raw: string): string {
+  return raw.replace(/^Bearer\s+/i, "")
+}
+
+/**
+ * Build standard ChatGPT fetch headers.
+ * token must already be normalized (no "Bearer " prefix).
+ */
+export function buildChatGPTFetchHeaders(token: string): Record<string, string> {
+  return {
+    "accept": "*/*",
+    "accept-language": "en-US,en;q=0.9",
+    "authorization": `Bearer ${token}`,
+    "referer": window.location.href,
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+  }
+}
+
+// =============================================================================
 // BACKWARD COMPATIBILITY (Deprecated - use ENDPOINTS directly)
 // =============================================================================
 
