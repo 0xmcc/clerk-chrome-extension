@@ -6,6 +6,7 @@ import { FloatingButton } from "~features/floating-button"
 import { SelectiveExporter } from "~components/SelectiveExporter"
 import { useCaptureSource } from "~hooks/useCaptureSource"
 import { useMessageScanner } from "~hooks/useMessageScanner"
+import { useYouTubeTranscript } from "~hooks/useYouTubeTranscript"
 import { debug } from "~utils/debug"
 
 // Instrumentation helper for rescan-on-open flow tracking
@@ -77,11 +78,16 @@ const PlasmoOverlay = () => {
   const displayTitle = selectedConvo ? selectedConvo.title : conversationTitle
   const displayConvoKey = selectedConvoKey ?? conversationKey
 
+  const { segments: youtubeSegments, status: youtubeStatus, errorMessage: youtubeErrorMessage, videoTitle: youtubeTitle } = useYouTubeTranscript()
+
   const { capture, emptyStateMessage } = useCaptureSource({
     isOpen: isExporterOpen,
     messages: displayMessages,
     conversationKey: displayConvoKey,
-    conversationTitle: displayTitle
+    conversationTitle: displayTitle,
+    youtubeSegments,
+    youtubeStatus,
+    youtubeTitle
   })
 
   // Guarded rescan-on-open: uses store-based activeMessageCount and cooldown retry
@@ -158,6 +164,8 @@ const PlasmoOverlay = () => {
         conversations={conversations}
         activeConvoKey={selectedConvoKey ?? activeConvoKey}
         onSelectConversation={setSelectedConvoKey}
+        youtubeStatus={youtubeStatus}
+        youtubeErrorMessage={youtubeErrorMessage}
       />
     </>
   )

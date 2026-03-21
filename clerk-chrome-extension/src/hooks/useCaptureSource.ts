@@ -5,16 +5,22 @@ import type { ResolvedCaptureState } from "~lib/capture"
 import {
   getCaptureSurface,
   isStructuredConversationSurface,
+  isYouTubeWatchPage,
   resolveCaptureMode
 } from "~lib/capture"
 import { extractPageMarkdownCapture } from "~lib/pageCapture"
 import { getPlatformLabel, detectPlatform } from "~utils/platform"
+import type { TranscriptSegment } from "~lib/transcript-parser"
+import type { TranscriptStatus } from "~hooks/useYouTubeTranscript"
 
 interface UseCaptureSourceParams {
   isOpen: boolean
   messages: Message[]
   conversationKey: string
   conversationTitle?: string
+  youtubeSegments?: TranscriptSegment[]
+  youtubeStatus?: TranscriptStatus
+  youtubeTitle?: string
 }
 
 const STRUCTURED_EMPTY_STATE =
@@ -27,7 +33,10 @@ export const useCaptureSource = ({
   isOpen,
   messages,
   conversationKey,
-  conversationTitle
+  conversationTitle,
+  youtubeSegments,
+  youtubeStatus,
+  youtubeTitle
 }: UseCaptureSourceParams): ResolvedCaptureState => {
   const platform = detectPlatform()
 
@@ -45,6 +54,28 @@ export const useCaptureSource = ({
       hasStructuredMessages: messages.length > 0,
       hasPageMarkdown: true
     })
+
+    if (isYouTubeWatchPage(platform, pathname)) {
+      const videoId = new URLSearchParams(new URL(sourceUrl).search).get("v") ?? ""
+      return {
+        capture: youtubeStatus === "ready" && youtubeSegments && youtubeSegments.length > 0
+          ? {
+              captureMode: "youtube_transcript" as const,
+              conversationKey,
+              videoId,
+              videoTitle: youtubeTitle || pageTitle,
+              videoUrl: sourceUrl,
+              segments: youtubeSegments,
+              metadata: { sourceUrl, pageTitle, capturedAt, platform: platformLabel, surface: "youtube_watch" as const }
+            }
+          : null,
+        emptyStateMessage: youtubeStatus === "no_transcript"
+          ? "This video doesn't have a transcript available."
+          : youtubeStatus === "error"
+            ? "Could not load transcript."
+            : "Loading transcript..."
+      }
+    }
 
     if (preferredCaptureMode === "structured_conversation") {
       return {
@@ -106,5 +137,5 @@ export const useCaptureSource = ({
           error instanceof Error ? error.message : PAGE_EMPTY_STATE
       }
     }
-  }, [conversationKey, conversationTitle, isOpen, messages, platform])
+  }, [conversationKey, conversationTitle, isOpen, messages, platform, youtubeSegments, youtubeStatus, youtubeTitle])
 }

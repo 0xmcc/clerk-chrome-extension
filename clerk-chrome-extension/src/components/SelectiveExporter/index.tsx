@@ -31,6 +31,7 @@ import { LinkedInHelperView } from "./views/LinkedInHelperView"
 import { MessageIndexView } from "./views/MessageIndexView"
 import { SettingsView } from "./views/SettingsView"
 import { SubHeader } from "./views/SubHeader"
+import { YouTubeTranscriptView } from "./views/YouTubeTranscriptView"
 
 export const SelectiveExporter = ({
   isOpen,
@@ -40,7 +41,9 @@ export const SelectiveExporter = ({
   emptyStateMessage,
   conversations = [],
   activeConvoKey,
-  onSelectConversation
+  onSelectConversation,
+  youtubeStatus,
+  youtubeErrorMessage
 }: SelectiveExporterProps) => {
   const hasInitializedRef = useRef(false)
   const platformLabelRef = useRef(getPlatformLabel())
@@ -60,7 +63,7 @@ export const SelectiveExporter = ({
   const isSignedOut = authStatus === "signedOut" && isStructuredCapture
 
   // View state management (single enum - no boolean drift)
-  const { view, goToExport, goToSettings, goToConversationIndex } = useViewState()
+  const { view, setView, goToExport, goToSettings, goToConversationIndex } = useViewState()
 
   // Settings storage
   const {
@@ -169,6 +172,13 @@ export const SelectiveExporter = ({
       hasInitializedRef.current = false
     }
   }, [isOpen, selectedCount])
+
+  // Auto-navigate to youtube_transcript view when YouTube capture is available
+  useEffect(() => {
+    if (capture?.captureMode === "youtube_transcript") {
+      setView("youtube_transcript")
+    }
+  }, [capture?.captureMode, setView])
 
   const handleClose = () => {
     onClose()
@@ -290,7 +300,7 @@ export const SelectiveExporter = ({
           .analysis-markdown li { list-style: disc; margin: 4px 0; }
           .analysis-markdown strong { font-weight: 700; }
         `}</style>
-        {!capture ? (
+        {!capture && view !== "youtube_transcript" ? (
           <div
             style={{
               textAlign: "center",
@@ -314,7 +324,13 @@ export const SelectiveExporter = ({
               lineHeight: 1.6,
               color: DARK_THEME.text
             }}>
-            {view === "analysis" ? (
+            {view === "youtube_transcript" ? (
+              <YouTubeTranscriptView
+                segments={capture?.captureMode === "youtube_transcript" ? capture.segments : []}
+                status={youtubeStatus ?? "idle"}
+                errorMessage={youtubeErrorMessage}
+              />
+            ) : view === "analysis" ? (
               <AnalysisView
                 analysisMessages={analysisMessages}
                 formatAnalysisText={formatAnalysisText}
