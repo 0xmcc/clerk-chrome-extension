@@ -7,14 +7,14 @@
 
 ### Transcript Extraction
 
-- [ ] **EXTR-01**: On YouTube watch pages (`youtube.com/watch?v=*`), call defuddle on the live document and extract `contentMarkdown`
+- [x] **EXTR-01**: On YouTube watch pages (`youtube.com/watch?v=*`), call defuddle on the live document and extract `contentMarkdown`
 - [x] **EXTR-02**: Parse defuddle transcript markdown into typed `TranscriptSegment[]` — each segment has `seconds: number`, `text: string`, and optional `section?: string`
 - [x] **EXTR-03**: Support `M:SS` and `H:MM:SS` timestamp formats in the parser
 - [x] **EXTR-04**: Parse `### Chapter Name` headings as section labels on subsequent segments
 - [x] **EXTR-05**: Return a distinct `NO_TRANSCRIPT` state (not null/error) when `## Transcript` heading is absent from defuddle output
-- [ ] **EXTR-06**: Listen to `yt-navigate-finish` DOM event and re-extract transcript when the video ID changes (YouTube SPA navigation)
-- [ ] **EXTR-07**: Debounce extraction 500ms after `yt-navigate-finish` to wait for fresh `ytInitialPlayerResponse` injection
-- [ ] **EXTR-08**: Add `"youtube"` to `detectPlatform()` return type and URL matching
+- [x] **EXTR-06**: Listen to `yt-navigate-finish` DOM event and re-extract transcript when the video ID changes (YouTube SPA navigation)
+- [x] **EXTR-07**: Debounce extraction 500ms after `yt-navigate-finish` to wait for fresh `ytInitialPlayerResponse` injection
+- [x] **EXTR-08**: Add `"youtube"` to `detectPlatform()` return type and URL matching
 
 ### Sidebar Display
 
@@ -96,14 +96,14 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EXTR-01 | Phase 1 | Pending |
+| EXTR-01 | Phase 1 | Complete |
 | EXTR-02 | Phase 1 | Complete |
 | EXTR-03 | Phase 1 | Complete |
 | EXTR-04 | Phase 1 | Complete |
 | EXTR-05 | Phase 1 | Complete |
-| EXTR-06 | Phase 1 | Pending |
-| EXTR-07 | Phase 1 | Pending |
-| EXTR-08 | Phase 1 | Pending |
+| EXTR-06 | Phase 1 | Complete |
+| EXTR-07 | Phase 1 | Complete |
+| EXTR-08 | Phase 1 | Complete |
 | DISP-01 | Phase 1 | Pending |
 | DISP-02 | Phase 1 | Pending |
 | DISP-03 | Phase 1 | Pending |
