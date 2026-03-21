@@ -22,7 +22,12 @@ Three phases deliver a fully interactive transcript sidebar from scratch: Phase 
   3. A video with no transcript shows a distinct human-readable empty state (not a blank panel, not an error)
   4. A defuddle extraction failure shows a distinct error state (not the empty state, not a spinner stuck forever)
   5. Skeleton rows appear while the transcript is loading (not a spinner)
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — TDD transcript parser (TranscriptSegment type, parseTranscriptMarkdown, timestampToSeconds, formatTimestamp, findActiveSegmentIndex)
+- [ ] 01-02-PLAN.md — Platform/capture type extensions + useYouTubeTranscript hook (defuddle extraction, SPA nav listener, status management)
+- [ ] 01-03-PLAN.md — YouTubeTranscriptView component + full wiring (useCaptureSource, content.tsx, SelectiveExporter view dispatch)
 
 **Files created:**
 - `src/lib/transcript-parser.ts` — pure fn: defuddle markdown → `TranscriptSegment[]`, `timestampToSeconds`, `findActiveSegmentIndex`
@@ -54,7 +59,7 @@ Three phases deliver a fully interactive transcript sidebar from scratch: Phase 
   2. Manually scrolling the transcript pauses auto-scroll for 3 seconds, then auto-scroll resumes automatically
   3. Clicking a timestamp seeks the video to that position and resumes auto-scroll immediately (even within the 3-second pause)
   4. Seeking clears any active clip selection (no stale selection after the user jumps position)
-  5. A 2-hour video (2,000–4,000 segments) renders without a visible paint freeze — virtualization added via `react-window` if manual testing shows > 200ms initial paint delay
+  5. A 2-hour video (2,000-4,000 segments) renders without a visible paint freeze — virtualization added via `react-window` if manual testing shows > 200ms initial paint delay
 **Plans**: TBD
 
 **Files extended:**
@@ -66,7 +71,7 @@ Three phases deliver a fully interactive transcript sidebar from scratch: Phase 
 
 **Critical notes:**
 - Test isolated-world `video.currentTime` write on day one of this phase — if YouTube player reverts the seek, switch the content script to `world: "MAIN"` in Plasmo config immediately; do NOT build the full selection UI before validating this
-- Do NOT store `currentTime` in React state — use refs + direct DOM class mutation for active segment highlight; `timeupdate` fires 4–66 times/second and React state would cause proportional re-renders
+- Do NOT store `currentTime` in React state — use refs + direct DOM class mutation for active segment highlight; `timeupdate` fires 4-66 times/second and React state would cause proportional re-renders
 - Auto-scroll must target the sidebar panel's scrollable container ref — NOT `document.querySelector(...)` on the host page; everything is inside Shadow DOM
 
 ### Phase 3: Selection and Clip Creation
@@ -93,13 +98,13 @@ Three phases deliver a fully interactive transcript sidebar from scratch: Phase 
 - Do NOT copy the tweets table RLS pattern — `001_tweet_saver.sql` has RLS disabled; `002_clips.sql` must enable RLS from the first line of the migration, not as a deferred TODO
 - Use Supabase native third-party auth (post-April 2025 Clerk pattern) — register Clerk as a third-party provider, pass Clerk session token as `Authorization: Bearer` header; do NOT use the deprecated Clerk JWT template approach
 - Call `requestClerkToken()` fresh at save time — do not cache the token on panel open; tokens expire and a stale cached token will cause silent Supabase auth failures
-- Validate Clerk JWT forwarding to Supabase works in the extension context on day one of this phase — before building the full save flow; the click → async message → async Supabase chain has not been tested end-to-end for this feature
+- Validate Clerk JWT forwarding to Supabase works in the extension context on day one of this phase — before building the full save flow; the click -> async message -> async Supabase chain has not been tested end-to-end for this feature
 
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Transcript Extraction and Display | 0/TBD | Not started | - |
+| 1. Transcript Extraction and Display | 0/3 | Planning complete | - |
 | 2. Playback Sync and Seek | 0/TBD | Not started | - |
 | 3. Selection and Clip Creation | 0/TBD | Not started | - |
 
