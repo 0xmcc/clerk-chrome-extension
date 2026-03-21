@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from "react"
-import Defuddle from "defuddle"
-import { cloneDocumentForExtraction, buildDefuddleOptions } from "~lib/pageCapture"
-import { parseTranscriptMarkdown, type TranscriptSegment } from "~lib/transcript-parser"
+import {
+  parseYtInitialPlayerResponse,
+  getCaptionTrackUrl,
+  parseYtTimedText
+} from "~lib/youtube-transcript"
+import type { TranscriptSegment } from "~lib/transcript-parser"
 import { detectPlatform } from "~utils/platform"
 
 export type TranscriptStatus = "idle" | "loading" | "ready" | "error" | "no_transcript"
@@ -23,16 +26,33 @@ export const useYouTubeTranscript = (): UseYouTubeTranscriptReturn => {
   const [errorMessage, setErrorMessage] = useState<string | undefined>()
   const [videoTitle, setVideoTitle] = useState("")
 
-  const extract = useCallback(() => {
+  const extract = useCallback(async () => {
     if (!isYouTube) return
     setStatus("loading")
     try {
-      const detached = cloneDocumentForExtraction(document)
-      const result = new Defuddle(detached, buildDefuddleOptions(location.href)).parse()
-      const title = result.title?.trim() || document.title
+      // Use document.title as title (available immediately without defuddle)
+      const title = document.title
       setVideoTitle(title)
-      const parsed = parseTranscriptMarkdown(result.contentMarkdown)
-      if (parsed === null || parsed.length === 0) {
+
+      // Read caption track URL from ytInitialPlayerResponse embedded in page scripts
+      const playerResponse = parseYtInitialPlayerResponse(document)
+      const captionUrl = playerResponse ? getCaptionTrackUrl(playerResponse) : null
+
+      if (!captionUrl) {
+        setSegments([])
+        setStatus("no_transcript")
+        return
+      }
+
+      const response = await fetch(captionUrl)
+      if (!response.ok) {
+        throw new Error(`Transcript fetch failed: ${response.status}`)
+      }
+
+      const xml = await response.text()
+      const parsed = parseYtTimedText(xml)
+
+      if (parsed.length === 0) {
         setSegments([])
         setStatus("no_transcript")
       } else {

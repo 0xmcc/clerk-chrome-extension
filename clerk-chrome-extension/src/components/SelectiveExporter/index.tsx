@@ -173,12 +173,15 @@ export const SelectiveExporter = ({
     }
   }, [isOpen, selectedCount])
 
-  // Auto-navigate to youtube_transcript view when YouTube capture is available
+  // Auto-navigate to youtube_transcript view as soon as YouTube extraction begins.
+  // Bug fix: previously triggered only on capture ready — but capture is null during
+  // loading/error/no_transcript, so those states fell through to the old empty state UI.
+  // YouTubeTranscriptView handles all non-idle states internally.
   useEffect(() => {
-    if (capture?.captureMode === "youtube_transcript") {
+    if (youtubeStatus && youtubeStatus !== "idle") {
       setView("youtube_transcript")
     }
-  }, [capture?.captureMode, setView])
+  }, [youtubeStatus, setView])
 
   const handleClose = () => {
     onClose()
