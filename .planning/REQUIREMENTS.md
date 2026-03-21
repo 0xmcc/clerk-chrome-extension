@@ -8,10 +8,10 @@
 ### Transcript Extraction
 
 - [ ] **EXTR-01**: On YouTube watch pages (`youtube.com/watch?v=*`), call defuddle on the live document and extract `contentMarkdown`
-- [ ] **EXTR-02**: Parse defuddle transcript markdown into typed `TranscriptSegment[]` — each segment has `seconds: number`, `text: string`, and optional `section?: string`
-- [ ] **EXTR-03**: Support `M:SS` and `H:MM:SS` timestamp formats in the parser
-- [ ] **EXTR-04**: Parse `### Chapter Name` headings as section labels on subsequent segments
-- [ ] **EXTR-05**: Return a distinct `NO_TRANSCRIPT` state (not null/error) when `## Transcript` heading is absent from defuddle output
+- [x] **EXTR-02**: Parse defuddle transcript markdown into typed `TranscriptSegment[]` — each segment has `seconds: number`, `text: string`, and optional `section?: string`
+- [x] **EXTR-03**: Support `M:SS` and `H:MM:SS` timestamp formats in the parser
+- [x] **EXTR-04**: Parse `### Chapter Name` headings as section labels on subsequent segments
+- [x] **EXTR-05**: Return a distinct `NO_TRANSCRIPT` state (not null/error) when `## Transcript` heading is absent from defuddle output
 - [ ] **EXTR-06**: Listen to `yt-navigate-finish` DOM event and re-extract transcript when the video ID changes (YouTube SPA navigation)
 - [ ] **EXTR-07**: Debounce extraction 500ms after `yt-navigate-finish` to wait for fresh `ytInitialPlayerResponse` injection
 - [ ] **EXTR-08**: Add `"youtube"` to `detectPlatform()` return type and URL matching
@@ -64,7 +64,7 @@
 - [ ] **INFRA-01**: Create `supabase/migrations/002_clips.sql` with RLS enabled from day one — do NOT copy the tweets table (RLS disabled) pattern
 - [ ] **INFRA-02**: Supabase RLS policy: users can only insert/select their own clips (`auth.jwt() ->> 'sub' = user_id`)
 - [ ] **INFRA-03**: Use Supabase native third-party auth (post-April 2025 Clerk pattern) — NOT the deprecated Clerk JWT template approach
-- [ ] **INFRA-04**: Video title source: use defuddle's `title` field; fall back to `document.title` if defuddle title is empty
+- [x] **INFRA-04**: Video title source: use defuddle's `title` field; fall back to `document.title` if defuddle title is empty
 
 ## v2 Requirements
 
@@ -97,10 +97,10 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | EXTR-01 | Phase 1 | Pending |
-| EXTR-02 | Phase 1 | Pending |
-| EXTR-03 | Phase 1 | Pending |
-| EXTR-04 | Phase 1 | Pending |
-| EXTR-05 | Phase 1 | Pending |
+| EXTR-02 | Phase 1 | Complete |
+| EXTR-03 | Phase 1 | Complete |
+| EXTR-04 | Phase 1 | Complete |
+| EXTR-05 | Phase 1 | Complete |
 | EXTR-06 | Phase 1 | Pending |
 | EXTR-07 | Phase 1 | Pending |
 | EXTR-08 | Phase 1 | Pending |
@@ -135,7 +135,7 @@
 | INFRA-01 | Phase 3 | Pending |
 | INFRA-02 | Phase 3 | Pending |
 | INFRA-03 | Phase 3 | Pending |
-| INFRA-04 | Phase 1 | Pending |
+| INFRA-04 | Phase 1 | Complete |
 
 **Coverage:**
 - v1 requirements: 36 total

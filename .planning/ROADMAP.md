@@ -22,10 +22,10 @@ Three phases deliver a fully interactive transcript sidebar from scratch: Phase 
   3. A video with no transcript shows a distinct human-readable empty state (not a blank panel, not an error)
   4. A defuddle extraction failure shows a distinct error state (not the empty state, not a spinner stuck forever)
   5. Skeleton rows appear while the transcript is loading (not a spinner)
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
-- [ ] 01-01-PLAN.md — TDD transcript parser (TranscriptSegment type, parseTranscriptMarkdown, timestampToSeconds, formatTimestamp, findActiveSegmentIndex)
+- [x] 01-01-PLAN.md — TDD transcript parser (TranscriptSegment type, parseTranscriptMarkdown, timestampToSeconds, formatTimestamp, findActiveSegmentIndex)
 - [ ] 01-02-PLAN.md — Platform/capture type extensions + useYouTubeTranscript hook (defuddle extraction, SPA nav listener, status management)
 - [ ] 01-03-PLAN.md — YouTubeTranscriptView component + full wiring (useCaptureSource, content.tsx, SelectiveExporter view dispatch)
 
@@ -104,7 +104,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Transcript Extraction and Display | 0/3 | Planning complete | - |
+| 1. Transcript Extraction and Display | 1/3 | In Progress|  |
 | 2. Playback Sync and Seek | 0/TBD | Not started | - |
 | 3. Selection and Clip Creation | 0/TBD | Not started | - |
 
