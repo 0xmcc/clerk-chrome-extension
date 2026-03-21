@@ -9,6 +9,14 @@ import {
 } from "./config/endpoints"
 import { IS_DEVELOPMENT } from "./config/features"
 import { installNetworkInterceptor } from "./interceptor"
+import {
+  createYouTubeClipJob,
+  getYouTubeClipJobStatus
+} from "./lib/youtube-clip-worker"
+import type {
+  CreateYouTubeClipRequest,
+  YouTubeClipJob
+} from "./lib/youtube-clip"
 import { debug } from "./utils/debug"
 import { handleProxyFetchMessage } from "./utils/proxyFetch"
 
@@ -150,6 +158,58 @@ export const injectInterceptor = (tabId: number) => {
     })
 }
 
+type BackgroundClipResponse = {
+  success: boolean
+  clip?: YouTubeClipJob | null
+  error?: string
+}
+
+export const handleCreateYouTubeClipMessage = async (
+  payload: CreateYouTubeClipRequest
+): Promise<BackgroundClipResponse> => {
+  const clip = await createYouTubeClipJob(payload)
+
+  if (clip.status === "error") {
+    return {
+      success: false,
+      clip,
+      error: clip.error || "Failed to create YouTube clip."
+    }
+  }
+
+  return {
+    success: true,
+    clip
+  }
+}
+
+export const handleGetYouTubeClipStatusMessage = async (
+  jobId: string
+): Promise<BackgroundClipResponse> => {
+  const clip = await getYouTubeClipJobStatus(jobId)
+
+  if (!clip) {
+    return {
+      success: false,
+      clip: null,
+      error: "YouTube clip job not found."
+    }
+  }
+
+  if (clip.status === "error") {
+    return {
+      success: false,
+      clip,
+      error: clip.error || "Failed to create YouTube clip."
+    }
+  }
+
+  return {
+    success: true,
+    clip
+  }
+}
+
 // Inject interceptor when tabs are updated (page loads/navigates)
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== "complete") return
@@ -178,6 +238,42 @@ chrome.storage?.onChanged?.addListener((changes, areaName) => {
 
 // Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.action === "createYouTubeClip") {
+    ;(async () => {
+      try {
+        sendResponse(await handleCreateYouTubeClipMessage(message.payload))
+      } catch (error) {
+        sendResponse({
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to create YouTube clip."
+        })
+      }
+    })()
+
+    return true
+  }
+
+  if (message.action === "getYouTubeClipStatus") {
+    ;(async () => {
+      try {
+        sendResponse(await handleGetYouTubeClipStatusMessage(message.jobId))
+      } catch (error) {
+        sendResponse({
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to load YouTube clip status."
+        })
+      }
+    })()
+
+    return true
+  }
+
   if (message.action === "openOptionsPage") {
     chrome.runtime.openOptionsPage()
     sendResponse({ success: true })

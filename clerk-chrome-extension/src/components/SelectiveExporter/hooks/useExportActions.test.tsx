@@ -56,9 +56,30 @@ describe("useExportActions", () => {
       }
     })
 
-    vi.stubGlobal("URL", URL)
-    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test")
-    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {})
+    const urlWithBlobApis = URL as typeof URL & {
+      createObjectURL: ReturnType<typeof vi.fn>
+      revokeObjectURL: ReturnType<typeof vi.fn>
+    }
+
+    if (!("createObjectURL" in urlWithBlobApis)) {
+      Object.defineProperty(urlWithBlobApis, "createObjectURL", {
+        configurable: true,
+        writable: true,
+        value: vi.fn()
+      })
+    }
+
+    if (!("revokeObjectURL" in urlWithBlobApis)) {
+      Object.defineProperty(urlWithBlobApis, "revokeObjectURL", {
+        configurable: true,
+        writable: true,
+        value: vi.fn()
+      })
+    }
+
+    vi.stubGlobal("URL", urlWithBlobApis)
+    vi.mocked(urlWithBlobApis.createObjectURL).mockReturnValue("blob:test")
+    vi.mocked(urlWithBlobApis.revokeObjectURL).mockImplementation(() => {})
   })
 
   it("keeps the structured transcript markdown path working", () => {

@@ -1,7 +1,12 @@
+import type { ReactNode } from "react"
+
 import type { TranscriptSegment } from "~lib/transcript-parser"
 import type { TranscriptStatus } from "~hooks/useYouTubeTranscript"
 import { formatTimestamp } from "~lib/transcript-parser"
-import { useEffect, useRef, useState } from "react"
+import { getClipEndSeconds } from "~lib/youtube-clip"
+import { useEffect, useState } from "react"
+
+import { useYouTubeClip } from "../hooks/useYouTubeClip"
 import { DARK_THEME } from "../constants"
 
 interface YouTubeTranscriptViewProps {
@@ -13,21 +18,6 @@ interface YouTubeTranscriptViewProps {
 
 const CLIP_BAR_PADDING_BOTTOM = "72px"
 
-export const getClipEndSeconds = (
-  segments: TranscriptSegment[],
-  endIdx: number
-): number => {
-  const nextSegment = segments[endIdx + 1]
-  return nextSegment ? nextSegment.seconds : segments[endIdx].seconds + 5
-}
-
-export const buildYtDlpCommand = (
-  videoUrl: string,
-  startSeconds: number,
-  endSeconds: number
-): string =>
-  `yt-dlp --merge-output-format mp4 --remux-video mp4 -S vcodec:h264,lang,quality,res,fps,hdr:12,acodec:aac --download-sections "*${formatTimestamp(startSeconds)}-${formatTimestamp(endSeconds)}" "${videoUrl}"`
-
 export const YouTubeTranscriptView = ({
   segments,
   status,
@@ -36,18 +26,17 @@ export const YouTubeTranscriptView = ({
 }: YouTubeTranscriptViewProps) => {
   const [clipStartIdx, setClipStartIdx] = useState<number | null>(null)
   const [clipEndIdx, setClipEndIdx] = useState<number | null>(null)
-  const [copied, setCopied] = useState(false)
-  const copiedTimeoutRef = useRef<number | null>(null)
+  const {
+    status: clipStatus,
+    errorMessage: clipErrorMessage,
+    createClip,
+    reset: resetClip
+  } = useYouTubeClip()
 
   const resetSelection = () => {
     setClipStartIdx(null)
     setClipEndIdx(null)
-    setCopied(false)
-
-    if (copiedTimeoutRef.current !== null) {
-      window.clearTimeout(copiedTimeoutRef.current)
-      copiedTimeoutRef.current = null
-    }
+    resetClip()
   }
 
   const transcriptKey = segments
@@ -56,15 +45,7 @@ export const YouTubeTranscriptView = ({
 
   useEffect(() => {
     resetSelection()
-  }, [transcriptKey, videoUrl, status])
-
-  useEffect(() => {
-    return () => {
-      if (copiedTimeoutRef.current !== null) {
-        window.clearTimeout(copiedTimeoutRef.current)
-      }
-    }
-  }, [])
+  }, [resetClip, status, transcriptKey, videoUrl])
 
   if (status === "idle") return null
 
@@ -137,7 +118,6 @@ export const YouTubeTranscriptView = ({
     )
   }
 
-  // status === "ready"
   let prevSection: string | undefined = undefined
   const hasRange = clipStartIdx !== null && clipEndIdx !== null
   const clipStartSegment =
@@ -167,43 +147,29 @@ export const YouTubeTranscriptView = ({
       return
     }
 
+    resetClip()
+
     if (clipStartIdx === null || clipEndIdx !== null) {
       setClipStartIdx(index)
       setClipEndIdx(null)
-      setCopied(false)
       return
     }
 
     const [start, end] = [clipStartIdx, index].sort((a, b) => a - b)
     setClipStartIdx(start)
     setClipEndIdx(end)
-    setCopied(false)
   }
 
   const handleCopyCommand = async () => {
-    if (
-      !videoUrl ||
-      clipStartSeconds === null ||
-      clipEndSeconds === null ||
-      !navigator.clipboard?.writeText
-    ) {
+    if (!videoUrl || clipStartSeconds === null || clipEndSeconds === null) {
       return
     }
 
-    await navigator.clipboard.writeText(
-      buildYtDlpCommand(videoUrl, clipStartSeconds, clipEndSeconds)
-    )
-
-    setCopied(true)
-
-    if (copiedTimeoutRef.current !== null) {
-      window.clearTimeout(copiedTimeoutRef.current)
-    }
-
-    copiedTimeoutRef.current = window.setTimeout(() => {
-      setCopied(false)
-      copiedTimeoutRef.current = null
-    }, 2000)
+    await createClip({
+      videoUrl,
+      startSeconds: clipStartSeconds,
+      endSeconds: clipEndSeconds
+    })
   }
 
   const isIndexSelected = (index: number) => {
@@ -220,7 +186,7 @@ export const YouTubeTranscriptView = ({
           paddingBottom: showClipBar ? CLIP_BAR_PADDING_BOTTOM : 0
         }}>
         {segments.map((segment, index) => {
-          const elements: React.ReactNode[] = []
+          const elements: ReactNode[] = []
           const isSelected = isIndexSelected(index)
 
           if (segment.section && segment.section !== prevSection) {
@@ -329,18 +295,53 @@ export const YouTubeTranscriptView = ({
             <button
               type="button"
               onClick={handleCopyCommand}
+              disabled={clipStatus === "creating"}
               style={{
                 padding: "8px 12px",
                 borderRadius: "10px",
-                border: `1px solid ${copied ? DARK_THEME.success : DARK_THEME.accent}`,
-                backgroundColor: copied ? "rgba(74, 222, 128, 0.12)" : DARK_THEME.accentBg,
-                color: copied ? DARK_THEME.success : DARK_THEME.text,
-                cursor: "pointer",
+                border: `1px solid ${
+                  clipStatus === "success"
+                    ? DARK_THEME.success
+                    : clipStatus === "error"
+                      ? DARK_THEME.danger
+                      : DARK_THEME.accent
+                }`,
+                backgroundColor:
+                  clipStatus === "success"
+                    ? "rgba(74, 222, 128, 0.12)"
+                    : clipStatus === "error"
+                      ? "rgba(239, 68, 68, 0.12)"
+                      : DARK_THEME.accentBg,
+                color:
+                  clipStatus === "success"
+                    ? DARK_THEME.success
+                    : clipStatus === "error"
+                      ? DARK_THEME.danger
+                      : DARK_THEME.text,
+                cursor: clipStatus === "creating" ? "wait" : "pointer",
+                opacity: clipStatus === "creating" ? 0.8 : 1,
                 fontSize: "12px",
                 fontWeight: 600
               }}>
-              {copied ? "Copied!" : "Copy yt-dlp command"}
+              {clipStatus === "creating"
+                ? "Creating..."
+                : clipStatus === "success"
+                  ? "Copied!"
+                  : clipStatus === "error"
+                    ? "Retry copy"
+                    : "Copy yt-dlp command"}
             </button>
+            {clipErrorMessage ? (
+              <span
+                role="alert"
+                style={{
+                  flexBasis: "100%",
+                  fontSize: "12px",
+                  color: DARK_THEME.danger
+                }}>
+                {clipErrorMessage}
+              </span>
+            ) : null}
           </div>
         </div>
       ) : null}
