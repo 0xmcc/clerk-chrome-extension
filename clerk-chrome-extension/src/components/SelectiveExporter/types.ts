@@ -26,6 +26,7 @@ export interface YouTubeTranscriptViewProps {
   segments: TranscriptSegment[]
   status: TranscriptStatus
   errorMessage?: string
+  videoUrl?: string
 }
 
 /**

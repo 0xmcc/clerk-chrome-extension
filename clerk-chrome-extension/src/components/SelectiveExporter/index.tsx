@@ -332,6 +332,11 @@ export const SelectiveExporter = ({
                 segments={capture?.captureMode === "youtube_transcript" ? capture.segments : []}
                 status={youtubeStatus ?? "idle"}
                 errorMessage={youtubeErrorMessage}
+                videoUrl={
+                  capture?.captureMode === "youtube_transcript"
+                    ? capture.videoUrl
+                    : undefined
+                }
               />
             ) : view === "analysis" ? (
               <AnalysisView
