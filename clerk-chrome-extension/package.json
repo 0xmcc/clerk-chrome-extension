@@ -22,6 +22,7 @@
     "@clerk/chrome-extension": "^2.8.4",
     "@supabase/supabase-js": "^2.94.1",
     "defuddle": "^0.10.0",
+    "get-shit-done-cc": "github:gsd-build/get-shit-done",
     "marked": "^17.0.1",
     "plasmo": "^0.90.5",
     "react": "18.2.0",
@@ -47,7 +48,7 @@
     "prettier": "3.2.4",
     "typescript": "5.3.3",
     "vite": "^5.2.0",
-    "vitest": "^4.0.18"
+    "vitest": "^2.1.9"
   },
   "manifest": {
     "key": "$CRX_PUBLIC_KEY",
