@@ -1,19 +1,146 @@
-import { describe, it, expect } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   getCaptionTrackUrl,
+  isYouTubeTranscriptUrl,
   parseYtTimedText,
   parseYtInitialPlayerResponse,
   parseYtInitialData,
   getTranscriptContinuationParams,
   parseInnerTubeTranscriptResponse,
   parseTranscriptSegmentsFromDom,
-  extractTranscriptSegmentsFromDom
+  extractTranscriptSegmentsFromDom,
+  waitForYouTubeTranscriptResponse
 } from "./youtube-transcript"
 
 // These tests document the contract for extracting YouTube transcripts via
 // ytInitialPlayerResponse.captions (not defuddle, which only extracts description).
 // They were written to reproduce the bug where useYouTubeTranscript always returned
 // "no_transcript" because defuddle's YouTube extractor never includes "## Transcript".
+
+const INTERCEPTOR_SOURCE = "__echo_network_interceptor__"
+
+const buildTranscriptResponse = (segments: Array<{ startMs: string; text: string }>) => ({
+  actions: [
+    {
+      updateEngagementPanelAction: {
+        content: {
+          transcriptRenderer: {
+            content: {
+              transcriptSearchPanelRenderer: {
+                body: {
+                  transcriptSegmentListRenderer: {
+                    initialSegments: segments.map((segment) => ({
+                      transcriptSegmentRenderer: {
+                        startMs: segment.startMs,
+                        snippet: {
+                          runs: [{ text: segment.text }]
+                        }
+                      }
+                    }))
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+})
+
+describe("isYouTubeTranscriptUrl", () => {
+  it("matches the youtubei get_transcript endpoint", () => {
+    expect(
+      isYouTubeTranscriptUrl("https://www.youtube.com/youtubei/v1/get_transcript?prettyPrint=false")
+    ).toBe(true)
+  })
+
+  it("rejects other youtubei endpoints", () => {
+    expect(
+      isYouTubeTranscriptUrl("https://www.youtube.com/youtubei/v1/browse")
+    ).toBe(false)
+  })
+})
+
+describe("waitForYouTubeTranscriptResponse", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("resolves transcript segments from an intercepted get_transcript response", async () => {
+    const promise = waitForYouTubeTranscriptResponse({ timeoutMs: 1000 })
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: window,
+        data: {
+          source: INTERCEPTOR_SOURCE,
+          url: "https://www.youtube.com/youtubei/v1/get_transcript?prettyPrint=false",
+          data: buildTranscriptResponse([
+            { startMs: "1000", text: "Hello world" },
+            { startMs: "2500", text: "Second line" }
+          ])
+        }
+      })
+    )
+
+    await expect(promise).resolves.toEqual([
+      { seconds: 1, text: "Hello world" },
+      { seconds: 2, text: "Second line" }
+    ])
+  })
+
+  it("ignores empty transcript payloads and keeps waiting for a later valid response", async () => {
+    const promise = waitForYouTubeTranscriptResponse({ timeoutMs: 1000 })
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: window,
+        data: {
+          source: INTERCEPTOR_SOURCE,
+          url: "https://www.youtube.com/youtubei/v1/get_transcript",
+          data: buildTranscriptResponse([])
+        }
+      })
+    )
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: window,
+        data: {
+          source: INTERCEPTOR_SOURCE,
+          url: "https://www.youtube.com/youtubei/v1/get_transcript",
+          data: buildTranscriptResponse([{ startMs: "4000", text: "Recovered" }])
+        }
+      })
+    )
+
+    await expect(promise).resolves.toEqual([{ seconds: 4, text: "Recovered" }])
+  })
+
+  it("times out with an empty result when no transcript response arrives", async () => {
+    const promise = waitForYouTubeTranscriptResponse({ timeoutMs: 1000 })
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: window,
+        data: {
+          source: INTERCEPTOR_SOURCE,
+          url: "https://www.youtube.com/youtubei/v1/browse",
+          data: buildTranscriptResponse([{ startMs: "1000", text: "Ignored" }])
+        }
+      })
+    )
+
+    await vi.advanceTimersByTimeAsync(1000)
+
+    await expect(promise).resolves.toEqual([])
+  })
+})
 
 describe("getCaptionTrackUrl", () => {
   it("returns null for empty player response", () => {
@@ -689,6 +816,32 @@ describe("parseTranscriptSegmentsFromDom", () => {
     ])
   })
 
+  it("parses rows from YouTube's transcript-segment-view-model markup", () => {
+    const doc = document.implementation.createHTMLDocument()
+    doc.body.innerHTML = `
+      <transcript-segment-view-model>
+        <div class="ytwTranscriptSegmentViewModelTimestamp">0:06</div>
+        <div class="ytwTranscriptSegmentViewModelSnippet">
+          quinoa, maybe some Brussels sprouts.
+        </div>
+      </transcript-segment-view-model>
+      <transcript-segment-view-model>
+        <div class="ytwTranscriptSegmentViewModelTimestamp">0:13</div>
+        <div class="ytwTranscriptSegmentViewModelSnippet">
+          when I'm not here, I want Brad Gersonner in the seat.
+        </div>
+      </transcript-segment-view-model>
+    `
+
+    expect(parseTranscriptSegmentsFromDom(doc)).toEqual([
+      { seconds: 6, text: "quinoa, maybe some Brussels sprouts." },
+      {
+        seconds: 13,
+        text: "when I'm not here, I want Brad Gersonner in the seat."
+      }
+    ])
+  })
+
   it("falls back to splitting the row text when selectors are missing", () => {
     const doc = document.implementation.createHTMLDocument()
     doc.body.innerHTML = `
@@ -699,6 +852,72 @@ describe("parseTranscriptSegmentsFromDom", () => {
 
     expect(parseTranscriptSegmentsFromDom(doc)).toEqual([
       { seconds: 5, text: "A fallback transcript line" }
+    ])
+  })
+
+  it("falls back when timestamp and text are adjacent sibling nodes with no whitespace", () => {
+    const doc = document.implementation.createHTMLDocument()
+    doc.body.innerHTML = `
+      <transcript-segment-view-model>
+        <div class="ytwTranscriptSegmentViewModelTimestamp">0:06</div><div>quinoa, maybe some Brussels sprouts.</div>
+      </transcript-segment-view-model>
+    `
+
+    expect(parseTranscriptSegmentsFromDom(doc)).toEqual([
+      { seconds: 6, text: "quinoa, maybe some Brussels sprouts." }
+    ])
+  })
+
+  it("strips spoken timestamp labels that are prepended inside the transcript snippet", () => {
+    const doc = document.implementation.createHTMLDocument()
+    doc.body.innerHTML = `
+      <transcript-segment-view-model>
+        <div class="ytwTranscriptSegmentViewModelTimestamp">7:54</div>
+        <div class="ytwTranscriptSegmentViewModelSnippet">
+          <span class="sr-only">7 minutes, 54 seconds</span>
+          <span>I think uh he might actually be for regime change.</span>
+        </div>
+      </transcript-segment-view-model>
+    `
+
+    expect(parseTranscriptSegmentsFromDom(doc)).toEqual([
+      {
+        seconds: 474,
+        text: "I think uh he might actually be for regime change."
+      }
+    ])
+  })
+
+  it("strips spoken timestamp labels when sr-only text is adjacent to the visible text", () => {
+    const doc = document.implementation.createHTMLDocument()
+    doc.body.innerHTML = `
+      <transcript-segment-view-model>
+        <div class="ytwTranscriptSegmentViewModelTimestamp">7:54</div>
+        <div class="ytwTranscriptSegmentViewModelSnippet"><span class="sr-only">7 minutes, 54 seconds</span><span>I think uh he might actually be for regime change.</span></div>
+      </transcript-segment-view-model>
+    `
+
+    expect(parseTranscriptSegmentsFromDom(doc)).toEqual([
+      {
+        seconds: 474,
+        text: "I think uh he might actually be for regime change."
+      }
+    ])
+  })
+
+  it("strips spoken timestamp labels from fallback row text", () => {
+    const doc = document.implementation.createHTMLDocument()
+    doc.body.innerHTML = `
+      <transcript-segment-view-model>
+        7:54 7 minutes, 54 seconds I think uh he might actually be for regime change.
+      </transcript-segment-view-model>
+    `
+
+    expect(parseTranscriptSegmentsFromDom(doc)).toEqual([
+      {
+        seconds: 474,
+        text: "I think uh he might actually be for regime change."
+      }
     ])
   })
 })

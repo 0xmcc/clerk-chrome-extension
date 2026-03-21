@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from "react"
+import { INTERCEPTOR_READY_SIGNAL } from "~config/interceptor"
 import {
-  parseYtInitialPlayerResponse,
   getCaptionTrackUrl,
+  extractTranscriptSegmentsFromDom,
+  parseTranscriptSegmentsFromDom,
+  parseYtInitialPlayerResponse,
   parseYtTimedText,
-  parseYtInitialData,
-  getTranscriptContinuationParams,
-  parseInnerTubeTranscriptResponse,
-  extractTranscriptSegmentsFromDom
+  waitForYouTubeTranscriptResponse
 } from "~lib/youtube-transcript"
 import type { TranscriptSegment } from "~lib/transcript-parser"
 import { detectPlatform } from "~utils/platform"
@@ -20,6 +20,13 @@ interface UseYouTubeTranscriptReturn {
   videoTitle: string
 }
 
+const TRANSCRIPT_WAIT_TIMEOUT_MS = 5000
+const DOM_POLL_DELAY_MS = 250
+const DOM_POLL_ATTEMPTS = Math.ceil(
+  TRANSCRIPT_WAIT_TIMEOUT_MS / DOM_POLL_DELAY_MS
+)
+const RECOVERABLE_STATUSES: TranscriptStatus[] = ["loading", "no_transcript"]
+
 export const useYouTubeTranscript = (): UseYouTubeTranscriptReturn => {
   const isYouTube =
     detectPlatform() === "youtube" && window.location.pathname.startsWith("/watch")
@@ -32,66 +39,55 @@ export const useYouTubeTranscript = (): UseYouTubeTranscriptReturn => {
 
   const extract = useCallback(async () => {
     if (!isYouTube) return
+
     setStatus("loading")
+    setSegments([])
+    setErrorMessage(undefined)
     console.log("[transcript] extract start", window.location.href)
+
     try {
       const title = document.title
       setVideoTitle(title)
 
-      const scriptCount = document.querySelectorAll("script").length
-      console.log("[transcript] scanning", scriptCount, "script tags")
+      const interceptedTranscriptPromise = waitForYouTubeTranscriptResponse({
+        timeoutMs: TRANSCRIPT_WAIT_TIMEOUT_MS
+      })
 
-      // 1. Try InnerTube API first
-      const ytInitialData = parseYtInitialData(document)
-      console.log("[transcript] ytInitialData found:", !!ytInitialData)
+      // Ask the interceptor to flush any queued MAIN-world events after our
+      // listener is attached, then drive the page to make its own request.
+      window.postMessage(INTERCEPTOR_READY_SIGNAL, "*")
 
-      const innerTubeParams = ytInitialData
-        ? getTranscriptContinuationParams(ytInitialData)
-        : null
-      console.log("[transcript] innerTubeParams found:", !!innerTubeParams)
+      const domTranscriptPromise = extractTranscriptSegmentsFromDom(document, {
+        maxAttempts: DOM_POLL_ATTEMPTS,
+        delayMs: DOM_POLL_DELAY_MS
+      })
 
-      if (innerTubeParams) {
-        try {
-          const innerTubeResponse = await fetch(
-            "https://www.youtube.com/youtubei/v1/get_transcript",
-            {
-              method: "POST",
-              credentials: "include",
-              headers: {
-                "Content-Type": "application/json",
-                "X-YouTube-Client-Name": "1",
-                "X-YouTube-Client-Version": "2.20240101.00.00",
-              },
-              body: JSON.stringify({
-                context: {
-                  client: {
-                    clientName: "WEB",
-                    clientVersion: "2.20240101.00.00",
-                    hl: "en",
-                    gl: "US",
-                  }
-                },
-                params: innerTubeParams
-              })
-            }
-          )
-          console.log("[transcript] InnerTube fetch →", innerTubeResponse.status)
-          if (innerTubeResponse.ok) {
-            const data = await innerTubeResponse.json()
-            const parsed = parseInnerTubeTranscriptResponse(data)
-            console.log("[transcript] InnerTube parsed", parsed.length, "segments")
-            if (parsed.length > 0) {
-              setSegments(parsed)
-              setStatus("ready")
-              return
-            }
-          }
-        } catch (err) {
-          console.error("[transcript] InnerTube ERROR:", err)
-        }
+      const pageManagedSegments = await Promise.any([
+        interceptedTranscriptPromise.then((resolvedSegments) =>
+          resolvedSegments.length > 0
+            ? resolvedSegments
+            : Promise.reject(new Error("No intercepted transcript response"))
+        ),
+        domTranscriptPromise.then((resolvedSegments) =>
+          resolvedSegments.length > 0
+            ? resolvedSegments
+            : Promise.reject(new Error("No transcript segments rendered in DOM"))
+        )
+      ]).catch(() => [] as TranscriptSegment[])
+
+      if (pageManagedSegments.length > 0) {
+        console.log(
+          "[transcript] resolved from page-managed path",
+          pageManagedSegments.length,
+          "segments"
+        )
+        setSegments(pageManagedSegments)
+        setStatus("ready")
+        return
       }
 
-      // 2. Fall back to timedtext API
+      // Fall back to legacy timedtext as a best-effort path for cases where the
+      // page did not emit a capturable transcript response.
       const playerResponse = parseYtInitialPlayerResponse(document)
       if (!playerResponse) {
         console.error("[transcript] FAIL: ytInitialPlayerResponse not found in any script tag")
@@ -124,20 +120,11 @@ export const useYouTubeTranscript = (): UseYouTubeTranscriptReturn => {
       const parsedXml = parseYtTimedText(xml)
       console.log("[transcript] parsed", parsedXml.length, "segments")
 
-      const finalSegments =
-        parsedXml.length > 0
-          ? parsedXml
-          : await extractTranscriptSegmentsFromDom(document)
-
       if (parsedXml.length === 0) {
-        console.log("[transcript] DOM fallback parsed", finalSegments.length, "segments")
-      }
-
-      if (finalSegments.length === 0) {
         setSegments([])
         setStatus("no_transcript")
       } else {
-        setSegments(finalSegments)
+        setSegments(parsedXml)
         setStatus("ready")
       }
     } catch (err) {
@@ -154,6 +141,56 @@ export const useYouTubeTranscript = (): UseYouTubeTranscriptReturn => {
     extract()
   }, [isYouTube, extract])
 
+  // Recover when transcript rows hydrate after the initial extraction has
+  // already settled to an empty result. YouTube frequently renders transcript
+  // rows lazily after the panel is opened.
+  useEffect(() => {
+    if (!isYouTube) return
+    if (!RECOVERABLE_STATUSES.includes(status)) return
+    if (segments.length > 0) return
+    if (typeof MutationObserver === "undefined") return
+
+    let active = true
+    let parseQueued = false
+
+    const tryRecoverFromDom = () => {
+      if (!active) return
+
+      const parsed = parseTranscriptSegmentsFromDom(document)
+      if (parsed.length === 0) return
+
+      console.log("[transcript] recovered from late DOM hydration", parsed.length)
+      setSegments(parsed)
+      setStatus("ready")
+      setErrorMessage(undefined)
+    }
+
+    const scheduleParse = () => {
+      if (parseQueued || !active) return
+      parseQueued = true
+      Promise.resolve().then(() => {
+        parseQueued = false
+        tryRecoverFromDom()
+      })
+    }
+
+    scheduleParse()
+
+    const observer = new MutationObserver(() => {
+      scheduleParse()
+    })
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    })
+
+    return () => {
+      active = false
+      observer.disconnect()
+    }
+  }, [isYouTube, segments.length, status])
+
   // SPA navigation detection
   useEffect(() => {
     if (!isYouTube) return
@@ -169,6 +206,7 @@ export const useYouTubeTranscript = (): UseYouTubeTranscriptReturn => {
       if (!isWatchPage) {
         setSegments([])
         setStatus("idle")
+        setErrorMessage(undefined)
         lastVideoId = ""
         return
       }

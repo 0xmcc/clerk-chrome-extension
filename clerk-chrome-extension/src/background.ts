@@ -4,6 +4,7 @@ import {
   ALL_HOST_PATTERNS,
   CHATGPT_ENDPOINTS,
   CLAUDE_ENDPOINTS,
+  YOUTUBE_ENDPOINTS,
   isTargetSite
 } from "./config/endpoints"
 import { IS_DEVELOPMENT } from "./config/features"
@@ -129,7 +130,7 @@ chrome.tabs.query({ url: [...ALL_HOST_PATTERNS] }, (tabs) => {
   })
 })
 
-// Inject network interceptor into MAIN world for ChatGPT/Claude tabs
+// Inject network interceptor into MAIN world for supported tabs
 // Pass endpoint patterns as arguments to avoid duplication (patterns defined in config/endpoints.ts)
 export const injectInterceptor = (tabId: number) => {
   chrome.scripting
@@ -139,7 +140,8 @@ export const injectInterceptor = (tabId: number) => {
       args: [
         CHATGPT_ENDPOINTS.CONVERSATION_DETAIL_PREFIX,
         CHATGPT_ENDPOINTS.CONVERSATIONS_LIST,
-        CLAUDE_ENDPOINTS.ORG_API_PREFIX
+        CLAUDE_ENDPOINTS.ORG_API_PREFIX,
+        YOUTUBE_ENDPOINTS.GET_TRANSCRIPT
       ],
       func: installNetworkInterceptor
     })

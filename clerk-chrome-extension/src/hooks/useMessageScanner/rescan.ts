@@ -2,9 +2,8 @@ import type { Conversation, CapturedPlatform, InterceptorEvent } from "./types"
 import { getActiveConversationIdFromUrl, now } from "./utils"
 import { getClaudeOrgId, getChatGPTAuthToken, setChatGPTAuthToken } from "./store"
 import { buildChatGPTDetailUrl, buildClaudeDetailUrls } from "../../config/endpoints"
+import { INTERCEPTOR_SOURCE } from "~config/interceptor"
 import { debug } from "~utils/debug"
-
-export const INTERCEPTOR_SOURCE = "__echo_network_interceptor__"
 
 // Instrumentation helper for rescan flow tracking
 function logRescan(step: string, details?: Record<string, unknown>) {

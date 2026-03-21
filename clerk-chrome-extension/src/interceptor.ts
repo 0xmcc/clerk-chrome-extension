@@ -3,7 +3,8 @@ import type { PlasmoCSConfig } from "plasmo"
 import {
   ALL_HOST_PATTERNS,
   CHATGPT_ENDPOINTS,
-  CLAUDE_ENDPOINTS
+  CLAUDE_ENDPOINTS,
+  YOUTUBE_ENDPOINTS
 } from "./config/endpoints"
 
 export const config: PlasmoCSConfig = {
@@ -21,7 +22,8 @@ declare global {
 export function installNetworkInterceptor(
   chatgptDetailPrefix: string,
   chatgptListPath: string,
-  claudeOrgPrefix: string
+  claudeOrgPrefix: string,
+  youtubeTranscriptPath: string
 ) {
   const MESSAGE_SOURCE = "__echo_network_interceptor__"
   const LISTENER_READY_SIGNAL = "__echo_listener_ready__"
@@ -54,6 +56,11 @@ export function installNetworkInterceptor(
       }
 
       if (path.startsWith(claudeOrgPrefix)) {
+        console.log("[Interceptor] shouldCapture: MATCH", { url: urlStr })
+        return true
+      }
+
+      if (path === youtubeTranscriptPath) {
         console.log("[Interceptor] shouldCapture: MATCH", { url: urlStr })
         return true
       }
@@ -132,7 +139,8 @@ export function installNetworkInterceptor(
       const response = await originalFetch(input as any, init)
 
       let requestHeaders: Record<string, string> | undefined
-      if (requestUrl.includes("/backend-api/")) {
+      const shouldCaptureRequest = shouldCapture(requestUrl)
+      if (requestUrl.includes("/backend-api/") || shouldCaptureRequest) {
         try {
           const headersSource =
             init?.headers ||
@@ -173,7 +181,7 @@ export function installNetworkInterceptor(
         }
       }
 
-      if (!shouldCapture(requestUrl)) {
+      if (!shouldCaptureRequest) {
         if (requestUrl.includes("/backend-api/conversation/")) {
           console.log("[Interceptor] Conversation endpoint NOT captured", {
             url: requestUrl
@@ -378,6 +386,7 @@ if (typeof window !== "undefined") {
   installNetworkInterceptor(
     CHATGPT_ENDPOINTS.CONVERSATION_DETAIL_PREFIX,
     CHATGPT_ENDPOINTS.CONVERSATIONS_LIST,
-    CLAUDE_ENDPOINTS.ORG_API_PREFIX
+    CLAUDE_ENDPOINTS.ORG_API_PREFIX,
+    YOUTUBE_ENDPOINTS.GET_TRANSCRIPT
   )
 }

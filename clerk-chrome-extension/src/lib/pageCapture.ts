@@ -7,7 +7,7 @@ export const buildDefuddleOptions = (url: string): DefuddleOptions => ({
   url,
   // The extension intentionally keeps the fallback local-only.
   // Defuddle's async fallback can call third-party services if enabled.
-  useAsync: true
+  useAsync: false
 })
 
 export const cloneDocumentForExtraction = (

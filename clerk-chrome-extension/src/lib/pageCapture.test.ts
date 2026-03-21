@@ -62,7 +62,15 @@ describe("pageCapture", () => {
     })
 
     expect(defuddleConstructorMock).toHaveBeenCalledTimes(1)
-    expect(defuddleConstructorMock.mock.calls[0]?.[1]).toEqual({
+    const firstConstructorCall = defuddleConstructorMock.mock.calls[0] as unknown as [
+      unknown,
+      {
+        markdown: boolean
+        url: string
+        useAsync: boolean
+      }
+    ]
+    expect(firstConstructorCall[1]).toEqual({
       markdown: true,
       url: "https://claude.ai/projects/example",
       useAsync: false

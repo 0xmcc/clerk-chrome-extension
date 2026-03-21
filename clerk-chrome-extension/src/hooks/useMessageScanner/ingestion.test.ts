@@ -18,7 +18,10 @@ const makeListResponse = (count: number, total: number, startId = 0) => ({
   })),
 })
 
-const makeDeps = (overrides?: Partial<{ getAuthToken: () => string | null; upsertMany: (c: Conversation[]) => void }>) => {
+const makeDeps = (overrides?: Partial<{
+  getAuthToken: () => string | null
+  upsertMany: ReturnType<typeof vi.fn>
+}>) => {
   const upsertMany = vi.fn()
   return {
     upsertMany,

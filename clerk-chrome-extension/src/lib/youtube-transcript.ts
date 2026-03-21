@@ -1,4 +1,6 @@
 import { timestampToSeconds, type TranscriptSegment } from "./transcript-parser"
+import { YOUTUBE_ENDPOINTS } from "~config/endpoints"
+import { INTERCEPTOR_SOURCE } from "~config/interceptor"
 
 /**
  * Parses the ytInitialPlayerResponse JSON from inline <script> tags in the document.
@@ -232,6 +234,72 @@ export function parseInnerTubeTranscriptResponse(data: unknown): TranscriptSegme
   return []
 }
 
+interface InterceptorPayload {
+  source?: string
+  url?: string
+  data?: unknown
+}
+
+export function isYouTubeTranscriptUrl(
+  urlStr: string,
+  baseUrl?: string
+): boolean {
+  try {
+    const fallbackBase =
+      baseUrl ?? globalThis.location?.href ?? "https://www.youtube.com"
+    const url = new URL(urlStr, fallbackBase)
+    return url.pathname === YOUTUBE_ENDPOINTS.GET_TRANSCRIPT
+  } catch {
+    return false
+  }
+}
+
+export function waitForYouTubeTranscriptResponse(options?: {
+  timeoutMs?: number
+  source?: string
+  targetWindow?: Window
+}): Promise<TranscriptSegment[]> {
+  const timeoutMs = options?.timeoutMs ?? 5000
+  const source = options?.source ?? INTERCEPTOR_SOURCE
+  const targetWindow = options?.targetWindow ?? window
+
+  return new Promise((resolve) => {
+    let settled = false
+
+    const cleanup = (segments: TranscriptSegment[]) => {
+      if (settled) return
+      settled = true
+      targetWindow.removeEventListener("message", onMessage as EventListener)
+      targetWindow.clearTimeout(timerId)
+      resolve(segments)
+    }
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== targetWindow) return
+
+      const payload = event.data as InterceptorPayload | undefined
+      if (!payload || payload.source !== source || typeof payload.url !== "string") {
+        return
+      }
+
+      if (!isYouTubeTranscriptUrl(payload.url, targetWindow.location.href)) {
+        return
+      }
+
+      const segments = parseInnerTubeTranscriptResponse(payload.data)
+      if (segments.length === 0) {
+        return
+      }
+
+      cleanup(segments)
+    }
+
+    const timerId = targetWindow.setTimeout(() => cleanup([]), timeoutMs)
+
+    targetWindow.addEventListener("message", onMessage as EventListener)
+  })
+}
+
 interface CaptionTrack {
   baseUrl?: string
   languageCode?: string
@@ -301,18 +369,25 @@ interface Json3Event {
   segs?: Array<{ utf8?: string }>
 }
 
-const TRANSCRIPT_ROW_SELECTOR = "ytd-transcript-segment-renderer"
+const TRANSCRIPT_ROW_SELECTOR = [
+  "ytd-transcript-segment-renderer",
+  "transcript-segment-view-model"
+].join(", ")
 const TRANSCRIPT_TIMESTAMP_SELECTOR = [
   "#segment-start-offset",
   ".segment-timestamp",
   "[class*='segment-timestamp']",
-  "[class*='cue-start-offset']"
+  "[class*='cue-start-offset']",
+  ".ytwTranscriptSegmentViewModelTimestamp",
+  "[class*='TranscriptSegmentViewModelTimestamp']"
 ].join(", ")
 const TRANSCRIPT_TEXT_SELECTOR = [
   "#segment-text",
   ".segment-text",
   "[class*='segment-text']",
-  "yt-formatted-string"
+  "yt-formatted-string",
+  ".ytwTranscriptSegmentViewModelSnippet",
+  "[class*='TranscriptSegmentViewModelSnippet']"
 ].join(", ")
 const TIMESTAMP_RE = /^\d{1,2}:\d{2}(?::\d{2})?$/
 
@@ -320,14 +395,47 @@ function normalizeWhitespace(text: string): string {
   return text.replace(/\s+/g, " ").trim()
 }
 
+function stripLeadingSpokenTimestampLabel(
+  text: string,
+  timestamp: string
+): string {
+  const normalized = normalizeWhitespace(text)
+  if (!normalized) return normalized
+
+  const totalSeconds = timestampToSeconds(timestamp)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+
+  const parts: string[] = []
+  if (hours > 0) {
+    parts.push(`${hours}\\s+hour${hours === 1 ? "" : "s"}`)
+  }
+  if (minutes > 0) {
+    parts.push(`${minutes}\\s+minute${minutes === 1 ? "" : "s"}`)
+  }
+  if (seconds > 0 || parts.length === 0) {
+    parts.push(`${seconds}\\s+second${seconds === 1 ? "" : "s"}`)
+  }
+
+  const spokenTimestampPrefix = new RegExp(
+    `^${parts.join("\\s*,?\\s*")}\\s*`,
+    "i"
+  )
+
+  return normalized.replace(spokenTimestampPrefix, "").trim()
+}
+
 function splitTimestampAndText(text: string): {
   timestamp: string
   text: string
 } | null {
   const normalized = normalizeWhitespace(text)
-  const match = normalized.match(/^(\d{1,2}:\d{2}(?::\d{2})?)\s+(.*)$/)
+  const match = normalized.match(/^(\d{1,2}:\d{2}(?::\d{2})?)(.*)$/)
   if (!match) return null
-  return { timestamp: match[1], text: match[2].trim() }
+  const parsedText = match[2].trim()
+  if (!parsedText) return null
+  return { timestamp: match[1], text: parsedText }
 }
 
 function clickIfPresent(element: Element | null): boolean {
@@ -373,6 +481,10 @@ export function parseTranscriptSegmentsFromDom(
         timestamp ||= fallback.timestamp
         text = text && text !== timestamp ? text : fallback.text
       }
+    }
+
+    if (timestamp && text) {
+      text = stripLeadingSpokenTimestampLabel(text, timestamp)
     }
 
     if (!timestamp || !TIMESTAMP_RE.test(timestamp) || !text) continue

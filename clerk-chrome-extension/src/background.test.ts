@@ -110,7 +110,8 @@ describe("background interceptor injection", () => {
       args: [
         CHATGPT_ENDPOINTS.CONVERSATION_DETAIL_PREFIX,
         CHATGPT_ENDPOINTS.CONVERSATIONS_LIST,
-        CLAUDE_ENDPOINTS.ORG_API_PREFIX
+        CLAUDE_ENDPOINTS.ORG_API_PREFIX,
+        "/youtubei/v1/get_transcript"
       ],
       func: installNetworkInterceptorMock
     })

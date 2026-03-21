@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react"
+import {
+  INTERCEPTOR_READY_SIGNAL,
+  INTERCEPTOR_SOURCE
+} from "~config/interceptor"
 import { createIngestionPipeline } from "./ingestion"
 import { getChatGPTAuthToken, loadPersistedState } from "./store"
 import { detectPlatform } from "~utils/platform"
@@ -8,7 +12,7 @@ import type { InterceptorEvent } from "./types"
 import { isCapturedPlatform, getConversationKey, getActiveConversationIdFromUrl } from "./utils"
 import { useConversationStore, useActiveMessages } from "./state"
 import { createInterceptorEventHandler } from "./handlers"
-import { createRescanHandler, INTERCEPTOR_SOURCE } from "./rescan"
+import { createRescanHandler } from "./rescan"
 
 // Instrumentation helper for message flow tracking
 function logFlow(step: string, details?: Record<string, unknown>) {
@@ -153,7 +157,7 @@ export const useMessageScanner = () => {
 
     // Signal to interceptor that listener is ready (drains queued messages)
     logFlow("READY_SIGNAL_SENDING")
-    window.postMessage("__echo_listener_ready__", "*")
+    window.postMessage(INTERCEPTOR_READY_SIGNAL, "*")
     logFlow("READY_SIGNAL_SENT")
 
     // Double-tick to handle "detail arrives after first tick" case

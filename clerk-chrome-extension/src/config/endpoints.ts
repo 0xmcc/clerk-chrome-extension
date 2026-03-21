@@ -54,6 +54,10 @@ export const ENDPOINTS = {
     ],
     /** Organization API prefix for platform detection */
     orgPrefix: "/api/organizations/",
+  },
+  youtube: {
+    /** Transcript endpoint used by YouTube's own web client */
+    transcript: "/youtubei/v1/get_transcript"
   }
 } as const
 
@@ -166,6 +170,13 @@ export function matchClaudeOrgApi(url: URL): boolean {
   return url.pathname.startsWith(ENDPOINTS.claude.orgPrefix)
 }
 
+/**
+ * Check if URL matches YouTube's transcript endpoint.
+ */
+export function matchYouTubeTranscript(url: URL): boolean {
+  return url.pathname === ENDPOINTS.youtube.transcript
+}
+
 // =============================================================================
 // URL BUILDERS (Create URLs for requests)
 // =============================================================================
@@ -255,6 +266,11 @@ export function shouldCaptureUrl(urlStr: string, baseUrl?: string): boolean {
       return true
     }
 
+    // YouTube: Capture the transcript endpoint emitted by the page itself
+    if (matchYouTubeTranscript(url)) {
+      return true
+    }
+
     return false
   } catch {
     return false
@@ -319,12 +335,14 @@ export const HOST_PATTERNS = {
   CHATGPT: ["https://chat.openai.com/*", "https://chatgpt.com/*"],
   CLAUDE: ["https://claude.ai/*", "https://*.claude.ai/*"],
   TWITTER: ["https://x.com/*", "https://twitter.com/*"],
+  YOUTUBE: ["https://www.youtube.com/*"]
 } as const
 
 export const ALL_HOST_PATTERNS = [
   ...HOST_PATTERNS.CHATGPT,
   ...HOST_PATTERNS.CLAUDE,
   ...HOST_PATTERNS.TWITTER,
+  ...HOST_PATTERNS.YOUTUBE,
 ] as const
 
 /**
@@ -336,7 +354,8 @@ export function isTargetSite(url: string): boolean {
     url.includes("chatgpt.com") ||
     url.includes("claude.ai") ||
     url.includes("x.com") ||
-    url.includes("twitter.com")
+    url.includes("twitter.com") ||
+    url.includes("youtube.com")
   )
 }
 
@@ -389,4 +408,12 @@ export const CHATGPT_ENDPOINTS = {
 export const CLAUDE_ENDPOINTS = {
   ORG_API_PREFIX: ENDPOINTS.claude.orgPrefix,
   CONVERSATION_PATHS: ["conversations", "chat_conversations"] as const,
+} as const
+
+/**
+ * @deprecated Use ENDPOINTS.youtube instead
+ * Kept for backward compatibility with existing code.
+ */
+export const YOUTUBE_ENDPOINTS = {
+  GET_TRANSCRIPT: ENDPOINTS.youtube.transcript
 } as const

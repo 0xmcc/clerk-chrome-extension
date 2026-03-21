@@ -19,4 +19,4 @@ export {
 } from "./utils"
 
 // Constants
-export { INTERCEPTOR_SOURCE } from "./rescan"
+export { INTERCEPTOR_SOURCE } from "~config/interceptor"
