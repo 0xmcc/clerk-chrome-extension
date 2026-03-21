@@ -6,7 +6,7 @@ Three phases deliver a fully interactive transcript sidebar from scratch: Phase 
 
 ## Phases
 
-- [ ] **Phase 1: Transcript Extraction and Display** - Parse and render the full transcript in the sidebar with loading, error, and empty states
+- [x] **Phase 1: Transcript Extraction and Display** - Parse and render the full transcript in the sidebar with loading, error, and empty states (completed 2026-03-21)
 - [ ] **Phase 2: Playback Sync and Seek** - Highlight the active segment during playback and seek the video on timestamp click
 - [ ] **Phase 3: Selection and Clip Creation** - Two-click span selection with one-action clip save to Supabase and clipboard
 
@@ -22,12 +22,12 @@ Three phases deliver a fully interactive transcript sidebar from scratch: Phase 
   3. A video with no transcript shows a distinct human-readable empty state (not a blank panel, not an error)
   4. A defuddle extraction failure shows a distinct error state (not the empty state, not a spinner stuck forever)
   5. Skeleton rows appear while the transcript is loading (not a spinner)
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 01-01-PLAN.md — TDD transcript parser (TranscriptSegment type, parseTranscriptMarkdown, timestampToSeconds, formatTimestamp, findActiveSegmentIndex)
 - [x] 01-02-PLAN.md — Platform/capture type extensions + useYouTubeTranscript hook (defuddle extraction, SPA nav listener, status management)
-- [ ] 01-03-PLAN.md — YouTubeTranscriptView component + full wiring (useCaptureSource, content.tsx, SelectiveExporter view dispatch)
+- [x] 01-03-PLAN.md — YouTubeTranscriptView component + full wiring (useCaptureSource, content.tsx, SelectiveExporter view dispatch)
 
 **Files created:**
 - `src/lib/transcript-parser.ts` — pure fn: defuddle markdown → `TranscriptSegment[]`, `timestampToSeconds`, `findActiveSegmentIndex`
@@ -104,7 +104,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Transcript Extraction and Display | 2/3 | In Progress|  |
+| 1. Transcript Extraction and Display | 3/3 | Complete   | 2026-03-21 |
 | 2. Playback Sync and Seek | 0/TBD | Not started | - |
 | 3. Selection and Clip Creation | 0/TBD | Not started | - |
 

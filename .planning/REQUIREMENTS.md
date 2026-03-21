@@ -18,12 +18,12 @@
 
 ### Sidebar Display
 
-- [ ] **DISP-01**: Render transcript segments in a scrollable list inside the SelectiveExporter sidebar when `captureMode === "youtube_transcript"`
-- [ ] **DISP-02**: Display formatted timestamps (e.g., `0:31`, `1:01`) left-aligned beside segment text
-- [ ] **DISP-03**: Render chapter headings as visual section separators above the first segment in each chapter
-- [ ] **DISP-04**: Show animated skeleton rows (not a spinner) while transcript is loading
-- [ ] **DISP-05**: Show a distinct error state when defuddle extraction fails
-- [ ] **DISP-06**: Show a distinct empty state with a human-readable message when video has no transcript (`NO_TRANSCRIPT`)
+- [x] **DISP-01**: Render transcript segments in a scrollable list inside the SelectiveExporter sidebar when `captureMode === "youtube_transcript"`
+- [x] **DISP-02**: Display formatted timestamps (e.g., `0:31`, `1:01`) left-aligned beside segment text
+- [x] **DISP-03**: Render chapter headings as visual section separators above the first segment in each chapter
+- [x] **DISP-04**: Show animated skeleton rows (not a spinner) while transcript is loading
+- [x] **DISP-05**: Show a distinct error state when defuddle extraction fails
+- [x] **DISP-06**: Show a distinct empty state with a human-readable message when video has no transcript (`NO_TRANSCRIPT`)
 - [ ] **DISP-07**: Virtualize the segment list (react-window) if a 2-hour video causes > 200ms initial paint delay in manual testing
 
 ### Playback Sync
@@ -104,12 +104,12 @@
 | EXTR-06 | Phase 1 | Complete |
 | EXTR-07 | Phase 1 | Complete |
 | EXTR-08 | Phase 1 | Complete |
-| DISP-01 | Phase 1 | Pending |
-| DISP-02 | Phase 1 | Pending |
-| DISP-03 | Phase 1 | Pending |
-| DISP-04 | Phase 1 | Pending |
-| DISP-05 | Phase 1 | Pending |
-| DISP-06 | Phase 1 | Pending |
+| DISP-01 | Phase 1 | Complete |
+| DISP-02 | Phase 1 | Complete |
+| DISP-03 | Phase 1 | Complete |
+| DISP-04 | Phase 1 | Complete |
+| DISP-05 | Phase 1 | Complete |
+| DISP-06 | Phase 1 | Complete |
 | DISP-07 | Phase 2 | Pending |
 | SYNC-01 | Phase 2 | Pending |
 | SYNC-02 | Phase 2 | Pending |
