@@ -6,6 +6,7 @@ const VIEW_LABELS: Record<ViewMode, string> = {
   settings: "Settings",
   analysis: "AI Analysis",
   conversation_index: "Conversations",
+  youtube_transcript: "Transcript",
 }
 
 interface SubHeaderProps {

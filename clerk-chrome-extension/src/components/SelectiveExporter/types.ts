@@ -1,5 +1,7 @@
 import type { ExportCapture } from "~lib/capture"
 import type { Conversation } from "~hooks/useMessageScanner/types"
+import type { TranscriptSegment } from "~lib/transcript-parser"
+import type { TranscriptStatus } from "~hooks/useYouTubeTranscript"
 
 /**
  * Props for the SelectiveExporter component.
@@ -13,6 +15,17 @@ export interface SelectiveExporterProps {
   conversations?: Conversation[]
   activeConvoKey?: string
   onSelectConversation?: (convoKey: string) => void
+  youtubeStatus?: TranscriptStatus
+  youtubeErrorMessage?: string
+}
+
+/**
+ * Props for the YouTubeTranscriptView component.
+ */
+export interface YouTubeTranscriptViewProps {
+  segments: TranscriptSegment[]
+  status: TranscriptStatus
+  errorMessage?: string
 }
 
 /**
@@ -49,7 +62,7 @@ export type ExportState = "idle" | "loading" | "success" | "error"
  * - "analysis": AI analysis chat view
  * - "conversation_index": Conversation list view for switching between captured conversations
  */
-export type ViewMode = "export" | "settings" | "analysis" | "conversation_index"
+export type ViewMode = "export" | "settings" | "analysis" | "conversation_index" | "youtube_transcript"
 
 /**
  * History format options for export.
