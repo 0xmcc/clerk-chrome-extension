@@ -1,13 +1,15 @@
 import type { Message } from "~hooks/useMessageScanner/types"
 import type { Platform } from "~utils/platform"
+import type { TranscriptSegment } from "~lib/transcript-parser"
 
-export type CaptureMode = "structured_conversation" | "page_markdown"
+export type CaptureMode = "structured_conversation" | "page_markdown" | "youtube_transcript"
 
 export type CaptureSurface =
   | "chatgpt_conversation"
   | "claude_chat"
   | "chatgpt_page"
   | "claude_page"
+  | "youtube_watch"
   | "generic_page"
 
 export interface CaptureMetadata {
@@ -34,7 +36,17 @@ export interface PageMarkdownCapture {
   metadata: CaptureMetadata
 }
 
-export type ExportCapture = StructuredConversationCapture | PageMarkdownCapture
+export interface YouTubeTranscriptCapture {
+  captureMode: "youtube_transcript"
+  conversationKey: string
+  videoId: string
+  videoTitle: string
+  videoUrl: string
+  segments: TranscriptSegment[]
+  metadata: CaptureMetadata
+}
+
+export type ExportCapture = StructuredConversationCapture | PageMarkdownCapture | YouTubeTranscriptCapture
 
 export interface ResolvedCaptureState {
   capture: ExportCapture | null
@@ -69,6 +81,9 @@ export const isStructuredConversationSurface = (
   return false
 }
 
+export const isYouTubeWatchPage = (platform: Platform, pathname: string): boolean =>
+  platform === "youtube" && pathname.startsWith("/watch")
+
 export const getCaptureSurface = (
   platform: Platform,
   pathname: string
@@ -82,6 +97,8 @@ export const getCaptureSurface = (
   if (platform === "claude") {
     return isClaudeChatSurface(pathname) ? "claude_chat" : "claude_page"
   }
+
+  if (platform === "youtube") return "youtube_watch"
 
   return "generic_page"
 }

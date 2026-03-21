@@ -53,7 +53,8 @@ export const SelectiveExporter = ({
 
   const isStructuredCapture = capture?.captureMode === "structured_conversation"
   const captureTitle =
-    capture?.title || capture?.metadata.pageTitle || `${platformLabelRef.current} Conversation`
+    (capture?.captureMode === "youtube_transcript" ? capture.videoTitle : capture?.title) ||
+    capture?.metadata.pageTitle || `${platformLabelRef.current} Conversation`
 
   // Derive isSignedOut for minimal churn (keeps existing prop names)
   const isSignedOut = authStatus === "signedOut" && isStructuredCapture

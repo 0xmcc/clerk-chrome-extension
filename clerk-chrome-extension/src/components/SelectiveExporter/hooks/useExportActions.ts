@@ -206,6 +206,10 @@ export const useExportActions = ({
       ].join("\n")
     }
 
+    if (capture.captureMode === "youtube_transcript") {
+      return ""
+    }
+
     const header = buildDeterministicHeader(capture, platformLabel)
     const body = capture.messages
       .map((msg) => {
