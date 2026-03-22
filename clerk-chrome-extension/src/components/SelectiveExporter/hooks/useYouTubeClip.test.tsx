@@ -1,91 +1,66 @@
-import { act, renderHook, waitFor } from "@testing-library/react"
+import { act, renderHook } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { createYouTubeClip } from "../services/youtubeClip"
+import { createYouTubeClip, getYouTubeClip } from "../services/youtubeClip"
 import { useYouTubeClip } from "./useYouTubeClip"
 
 vi.mock("../services/youtubeClip", () => ({
-  createYouTubeClip: vi.fn()
+  createYouTubeClip: vi.fn(),
+  getYouTubeClip: vi.fn()
 }))
 
 const mockedCreateYouTubeClip = vi.mocked(createYouTubeClip)
+const mockedGetYouTubeClip = vi.mocked(getYouTubeClip)
 
 const BASE_REQUEST = {
   videoUrl: "https://www.youtube.com/watch?v=abc123",
   startSeconds: 30,
-  endSeconds: 105
+  endSeconds: 105,
+  videoId: "abc123",
+  title: "Jensen Huang interview",
+  source: "chrome_extension" as const
 }
 
-const createDeferred = () => {
-  let resolve!: (value: {
-    id: string
-    status: "success"
-    command: string
-    createdAt: string
-  }) => void
-
-  const promise = new Promise<{
-    id: string
-    status: "success"
-    command: string
-    createdAt: string
-  }>((res) => {
+const createDeferred = <T,>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((res) => {
     resolve = res
   })
-
   return { promise, resolve }
 }
 
 describe("useYouTubeClip", () => {
   beforeEach(() => {
     mockedCreateYouTubeClip.mockReset()
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: {
-        writeText: vi.fn().mockResolvedValue(undefined)
-      }
-    })
+    mockedGetYouTubeClip.mockReset()
   })
 
   afterEach(() => {
     vi.useRealTimers()
   })
 
-  it("copies the yt-dlp command, creates the clip job, and resets success state after two seconds", async () => {
-    mockedCreateYouTubeClip.mockResolvedValue({
+  it("submits a clip request, polls until completed, and exposes the download URL", async () => {
+    vi.useFakeTimers()
+
+    const createdClip = {
       id: "clip-1",
-      status: "success",
-      command:
-        'yt-dlp --merge-output-format mp4 --remux-video mp4 -S vcodec:h264,lang,quality,res,fps,hdr:12,acodec:aac --download-sections "*0:30-1:45" "https://www.youtube.com/watch?v=abc123"',
+      status: "queued" as const,
       createdAt: "2026-03-21T00:00:00.000Z"
-    })
-
-    const { result } = renderHook(() => useYouTubeClip())
-
-    await act(async () => {
-      await expect(result.current.createClip(BASE_REQUEST)).resolves.toBe(true)
-    })
-
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      'yt-dlp --merge-output-format mp4 --remux-video mp4 -S vcodec:h264,lang,quality,res,fps,hdr:12,acodec:aac --download-sections "*0:30-1:45" "https://www.youtube.com/watch?v=abc123"'
-    )
-    expect(mockedCreateYouTubeClip).toHaveBeenCalledWith(BASE_REQUEST)
-
-    await waitFor(() => {
-      expect(result.current.status).toBe("success")
-    })
-
-    await waitFor(
-      () => {
-        expect(result.current.status).toBe("idle")
-      },
-      { timeout: 3000 }
-    )
-  })
-
-  it("exposes a creating state while the background request is in flight", async () => {
-    const deferred = createDeferred()
+    }
+    const deferred = createDeferred<typeof createdClip>()
     mockedCreateYouTubeClip.mockReturnValue(deferred.promise)
+    mockedGetYouTubeClip
+      .mockResolvedValueOnce({
+        id: "clip-1",
+        status: "processing",
+        createdAt: "2026-03-21T00:00:00.000Z"
+      })
+      .mockResolvedValueOnce({
+        id: "clip-1",
+        status: "completed",
+        downloadUrl: "https://cdn.example.test/clip-1.mp4",
+        createdAt: "2026-03-21T00:00:00.000Z"
+      })
 
     const { result } = renderHook(() => useYouTubeClip())
 
@@ -93,27 +68,43 @@ describe("useYouTubeClip", () => {
       void result.current.createClip(BASE_REQUEST)
     })
 
-    expect(result.current.status).toBe("creating")
+    expect(result.current.status).toBe("submitting")
 
     await act(async () => {
-      deferred.resolve({
-        id: "clip-1",
-        status: "success",
-        command: "yt-dlp ...",
-        createdAt: "2026-03-21T00:00:00.000Z"
-      })
+      deferred.resolve(createdClip)
       await deferred.promise
     })
 
-    await waitFor(() => {
-      expect(result.current.status).toBe("success")
+    expect(result.current.status).toBe("queued")
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500)
     })
+
+    expect(result.current.status).toBe("processing")
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500)
+    })
+
+    expect(result.current.status).toBe("completed")
+
+    expect(result.current.clip).toEqual({
+      id: "clip-1",
+      status: "completed",
+      downloadUrl: "https://cdn.example.test/clip-1.mp4",
+      createdAt: "2026-03-21T00:00:00.000Z"
+    })
+    expect(result.current.errorMessage).toBeUndefined()
   })
 
-  it("reports background failures after the clipboard write succeeds", async () => {
-    mockedCreateYouTubeClip.mockRejectedValue(
-      new Error("Background worker unavailable")
-    )
+  it("reports a terminal failure from the backend", async () => {
+    mockedCreateYouTubeClip.mockResolvedValue({
+      id: "clip-1",
+      status: "failed",
+      error: "Transcript unavailable",
+      createdAt: "2026-03-21T00:00:00.000Z"
+    })
 
     const { result } = renderHook(() => useYouTubeClip())
 
@@ -121,12 +112,27 @@ describe("useYouTubeClip", () => {
       await expect(result.current.createClip(BASE_REQUEST)).resolves.toBe(false)
     })
 
-    expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(1)
+    expect(result.current.status).toBe("failed")
+    expect(result.current.clip).toEqual({
+      id: "clip-1",
+      status: "failed",
+      error: "Transcript unavailable",
+      createdAt: "2026-03-21T00:00:00.000Z"
+    })
+    expect(result.current.errorMessage).toBe("Transcript unavailable")
+  })
 
-    await waitFor(() => {
-      expect(result.current.status).toBe("error")
+  it("surfaces request failures", async () => {
+    mockedCreateYouTubeClip.mockRejectedValue(new Error("Missing Clerk session"))
+
+    const { result } = renderHook(() => useYouTubeClip())
+
+    await act(async () => {
+      await expect(result.current.createClip(BASE_REQUEST)).resolves.toBe(false)
     })
 
-    expect(result.current.errorMessage).toBe("Background worker unavailable")
+    expect(result.current.status).toBe("failed")
+    expect(result.current.clip).toBeNull()
+    expect(result.current.errorMessage).toBe("Missing Clerk session")
   })
 })

@@ -2,22 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { CHATGPT_ENDPOINTS, CLAUDE_ENDPOINTS } from "./config/endpoints"
 
-const {
-  createClerkClientMock,
-  createYouTubeClipJobMock,
-  executeScriptMock,
-  getYouTubeClipJobStatusMock,
-  installNetworkInterceptorMock
-} = vi.hoisted(() => ({
-  createClerkClientMock: vi.fn(() => ({
-    load: vi.fn().mockResolvedValue(undefined),
-    session: null
-  })),
-  createYouTubeClipJobMock: vi.fn(),
-  executeScriptMock: vi.fn().mockResolvedValue(undefined),
-  getYouTubeClipJobStatusMock: vi.fn(),
-  installNetworkInterceptorMock: vi.fn()
-}))
+const { createClerkClientMock, executeScriptMock, installNetworkInterceptorMock } =
+  vi.hoisted(() => ({
+    createClerkClientMock: vi.fn(() => ({
+      load: vi.fn().mockResolvedValue(undefined),
+      session: null
+    })),
+    executeScriptMock: vi.fn().mockResolvedValue(undefined),
+    installNetworkInterceptorMock: vi.fn()
+  }))
 
 vi.mock("@clerk/chrome-extension/background", () => ({
   createClerkClient: createClerkClientMock
@@ -25,11 +18,6 @@ vi.mock("@clerk/chrome-extension/background", () => ({
 
 vi.mock("./interceptor", () => ({
   installNetworkInterceptor: installNetworkInterceptorMock
-}))
-
-vi.mock("./lib/youtube-clip-worker", () => ({
-  createYouTubeClipJob: createYouTubeClipJobMock,
-  getYouTubeClipJobStatus: getYouTubeClipJobStatusMock
 }))
 
 const createChromeMock = () => ({
@@ -85,9 +73,7 @@ describe("background interceptor injection", () => {
     process.env.PLASMO_PUBLIC_CLERK_SYNC_HOST = "https://sync.example.test"
 
     createClerkClientMock.mockClear()
-    createYouTubeClipJobMock.mockClear()
     executeScriptMock.mockClear()
-    getYouTubeClipJobStatusMock.mockClear()
     installNetworkInterceptorMock.mockClear()
   })
 
@@ -126,87 +112,5 @@ describe("background interceptor injection", () => {
       ],
       func: installNetworkInterceptorMock
     })
-  })
-
-  it("creates YouTube clip jobs through the background handler", async () => {
-    createYouTubeClipJobMock.mockResolvedValue({
-      id: "clip-1",
-      status: "success",
-      command: "yt-dlp ...",
-      createdAt: "2026-03-21T00:00:00.000Z"
-    })
-
-    const background = (await import("./background")) as {
-      handleCreateYouTubeClipMessage?: (payload: {
-        videoUrl: string
-        startSeconds: number
-        endSeconds: number
-      }) => Promise<{
-        success: boolean
-        clip?: {
-          id: string
-          status: string
-          command: string | null
-          createdAt: string
-        }
-      }>
-    }
-
-    await expect(
-      background.handleCreateYouTubeClipMessage?.({
-        videoUrl: "https://www.youtube.com/watch?v=abc123",
-        startSeconds: 30,
-        endSeconds: 105
-      })
-    ).resolves.toEqual({
-      success: true,
-      clip: {
-        id: "clip-1",
-        status: "success",
-        command: "yt-dlp ...",
-        createdAt: "2026-03-21T00:00:00.000Z"
-      }
-    })
-
-    expect(createYouTubeClipJobMock).toHaveBeenCalledWith({
-      videoUrl: "https://www.youtube.com/watch?v=abc123",
-      startSeconds: 30,
-      endSeconds: 105
-    })
-  })
-
-  it("loads YouTube clip job status through the background handler", async () => {
-    getYouTubeClipJobStatusMock.mockResolvedValue({
-      id: "clip-1",
-      status: "success",
-      command: "yt-dlp ...",
-      createdAt: "2026-03-21T00:00:00.000Z"
-    })
-
-    const background = (await import("./background")) as {
-      handleGetYouTubeClipStatusMessage?: (jobId: string) => Promise<{
-        success: boolean
-        clip?: {
-          id: string
-          status: string
-          command: string | null
-          createdAt: string
-        } | null
-      }>
-    }
-
-    await expect(
-      background.handleGetYouTubeClipStatusMessage?.("clip-1")
-    ).resolves.toEqual({
-      success: true,
-      clip: {
-        id: "clip-1",
-        status: "success",
-        command: "yt-dlp ...",
-        createdAt: "2026-03-21T00:00:00.000Z"
-      }
-    })
-
-    expect(getYouTubeClipJobStatusMock).toHaveBeenCalledWith("clip-1")
   })
 })

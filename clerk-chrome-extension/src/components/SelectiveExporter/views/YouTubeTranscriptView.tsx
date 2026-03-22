@@ -1,20 +1,13 @@
-import type { ReactNode } from "react"
-
-import type { TranscriptSegment } from "~lib/transcript-parser"
-import type { TranscriptStatus } from "~hooks/useYouTubeTranscript"
 import { formatTimestamp } from "~lib/transcript-parser"
-import { getClipEndSeconds } from "~lib/youtube-clip"
-import { useEffect, useState } from "react"
+import {
+  getClipEndSeconds,
+  getYouTubeClipDownloadUrl
+} from "~lib/youtube-clip"
+import { useEffect, useState, type ReactNode } from "react"
 
 import { useYouTubeClip } from "../hooks/useYouTubeClip"
 import { DARK_THEME } from "../constants"
-
-interface YouTubeTranscriptViewProps {
-  segments: TranscriptSegment[]
-  status: TranscriptStatus
-  errorMessage?: string
-  videoUrl?: string
-}
+import type { YouTubeTranscriptViewProps } from "../types"
 
 const CLIP_BAR_PADDING_BOTTOM = "72px"
 
@@ -22,12 +15,15 @@ export const YouTubeTranscriptView = ({
   segments,
   status,
   errorMessage,
+  videoId,
+  videoTitle,
   videoUrl
 }: YouTubeTranscriptViewProps) => {
   const [clipStartIdx, setClipStartIdx] = useState<number | null>(null)
   const [clipEndIdx, setClipEndIdx] = useState<number | null>(null)
   const {
     status: clipStatus,
+    clip,
     errorMessage: clipErrorMessage,
     createClip,
     reset: resetClip
@@ -133,6 +129,8 @@ export const YouTubeTranscriptView = ({
     clipStartSeconds !== null && clipEndSeconds !== null
       ? clipEndSeconds - clipStartSeconds
       : null
+  const clipDownloadUrl =
+    clipStatus === "completed" && clip ? getYouTubeClipDownloadUrl(clip) : null
   const showClipBar = Boolean(
     hasRange &&
       videoUrl &&
@@ -160,16 +158,33 @@ export const YouTubeTranscriptView = ({
     setClipEndIdx(end)
   }
 
-  const handleCopyCommand = async () => {
-    if (!videoUrl || clipStartSeconds === null || clipEndSeconds === null) {
+  const handleCreateClip = async () => {
+    if (
+      !videoUrl ||
+      !videoId ||
+      !videoTitle ||
+      clipStartSeconds === null ||
+      clipEndSeconds === null
+    ) {
       return
     }
 
     await createClip({
       videoUrl,
       startSeconds: clipStartSeconds,
-      endSeconds: clipEndSeconds
+      endSeconds: clipEndSeconds,
+      videoId,
+      title: videoTitle,
+      source: "chrome_extension"
     })
+  }
+
+  const handleDownloadClip = () => {
+    if (!clipDownloadUrl) {
+      return
+    }
+
+    window.open(clipDownloadUrl, "_blank", "noopener,noreferrer")
   }
 
   const isIndexSelected = (index: number) => {
@@ -177,6 +192,25 @@ export const YouTubeTranscriptView = ({
     if (clipEndIdx === null) return index === clipStartIdx
     return index >= clipStartIdx && index <= clipEndIdx
   }
+
+  const isSubmitting = clipStatus === "submitting"
+  const isPolling = clipStatus === "queued" || clipStatus === "processing"
+  const isActionDisabled =
+    isSubmitting || isPolling || (clipStatus === "completed" && !clipDownloadUrl)
+  const actionLabel =
+    clipStatus === "submitting"
+      ? "Submitting..."
+      : clipStatus === "queued"
+        ? "Queued..."
+        : clipStatus === "processing"
+          ? typeof clip?.progress === "number"
+            ? `Processing ${clip.progress}%...`
+            : "Processing..."
+          : clipStatus === "completed"
+            ? "Download clip"
+            : clipStatus === "failed"
+              ? "Retry clip"
+              : "Create clip"
 
   return (
     <div style={{ padding: "8px 0" }}>
@@ -294,42 +328,42 @@ export const YouTubeTranscriptView = ({
             </span>
             <button
               type="button"
-              onClick={handleCopyCommand}
-              disabled={clipStatus === "creating"}
+              onClick={clipStatus === "completed" ? handleDownloadClip : handleCreateClip}
+              disabled={isActionDisabled}
               style={{
                 padding: "8px 12px",
                 borderRadius: "10px",
                 border: `1px solid ${
-                  clipStatus === "success"
+                  clipStatus === "completed"
                     ? DARK_THEME.success
-                    : clipStatus === "error"
+                    : clipStatus === "failed"
                       ? DARK_THEME.danger
-                      : DARK_THEME.accent
+                      : clipStatus === "queued" || clipStatus === "processing"
+                        ? DARK_THEME.warning
+                        : DARK_THEME.accent
                 }`,
                 backgroundColor:
-                  clipStatus === "success"
+                  clipStatus === "completed"
                     ? "rgba(74, 222, 128, 0.12)"
-                    : clipStatus === "error"
+                    : clipStatus === "failed"
                       ? "rgba(239, 68, 68, 0.12)"
-                      : DARK_THEME.accentBg,
+                      : clipStatus === "queued" || clipStatus === "processing"
+                        ? "rgba(251, 191, 36, 0.12)"
+                        : DARK_THEME.accentBg,
                 color:
-                  clipStatus === "success"
+                  clipStatus === "completed"
                     ? DARK_THEME.success
-                    : clipStatus === "error"
+                    : clipStatus === "failed"
                       ? DARK_THEME.danger
-                      : DARK_THEME.text,
-                cursor: clipStatus === "creating" ? "wait" : "pointer",
-                opacity: clipStatus === "creating" ? 0.8 : 1,
+                      : clipStatus === "queued" || clipStatus === "processing"
+                        ? DARK_THEME.warning
+                        : DARK_THEME.text,
+                cursor: isActionDisabled ? "wait" : "pointer",
+                opacity: isActionDisabled ? 0.8 : 1,
                 fontSize: "12px",
                 fontWeight: 600
               }}>
-              {clipStatus === "creating"
-                ? "Creating..."
-                : clipStatus === "success"
-                  ? "Copied!"
-                  : clipStatus === "error"
-                    ? "Retry copy"
-                    : "Copy yt-dlp command"}
+              {actionLabel}
             </button>
             {clipErrorMessage ? (
               <span
@@ -340,6 +374,15 @@ export const YouTubeTranscriptView = ({
                   color: DARK_THEME.danger
                 }}>
                 {clipErrorMessage}
+              </span>
+            ) : clipStatus === "completed" ? (
+              <span
+                style={{
+                  flexBasis: "100%",
+                  fontSize: "12px",
+                  color: DARK_THEME.success
+                }}>
+                Clip ready.
               </span>
             ) : null}
           </div>

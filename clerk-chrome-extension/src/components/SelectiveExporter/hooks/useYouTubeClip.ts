@@ -1,80 +1,137 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
-import {
-  buildYouTubeClipCommand,
-  type CreateYouTubeClipRequest,
-  type YouTubeClipJob
+import type {
+  CreateYouTubeClipRequest,
+  YouTubeClip,
+  YouTubeClipStatus
 } from "~lib/youtube-clip"
+import { isTerminalYouTubeClipStatus } from "~lib/youtube-clip"
 
-import { createYouTubeClip } from "../services/youtubeClip"
+import { createYouTubeClip, getYouTubeClip } from "../services/youtubeClip"
 
-type UseYouTubeClipStatus = "idle" | "creating" | "success" | "error"
-
-const SUCCESS_RESET_DELAY_MS = 2000
+const POLL_INTERVAL_MS = 1500
 
 export const useYouTubeClip = () => {
-  const [status, setStatus] = useState<UseYouTubeClipStatus>("idle")
-  const [clip, setClip] = useState<YouTubeClipJob | null>(null)
+  const [status, setStatus] = useState<YouTubeClipStatus>("idle")
+  const [clip, setClip] = useState<YouTubeClip | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | undefined>()
-  const successTimeoutRef = useRef<number | null>(null)
+  const pollTimeoutRef = useRef<number | null>(null)
+  const activeClipIdRef = useRef<string | null>(null)
 
-  const clearSuccessTimeout = useCallback(() => {
-    if (successTimeoutRef.current !== null) {
-      window.clearTimeout(successTimeoutRef.current)
-      successTimeoutRef.current = null
+  const clearPollTimeout = useCallback(() => {
+    if (pollTimeoutRef.current !== null) {
+      window.clearTimeout(pollTimeoutRef.current)
+      pollTimeoutRef.current = null
     }
   }, [])
 
-  const reset = useCallback(() => {
-    clearSuccessTimeout()
-    setStatus("idle")
-    setClip(null)
-    setErrorMessage(undefined)
-  }, [clearSuccessTimeout])
+  const stopPolling = useCallback(() => {
+    clearPollTimeout()
+    activeClipIdRef.current = null
+  }, [clearPollTimeout])
 
   useEffect(() => {
     return () => {
-      clearSuccessTimeout()
+      stopPolling()
     }
-  }, [clearSuccessTimeout])
+  }, [stopPolling])
+
+  const schedulePoll = useCallback(
+    (clipId: string) => {
+      clearPollTimeout()
+      activeClipIdRef.current = clipId
+
+      pollTimeoutRef.current = window.setTimeout(async () => {
+        if (activeClipIdRef.current !== clipId) {
+          return
+        }
+
+        try {
+          const nextClip = await getYouTubeClip(clipId)
+          if (activeClipIdRef.current !== clipId) {
+            return
+          }
+
+          setClip(nextClip)
+          setStatus(nextClip.status)
+
+          if (nextClip.status === "failed") {
+            console.error("[YouTubeClip] Job failed", {
+              clipId,
+              error: nextClip.error,
+              errorDetails: nextClip.errorDetails ?? null
+            })
+            setErrorMessage(
+              nextClip.error || "Failed to create YouTube clip."
+            )
+            stopPolling()
+            return
+          }
+
+          if (nextClip.status === "completed") {
+            setErrorMessage(undefined)
+            stopPolling()
+            return
+          }
+
+          schedulePoll(clipId)
+        } catch (error) {
+          if (activeClipIdRef.current !== clipId) {
+            return
+          }
+
+          setStatus("failed")
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Failed to load YouTube clip."
+          )
+          stopPolling()
+        }
+      }, POLL_INTERVAL_MS)
+    },
+    [clearPollTimeout, stopPolling]
+  )
+
+  const reset = useCallback(() => {
+    stopPolling()
+    setStatus("idle")
+    setClip(null)
+    setErrorMessage(undefined)
+  }, [stopPolling])
 
   const createClip = useCallback(
     async (request: CreateYouTubeClipRequest): Promise<boolean> => {
-      if (!navigator.clipboard?.writeText) {
-        setStatus("error")
-        setClip(null)
-        setErrorMessage("Clipboard is unavailable in this browser context.")
-        return false
-      }
-
-      clearSuccessTimeout()
-      setStatus("creating")
+      stopPolling()
+      setStatus("submitting")
       setClip(null)
       setErrorMessage(undefined)
 
       try {
-        await navigator.clipboard.writeText(buildYouTubeClipCommand(request))
-
         const createdClip = await createYouTubeClip(request)
+        setClip(createdClip)
+        setStatus(createdClip.status)
 
-        if (createdClip.status === "error") {
-          setStatus("error")
-          setClip(createdClip)
+        if (createdClip.status === "failed") {
+          console.error("[YouTubeClip] Job failed during submission", {
+            clipId: createdClip.id,
+            error: createdClip.error,
+            errorDetails: createdClip.errorDetails ?? null
+          })
           setErrorMessage(
             createdClip.error || "Failed to create YouTube clip."
           )
           return false
         }
 
-        setStatus("success")
-        setClip(createdClip)
-        successTimeoutRef.current = window.setTimeout(() => {
-          setStatus("idle")
-          successTimeoutRef.current = null
-        }, SUCCESS_RESET_DELAY_MS)
+        if (isTerminalYouTubeClipStatus(createdClip.status)) {
+          return true
+        }
+
+        schedulePoll(createdClip.id)
         return true
       } catch (error) {
-        setStatus("error")
+        setStatus("failed")
         setClip(null)
         setErrorMessage(
           error instanceof Error
@@ -84,7 +141,7 @@ export const useYouTubeClip = () => {
         return false
       }
     },
-    [clearSuccessTimeout]
+    [schedulePoll, stopPolling]
   )
 
   return {

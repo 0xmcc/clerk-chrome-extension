@@ -1,85 +1,123 @@
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import {
-  createYouTubeClip,
-  getYouTubeClipStatus
-} from "./youtubeClip"
+import { API_BASE_URL } from "~config/api"
+import { requestClerkToken } from "~utils/clerk"
+
+import { createYouTubeClip, getYouTubeClip } from "./youtubeClip"
+
+vi.mock("~utils/clerk", () => ({
+  requestClerkToken: vi.fn()
+}))
+
+const mockedRequestClerkToken = vi.mocked(requestClerkToken)
 
 describe("youtubeClip service", () => {
-  it("sends createYouTubeClip messages with the selected range", async () => {
-    const sendMessage = vi.fn().mockResolvedValue({
-      success: true,
-      clip: {
-        id: "clip-1",
-        status: "success",
-        command: "yt-dlp ...",
-        createdAt: "2026-03-21T00:00:00.000Z"
-      }
-    })
+  beforeEach(() => {
+    mockedRequestClerkToken.mockReset()
+    mockedRequestClerkToken.mockResolvedValue("test-token")
+    vi.stubGlobal("fetch", vi.fn())
+  })
 
-    chrome.runtime.sendMessage = sendMessage
+  it("creates a YouTube clip job through the backend API", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        job: {
+          id: "clip_123",
+          status: "queued",
+          createdAt: "2026-03-21T12:00:00.000Z"
+        }
+      })
+    } as unknown as Response)
 
     await expect(
       createYouTubeClip({
         videoUrl: "https://www.youtube.com/watch?v=abc123",
-        startSeconds: 30,
-        endSeconds: 105
+        startSeconds: 1380,
+        endSeconds: 1398,
+        videoId: "abc123",
+        title: "Jensen Huang interview",
+        source: "chrome_extension"
       })
     ).resolves.toEqual({
-      id: "clip-1",
-      status: "success",
-      command: "yt-dlp ...",
-      createdAt: "2026-03-21T00:00:00.000Z"
+      id: "clip_123",
+      status: "queued",
+      createdAt: "2026-03-21T12:00:00.000Z"
     })
 
-    expect(sendMessage).toHaveBeenCalledWith({
-      action: "createYouTubeClip",
-      payload: {
+    expect(fetch).toHaveBeenCalledWith(`${API_BASE_URL}/v1/youtube-clips`, {
+      method: "POST",
+      body: JSON.stringify({
         videoUrl: "https://www.youtube.com/watch?v=abc123",
-        startSeconds: 30,
-        endSeconds: 105
+        startSeconds: 1380,
+        endSeconds: 1398,
+        videoId: "abc123",
+        title: "Jensen Huang interview",
+        source: "chrome_extension"
+      }),
+      headers: {
+        Authorization: "Bearer test-token",
+        "Content-Type": "application/json"
       }
     })
   })
 
-  it("sends getYouTubeClipStatus messages with the job id", async () => {
-    const sendMessage = vi.fn().mockResolvedValue({
-      success: true,
-      clip: {
-        id: "clip-1",
-        status: "success",
-        command: "yt-dlp ...",
-        createdAt: "2026-03-21T00:00:00.000Z"
+  it("loads a YouTube clip job through the backend API", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        job: {
+          id: "clip_123",
+          status: "processing",
+          createdAt: "2026-03-21T12:00:00.000Z",
+          startedAt: "2026-03-21T12:00:02.000Z",
+          progress: 35,
+          downloadUrl: null,
+          error: null
+        }
+      })
+    } as unknown as Response)
+
+    await expect(getYouTubeClip("clip_123")).resolves.toEqual({
+      id: "clip_123",
+      status: "processing",
+      createdAt: "2026-03-21T12:00:00.000Z",
+      startedAt: "2026-03-21T12:00:02.000Z",
+      progress: 35,
+      downloadUrl: null,
+      error: null
+    })
+
+    expect(fetch).toHaveBeenCalledWith(
+      `${API_BASE_URL}/v1/youtube-clips/clip_123`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json"
+        }
       }
-    })
-
-    chrome.runtime.sendMessage = sendMessage
-
-    await expect(getYouTubeClipStatus("clip-1")).resolves.toEqual({
-      id: "clip-1",
-      status: "success",
-      command: "yt-dlp ...",
-      createdAt: "2026-03-21T00:00:00.000Z"
-    })
-
-    expect(sendMessage).toHaveBeenCalledWith({
-      action: "getYouTubeClipStatus",
-      jobId: "clip-1"
-    })
+    )
   })
 
-  it("throws the background error when clip creation fails", async () => {
-    chrome.runtime.sendMessage = vi.fn().mockResolvedValue({
-      success: false,
-      error: "Background worker unavailable"
-    })
+  it("throws the backend error when clip creation fails", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: vi.fn().mockResolvedValue({
+        error: "Missing Clerk session"
+      })
+    } as unknown as Response)
 
     await expect(
       createYouTubeClip({
         videoUrl: "https://www.youtube.com/watch?v=abc123",
-        startSeconds: 30,
-        endSeconds: 105
+        startSeconds: 1380,
+        endSeconds: 1398,
+        videoId: "abc123",
+        title: "Jensen Huang interview",
+        source: "chrome_extension"
       })
-    ).rejects.toThrow("Background worker unavailable")
+    ).rejects.toThrow("Missing Clerk session")
   })
 })

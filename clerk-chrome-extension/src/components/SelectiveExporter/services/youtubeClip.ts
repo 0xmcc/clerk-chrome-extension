@@ -1,46 +1,68 @@
-import type {
-  CreateYouTubeClipRequest,
-  YouTubeClipJob
-} from "~lib/youtube-clip"
+import { API_BASE_URL } from "~config/api"
+import type { CreateYouTubeClipRequest, YouTubeClip } from "~lib/youtube-clip"
+import { requestClerkToken } from "~utils/clerk"
 
-type CreateYouTubeClipResponse = {
-  success?: boolean
-  clip?: YouTubeClipJob
+type ApiErrorResponse = {
   error?: string
+  message?: string
 }
 
-type GetYouTubeClipStatusResponse = {
-  success?: boolean
-  clip?: YouTubeClipJob | null
-  error?: string
+type YouTubeClipResponse = {
+  job?: YouTubeClip
+}
+
+const buildBaseHeaders = (): HeadersInit => ({
+  "Content-Type": "application/json"
+})
+
+const buildAuthHeaders = (token: string, headers?: HeadersInit): HeadersInit => ({
+  Authorization: `Bearer ${token}`,
+  ...buildBaseHeaders(),
+  ...(headers ?? {})
+})
+
+const readResponseError = async (response: Response): Promise<string> => {
+  try {
+    const payload = (await response.json()) as ApiErrorResponse
+    return payload.error || payload.message || `Request failed (${response.status})`
+  } catch {
+    return `Request failed (${response.status})`
+  }
+}
+
+const fetchYouTubeClip = async (
+  url: string,
+  init: RequestInit
+): Promise<YouTubeClip> => {
+  const token = await requestClerkToken()
+  const response = await fetch(url, {
+    ...init,
+    headers: buildAuthHeaders(token, init.headers)
+  })
+
+  if (!response.ok) {
+    throw new Error(await readResponseError(response))
+  }
+
+  const payload = (await response.json()) as YouTubeClipResponse
+  const clip = payload.job
+
+  if (!clip?.id) {
+    throw new Error("Failed to load YouTube clip.")
+  }
+
+  return clip
 }
 
 export const createYouTubeClip = async (
   payload: CreateYouTubeClipRequest
-): Promise<YouTubeClipJob> => {
-  const result = (await chrome.runtime.sendMessage({
-    action: "createYouTubeClip",
-    payload
-  })) as CreateYouTubeClipResponse
+): Promise<YouTubeClip> =>
+  fetchYouTubeClip(`${API_BASE_URL}/v1/youtube-clips`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  })
 
-  if (!result?.success || !result.clip) {
-    throw new Error(result?.error || "Failed to create YouTube clip.")
-  }
-
-  return result.clip
-}
-
-export const getYouTubeClipStatus = async (
-  jobId: string
-): Promise<YouTubeClipJob | null> => {
-  const result = (await chrome.runtime.sendMessage({
-    action: "getYouTubeClipStatus",
-    jobId
-  })) as GetYouTubeClipStatusResponse
-
-  if (!result?.success) {
-    throw new Error(result?.error || "Failed to load YouTube clip status.")
-  }
-
-  return result.clip ?? null
-}
+export const getYouTubeClip = async (id: string): Promise<YouTubeClip> =>
+  fetchYouTubeClip(`${API_BASE_URL}/v1/youtube-clips/${encodeURIComponent(id)}`, {
+    method: "GET"
+  })

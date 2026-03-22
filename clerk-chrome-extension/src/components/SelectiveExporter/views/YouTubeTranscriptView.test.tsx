@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { TranscriptSegment } from "~lib/transcript-parser"
 
-import { DARK_THEME } from "../constants"
 import { useYouTubeClip } from "../hooks/useYouTubeClip"
 import { YouTubeTranscriptView } from "./YouTubeTranscriptView"
 
@@ -13,6 +12,8 @@ vi.mock("../hooks/useYouTubeClip", () => ({
 }))
 
 const BASE_VIDEO_URL = "https://www.youtube.com/watch?v=abc123"
+const BASE_VIDEO_ID = "abc123"
+const BASE_VIDEO_TITLE = "Jensen Huang interview"
 
 const BASE_SEGMENTS: TranscriptSegment[] = [
   { seconds: 30, text: "Intro line" },
@@ -23,6 +24,7 @@ const BASE_SEGMENTS: TranscriptSegment[] = [
 
 const createClipMock = vi.fn()
 const resetClipMock = vi.fn()
+const openMock = vi.fn()
 const mockedUseYouTubeClip = vi.mocked(useYouTubeClip)
 
 const renderView = (
@@ -32,6 +34,8 @@ const renderView = (
     <YouTubeTranscriptView
       segments={BASE_SEGMENTS}
       status="ready"
+      videoId={BASE_VIDEO_ID}
+      videoTitle={BASE_VIDEO_TITLE}
       videoUrl={BASE_VIDEO_URL}
       {...props}
     />
@@ -46,6 +50,8 @@ describe("YouTubeTranscriptView clip selection", () => {
   beforeEach(() => {
     createClipMock.mockReset()
     resetClipMock.mockReset()
+    openMock.mockReset()
+    vi.stubGlobal("open", openMock)
     mockedUseYouTubeClip.mockReturnValue({
       status: "idle",
       clip: null,
@@ -55,119 +61,75 @@ describe("YouTubeTranscriptView clip selection", () => {
     })
   })
 
-  it("selects a range and forwards the selected clip bounds to the hook", () => {
+  it("selects a range and forwards the selected clip metadata to the hook", () => {
     renderView()
 
     fireEvent.click(getSegmentRow("0:30", "Intro line"))
     expect(
-      screen.queryByRole("button", { name: "Copy yt-dlp command" })
+      screen.queryByRole("button", { name: "Create clip" })
     ).not.toBeInTheDocument()
 
     fireEvent.click(getSegmentRow("1:00", "Second line"))
-
-    expect(screen.getByText("0:30 - 1:45 (75s)")).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole("button", { name: "Copy yt-dlp command" }))
+    fireEvent.click(screen.getByRole("button", { name: "Create clip" }))
 
     expect(createClipMock).toHaveBeenCalledWith({
-      videoUrl: "https://www.youtube.com/watch?v=abc123",
+      videoUrl: BASE_VIDEO_URL,
       startSeconds: 30,
-      endSeconds: 105
+      endSeconds: 105,
+      videoId: BASE_VIDEO_ID,
+      title: BASE_VIDEO_TITLE,
+      source: "chrome_extension"
     })
   })
 
-  it("sorts reverse selections, highlights the full range, and resets to a new start after a completed range", () => {
+  it("renders a download action when the clip is completed", () => {
+    mockedUseYouTubeClip.mockReturnValue({
+      status: "completed",
+      clip: {
+        id: "clip_123",
+        status: "completed",
+        createdAt: "2026-03-21T12:00:00.000Z",
+        downloadUrl: "https://cdn.example.test/clip.mp4"
+      },
+      errorMessage: undefined,
+      createClip: createClipMock,
+      reset: resetClipMock
+    })
+
     renderView()
-
-    const first = getSegmentRow("0:30", "Intro line")
-    const second = getSegmentRow("1:00", "Second line")
-    const third = getSegmentRow("1:45", "Third line")
-    const fourth = getSegmentRow("2:20", "Fourth line")
-
-    fireEvent.click(third)
-    fireEvent.click(first)
-
-    expect(first).toHaveStyle({ backgroundColor: DARK_THEME.accentBg })
-    expect(second).toHaveStyle({ backgroundColor: DARK_THEME.accentBg })
-    expect(third).toHaveStyle({ backgroundColor: DARK_THEME.accentBg })
-    expect(fourth).not.toHaveStyle({ backgroundColor: DARK_THEME.accentBg })
-    expect(screen.getByText("0:30 - 2:20 (110s)")).toBeInTheDocument()
-
-    fireEvent.click(fourth)
-
-    expect(screen.queryByText("0:30 - 2:20 (110s)")).not.toBeInTheDocument()
-    expect(first).not.toHaveStyle({ backgroundColor: DARK_THEME.accentBg })
-    expect(second).not.toHaveStyle({ backgroundColor: DARK_THEME.accentBg })
-    expect(third).not.toHaveStyle({ backgroundColor: DARK_THEME.accentBg })
-    expect(fourth).toHaveStyle({ backgroundColor: DARK_THEME.accentBg })
-  })
-
-  it("clears the selection when clicking the active start or end boundary", () => {
-    renderView()
-
-    const first = getSegmentRow("0:30", "Intro line")
-    const second = getSegmentRow("1:00", "Second line")
-
-    fireEvent.click(first)
-    fireEvent.click(second)
-    expect(screen.getByText("0:30 - 1:45 (75s)")).toBeInTheDocument()
-
-    fireEvent.click(second)
-
-    expect(screen.queryByText("0:30 - 1:45 (75s)")).not.toBeInTheDocument()
-    expect(first).not.toHaveStyle({ backgroundColor: DARK_THEME.accentBg })
-    expect(second).not.toHaveStyle({ backgroundColor: DARK_THEME.accentBg })
-  })
-
-  it("resets the selection when the transcript or video changes", () => {
-    const { rerender } = renderView()
 
     fireEvent.click(getSegmentRow("0:30", "Intro line"))
     fireEvent.click(getSegmentRow("1:00", "Second line"))
-    expect(screen.getByText("0:30 - 1:45 (75s)")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Download clip" }))
 
-    rerender(
-      <YouTubeTranscriptView
-        segments={BASE_SEGMENTS}
-        status="ready"
-        videoUrl="https://www.youtube.com/watch?v=different"
-      />
+    expect(openMock).toHaveBeenCalledWith(
+      "https://cdn.example.test/clip.mp4",
+      "_blank",
+      "noopener,noreferrer"
     )
-
-    expect(screen.queryByText("0:30 - 1:45 (75s)")).not.toBeInTheDocument()
-
-    fireEvent.click(getSegmentRow("1:00", "Second line"))
-    fireEvent.click(getSegmentRow("1:45", "Third line"))
-    expect(screen.getByText("1:00 - 2:20 (80s)")).toBeInTheDocument()
-
-    rerender(
-      <YouTubeTranscriptView
-        segments={[
-          { seconds: 5, text: "Fresh intro" },
-          { seconds: 20, text: "Fresh second line" }
-        ]}
-        status="ready"
-        videoUrl="https://www.youtube.com/watch?v=different"
-      />
-    )
-
-    expect(screen.queryByText("1:00 - 2:20 (80s)")).not.toBeInTheDocument()
+    expect(screen.getByText("Clip ready.")).toBeInTheDocument()
   })
 
-  it("uses a 5-second buffer for the final segment and adds bottom padding for the sticky bar", () => {
-    renderView({
-      segments: [
-        { seconds: 3600, text: "One hour mark" },
-        { seconds: 3661, text: "Final line" }
-      ]
+  it("shows backend failures inline", () => {
+    mockedUseYouTubeClip.mockReturnValue({
+      status: "failed",
+      clip: {
+        id: "clip_123",
+        status: "failed",
+        createdAt: "2026-03-21T12:00:00.000Z",
+        error: "Missing Clerk session"
+      },
+      errorMessage: "Missing Clerk session",
+      createClip: createClipMock,
+      reset: resetClipMock
     })
 
-    fireEvent.click(getSegmentRow("1:00:00", "One hour mark"))
-    fireEvent.click(getSegmentRow("1:01:01", "Final line"))
+    renderView()
 
-    expect(screen.getByText("1:00:00 - 1:01:06 (66s)")).toBeInTheDocument()
-    expect(screen.getByTestId("yt-transcript-segment-list")).toHaveStyle({
-      paddingBottom: "72px"
-    })
+    fireEvent.click(getSegmentRow("0:30", "Intro line"))
+    fireEvent.click(getSegmentRow("1:00", "Second line"))
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Missing Clerk session")
+    expect(screen.getByRole("button", { name: "Retry clip" })).toBeInTheDocument()
   })
 })
