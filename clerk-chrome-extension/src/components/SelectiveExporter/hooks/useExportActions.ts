@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react"
 import { API_BASE_URL } from "~config/api"
 import { ENABLE_SEND_TO_MY_AI } from "~config/features"
 import type { ExportCapture, StructuredConversationCapture } from "~lib/capture"
+import { saveRecentCapture } from "~lib/recentCaptures"
 import { requestClerkToken } from "~utils/clerk"
 import { deriveConversationId, sanitizeFilename } from "~utils/conversation"
 import { detectPlatform, getPlatformLabel } from "~utils/platform"
@@ -469,6 +470,19 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
         )
       }
 
+      await saveRecentCapture({
+        id: result?.conversation?.id ?? conversationId,
+        title:
+          conversationTitle ||
+          capture.title ||
+          capture.metadata.pageTitle ||
+          "Conversation",
+        source: platformLabel,
+        sourceUrl: capture.metadata.sourceUrl,
+        captureMode: "structured_conversation",
+        savedAt: new Date().toISOString()
+      })
+
       setExportState("success")
       setStatusMessage("Conversation saved successfully.")
       console.log("[SelectiveExporter] Save success", result)
@@ -479,7 +493,7 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
         error instanceof Error ? error.message : "Failed to save conversation."
       )
     }
-  }, [capture, exportState, platformLabel])
+  }, [capture, conversationTitle, exportState, platformLabel])
 
   const resetExportState = useCallback(() => {
     setExportState("idle")

@@ -53,6 +53,7 @@
   "manifest": {
     "key": "$CRX_PUBLIC_KEY",
     "permissions": [
+      "activeTab",
       "cookies",
       "storage",
       "scripting"

@@ -7,6 +7,12 @@ import { SelectiveExporter } from "~components/SelectiveExporter"
 import { useCaptureSource } from "~hooks/useCaptureSource"
 import { useMessageScanner } from "~hooks/useMessageScanner"
 import { useYouTubeTranscript } from "~hooks/useYouTubeTranscript"
+import {
+  buildLivePageContext,
+  POPUP_GET_CAPTURE,
+  POPUP_GET_PAGE_CONTEXT,
+  serializePopupCapture
+} from "~popupBridge"
 import { debug } from "~utils/debug"
 
 // Instrumentation helper for rescan-on-open flow tracking
@@ -89,6 +95,61 @@ const PlasmoOverlay = () => {
     youtubeStatus,
     youtubeTitle
   })
+
+  const popupCapture = useMemo(() => serializePopupCapture(capture), [capture])
+
+  const popupPageContext = useMemo(
+    () =>
+      buildLivePageContext({
+        url: window.location.href,
+        pageTitle: document.title,
+        conversationTitle: displayTitle,
+        capture: popupCapture,
+        activeMessageCount,
+        youtubeStatus,
+        emptyStateMessage
+      }),
+    [
+      activeMessageCount,
+      displayTitle,
+      emptyStateMessage,
+      popupCapture,
+      youtubeStatus,
+      conversationKey
+    ]
+  )
+
+  useEffect(() => {
+    if (!chrome?.runtime?.onMessage) return
+
+    const handlePopupMessage = (
+      message: { type?: string },
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response?: unknown) => void
+    ) => {
+      if (message?.type === POPUP_GET_PAGE_CONTEXT) {
+        sendResponse({
+          ok: true,
+          context: popupPageContext
+        })
+        return
+      }
+
+      if (message?.type === POPUP_GET_CAPTURE) {
+        sendResponse({
+          ok: !!popupCapture,
+          context: popupPageContext,
+          capture: popupCapture,
+          error: popupCapture ? undefined : popupPageContext.statusDetail
+        })
+      }
+    }
+
+    chrome.runtime.onMessage.addListener(handlePopupMessage)
+    return () => {
+      chrome.runtime.onMessage.removeListener(handlePopupMessage)
+    }
+  }, [popupCapture, popupPageContext])
 
   // Guarded rescan-on-open: uses store-based activeMessageCount and cooldown retry
   useEffect(() => {

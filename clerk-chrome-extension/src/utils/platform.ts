@@ -1,12 +1,31 @@
 export type Platform = "chatgpt" | "claude" | "linkedin" | "youtube" | "unknown"
 
-export const detectPlatform = (): Platform => {
-  const host = window.location.hostname.toLowerCase()
-  if (host.includes("youtube.com")) return "youtube"
-  if (host.includes("linkedin.com")) return "linkedin"
-  if (host.includes("claude.ai")) return "claude"
-  if (host.includes("chatgpt") || host.includes("openai")) return "chatgpt"
+export const detectPlatformFromHost = (host: string): Platform => {
+  const normalizedHost = host.toLowerCase()
+  if (normalizedHost.includes("youtube.com")) return "youtube"
+  if (normalizedHost.includes("linkedin.com")) return "linkedin"
+  if (normalizedHost.includes("claude.ai")) return "claude"
+  if (normalizedHost.includes("chatgpt") || normalizedHost.includes("openai")) {
+    return "chatgpt"
+  }
   return "unknown"
+}
+
+export const detectPlatformFromUrl = (
+  input?: string | URL | null
+): Platform => {
+  if (!input) return "unknown"
+
+  try {
+    const url = typeof input === "string" ? new URL(input) : input
+    return detectPlatformFromHost(url.hostname)
+  } catch {
+    return "unknown"
+  }
+}
+
+export const detectPlatform = (): Platform => {
+  return detectPlatformFromHost(window.location.hostname)
 }
 
 export const getPlatformLabel = (platform: Platform = detectPlatform()) => {
