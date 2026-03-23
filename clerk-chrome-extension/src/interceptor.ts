@@ -27,9 +27,22 @@ export function installNetworkInterceptor(
 ) {
   const MESSAGE_SOURCE = "__echo_network_interceptor__"
   const LISTENER_READY_SIGNAL = "__echo_listener_ready__"
+  const LISTENER_READY_ACK_SIGNAL = "__echo_listener_ready_ack__"
   const messageQueue: any[] = []
   let listenerReady = false
   let messageSeq = 0
+
+  function isReadySignalEvent(event: MessageEvent) {
+    if (event.data !== LISTENER_READY_SIGNAL) {
+      return false
+    }
+
+    if (event.source === window || event.source == null) {
+      return true
+    }
+
+    return event.origin === "" || event.origin === window.location.origin
+  }
 
   function logFlow(step: string, details?: Record<string, unknown>) {
     const timestamp = performance.now().toFixed(2)
@@ -345,14 +358,16 @@ export function installNetworkInterceptor(
   logFlow("INIT", { messageQueueLength: messageQueue.length, listenerReady })
 
   window.addEventListener("message", (event) => {
-    if (event.source === window && event.data === LISTENER_READY_SIGNAL) {
+    if (isReadySignalEvent(event)) {
       logFlow("READY_SIGNAL_RECEIVED", {
         wasAlreadyReady: listenerReady,
-        queuedMessageCount: messageQueue.length
+        queuedMessageCount: messageQueue.length,
+        origin: event.origin
       })
 
       if (!listenerReady) {
         listenerReady = true
+        window.postMessage(LISTENER_READY_ACK_SIGNAL, "*")
         logFlow("QUEUE_FLUSH_START", { messageCount: messageQueue.length })
         messageQueue.forEach((message, index) => {
           logFlow("QUEUE_FLUSH_ITEM", {

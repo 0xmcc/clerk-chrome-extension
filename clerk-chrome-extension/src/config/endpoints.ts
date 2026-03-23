@@ -201,18 +201,34 @@ export function buildChatGPTDetailUrl(conversationId: string): string {
  * 
  * Example: buildClaudeDetailUrls("org-123", "uuid-456")
  * Returns: [
- *   "/api/organizations/org-123/conversations/uuid-456",
- *   "/api/organizations/org-123/chat_conversations/uuid-456"
+ *   "/api/organizations/org-123/chat_conversations/uuid-456?tree=True&rendering_mode=messages&render_all_tools=true&return_dangling_human_message=true",
+ *   "/api/organizations/org-123/chat_conversations/uuid-456",
+ *   "/api/organizations/org-123/conversations/uuid-456"
  * ]
  */
 export function buildClaudeDetailUrls(orgId: string, conversationId: string): string[] {
-  const templates = Array.isArray(ENDPOINTS.claude.detail) 
-    ? ENDPOINTS.claude.detail 
-    : [ENDPOINTS.claude.detail]
-  
-  return templates.map(template => 
-    fillTemplate(template, { orgId, id: conversationId })
+  const modernPath = fillTemplate(
+    "/api/organizations/{orgId}/chat_conversations/{id}",
+    { orgId, id: conversationId }
   )
+  const modernParams = new URLSearchParams({
+    tree: "True",
+    rendering_mode: "messages",
+    render_all_tools: "true",
+    return_dangling_human_message: "true"
+  })
+
+  const legacyTemplates = [
+    "/api/organizations/{orgId}/chat_conversations/{id}",
+    "/api/organizations/{orgId}/conversations/{id}"
+  ]
+
+  return [
+    `${modernPath}?${modernParams.toString()}`,
+    ...legacyTemplates.map(template =>
+      fillTemplate(template, { orgId, id: conversationId })
+    )
+  ]
 }
 
 /**

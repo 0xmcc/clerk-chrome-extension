@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react"
-import {
-  INTERCEPTOR_READY_SIGNAL,
-  INTERCEPTOR_SOURCE
-} from "~config/interceptor"
+import { INTERCEPTOR_SOURCE } from "~config/interceptor"
 import { createIngestionPipeline } from "./ingestion"
 import { getChatGPTAuthToken, loadPersistedState } from "./store"
 import { detectPlatform } from "~utils/platform"
@@ -13,6 +10,10 @@ import { isCapturedPlatform, getConversationKey, getActiveConversationIdFromUrl 
 import { useConversationStore, useActiveMessages } from "./state"
 import { createInterceptorEventHandler } from "./handlers"
 import { createRescanHandler } from "./rescan"
+import {
+  isInterceptorPayloadEvent,
+  startReadySignalHandshake
+} from "./handshake"
 
 // Instrumentation helper for message flow tracking
 function logFlow(step: string, details?: Record<string, unknown>) {
@@ -114,11 +115,9 @@ export const useMessageScanner = () => {
     logFlow("LISTENER_SETUP_START", { handlerDeps: "handleInterceptorEvent" })
 
     const listener = (event: MessageEvent) => {
-      // Security: only accept messages from same window
-      if (event.source !== window) return
+      if (!isInterceptorPayloadEvent(event)) return
 
       const data = event.data
-      if (!data || data.source !== INTERCEPTOR_SOURCE) return
 
       receivedMessageCount.current++
       logFlow("MESSAGE_RECEIVED", {
@@ -155,10 +154,9 @@ export const useMessageScanner = () => {
     window.addEventListener("message", listener)
     logFlow("LISTENER_REGISTERED")
 
-    // Signal to interceptor that listener is ready (drains queued messages)
-    logFlow("READY_SIGNAL_SENDING")
-    window.postMessage(INTERCEPTOR_READY_SIGNAL, "*")
-    logFlow("READY_SIGNAL_SENT")
+    // Retry until the main-world interceptor acknowledges readiness.
+    logFlow("READY_SIGNAL_HANDSHAKE_START")
+    const stopReadyHandshake = startReadySignalHandshake()
 
     // Double-tick to handle "detail arrives after first tick" case
     setTimeout(() => {
@@ -172,6 +170,7 @@ export const useMessageScanner = () => {
 
     return () => {
       logFlow("LISTENER_CLEANUP")
+      stopReadyHandshake()
       window.removeEventListener("message", listener)
       ingestionPipelineRef.current?.cancel()
     }
