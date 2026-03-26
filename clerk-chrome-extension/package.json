@@ -68,6 +68,7 @@
       "$PLASMO_PUBLIC_CLERK_SYNC_HOST/*",
       "$CLERK_FRONTEND_API/*",
       "https://api.agentmail.to/*",
+      "https://defuddle.md/*",
       "https://www.youtube.com/*"
     ]
   }

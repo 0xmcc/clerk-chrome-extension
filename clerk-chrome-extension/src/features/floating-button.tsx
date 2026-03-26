@@ -1,55 +1,22 @@
-import { useEffect, useState } from "react"
-
 interface FloatingButtonProps {
   onOpenExporter?: () => void
 }
 
 export const FloatingButton = ({ onOpenExporter }: FloatingButtonProps) => {
-  const [isEnabled, setIsEnabled] = useState(true)
-  const [isActive, setIsActive] = useState(false)
-
-  // Load enabled state from storage
-  useEffect(() => {
-    chrome.storage.sync.get(["floatingButtonEnabled"], (result) => {
-      setIsEnabled(result.floatingButtonEnabled !== false)
-    })
-
-    // Listen for storage changes
-    const handleStorageChange = (changes: any, namespace: string) => {
-      if (namespace === "sync" && changes.floatingButtonEnabled) {
-        setIsEnabled(changes.floatingButtonEnabled.newValue !== false)
-      }
-    }
-
-    chrome.storage.onChanged.addListener(handleStorageChange)
-
-    return () => {
-      chrome.storage.onChanged.removeListener(handleStorageChange)
-    }
-  }, [])
-
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault()
     e.stopPropagation()
 
-    // Open selective exporter
-    if (onOpenExporter) {
-      onOpenExporter()
-    }
+    onOpenExporter?.()
 
     console.log("[FloatingButton] Clicked - opening exporter")
   }
 
-  const handleRightClick = (e: React.MouseEvent) => {
+  const handleRightClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault()
     e.stopPropagation()
 
-    // Open extension options page
     chrome.runtime.sendMessage({ action: "openOptionsPage" })
-  }
-
-  if (!isEnabled) {
-    return null
   }
 
   return (
@@ -67,7 +34,9 @@ export const FloatingButton = ({ onOpenExporter }: FloatingButtonProps) => {
           }
         }
       `}</style>
-      <div
+      <button
+        type="button"
+        aria-label="Capture this page for AI"
         onClick={handleClick}
         onContextMenu={handleRightClick}
         title="Capture this page for AI"
@@ -77,9 +46,7 @@ export const FloatingButton = ({ onOpenExporter }: FloatingButtonProps) => {
           right: "20px",
           width: "50px",
           height: "50px",
-          background: isActive
-            ? "linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)"
-            : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
           borderRadius: "50%",
           display: "flex",
           alignItems: "center",
@@ -87,13 +54,14 @@ export const FloatingButton = ({ onOpenExporter }: FloatingButtonProps) => {
           fontSize: "20px",
           color: "white",
           cursor: "pointer",
-          zIndex: 9998,
+          zIndex: 2147483646,
           boxShadow: "0 4px 20px rgba(0, 0, 0, 0.15)",
           transition: "all 0.3s ease",
           opacity: 0.7,
           userSelect: "none",
           border: "2px solid rgba(255, 255, 255, 0.2)",
-          animation: isActive ? "pulse 1.5s infinite" : "none"
+          animation: "none",
+          padding: 0
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.opacity = "1"
@@ -106,7 +74,7 @@ export const FloatingButton = ({ onOpenExporter }: FloatingButtonProps) => {
           e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 0, 0, 0.15)"
         }}>
         ✨
-      </div>
+      </button>
     </>
   )
 }

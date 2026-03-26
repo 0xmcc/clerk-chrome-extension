@@ -3,6 +3,10 @@ import { useCallback, useEffect, useState } from "react"
 import { API_BASE_URL } from "~config/api"
 import { ENABLE_SEND_TO_MY_AI } from "~config/features"
 import type { ExportCapture, StructuredConversationCapture } from "~lib/capture"
+import {
+  buildCaptureExportPayload,
+  buildYouTubeTranscriptMarkdown
+} from "~lib/exportCapture"
 import { saveRecentCapture } from "~lib/recentCaptures"
 import { requestClerkToken } from "~utils/clerk"
 import { deriveConversationId, sanitizeFilename } from "~utils/conversation"
@@ -169,14 +173,22 @@ export const useExportActions = ({
     useState<HistoryFormat>(initialHistoryFormat)
 
   useEffect(() => {
-    if (capture?.captureMode === "page_markdown" && historyFormat !== "markdown") {
+    if (
+      (capture?.captureMode === "page_markdown" ||
+        capture?.captureMode === "youtube_transcript") &&
+      historyFormat !== "markdown"
+    ) {
       setHistoryFormat("markdown")
     }
   }, [capture, historyFormat])
 
   const setHistoryFormatSafe = useCallback(
     (format: HistoryFormat) => {
-      if (capture?.captureMode === "page_markdown" && format === "json") {
+      if (
+        (capture?.captureMode === "page_markdown" ||
+          capture?.captureMode === "youtube_transcript") &&
+        format === "json"
+      ) {
         setHistoryFormat("markdown")
         return
       }
@@ -208,7 +220,7 @@ export const useExportActions = ({
     }
 
     if (capture.captureMode === "youtube_transcript") {
-      return ""
+      return buildYouTubeTranscriptMarkdown(capture)
     }
 
     const header = buildDeterministicHeader(capture, platformLabel)
@@ -266,20 +278,23 @@ export const useExportActions = ({
         ? generateMarkdown()
         : JSON.stringify(generateJSON(), null, 2)
     const exportedFormat =
-      capture.captureMode === "page_markdown" ? "markdown" : historyFormat
+      capture.captureMode === "structured_conversation" ? historyFormat : "markdown"
     const ext =
-      capture.captureMode === "page_markdown" || historyFormat === "markdown"
+      capture.captureMode !== "structured_conversation" || historyFormat === "markdown"
         ? "md"
         : "json"
     const base =
       capture.captureMode === "page_markdown"
         ? sanitizeFilename(`page-${conversationTitle}`) ||
           `page-${deriveConversationId()}`
-        : sanitizeFilename(conversationTitle) ||
-          `conversation-${deriveConversationId()}`
+        : capture.captureMode === "youtube_transcript"
+          ? sanitizeFilename(conversationTitle) ||
+            `youtube-transcript-${deriveConversationId()}`
+          : sanitizeFilename(conversationTitle) ||
+            `conversation-${deriveConversationId()}`
     const filename = `${base}.${ext}`
     const mimeType =
-      capture.captureMode === "page_markdown" || historyFormat === "markdown"
+      capture.captureMode !== "structured_conversation" || historyFormat === "markdown"
         ? "text/markdown"
         : "application/json"
 
@@ -419,37 +434,26 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
   }, [capture, conversationTitle, aiEmail, aiEmailFrom, aiEmailApiKey])
 
   const handleSaveToDatabase = useCallback(async () => {
-    if (!capture || capture.captureMode !== "structured_conversation") return
-    if (capture.messages.length === 0 || exportState === "loading") return
+    if (!capture || capture.captureMode === "page_markdown") return
+    if (
+      (capture.captureMode === "structured_conversation" &&
+        capture.messages.length === 0) ||
+      (capture.captureMode === "youtube_transcript" && capture.segments.length === 0) ||
+      exportState === "loading"
+    ) {
+      return
+    }
 
     setExportState("loading")
-    setStatusMessage("Saving conversation...")
+    setStatusMessage(
+      capture.captureMode === "youtube_transcript"
+        ? "Saving transcript..."
+        : "Saving conversation..."
+    )
 
     try {
       const token = await requestClerkToken()
-      const conversationId = deriveConversationId()
-      const payload = {
-        conversationId,
-        title: document.title || "Conversation",
-        model: platformLabel.toLowerCase(),
-        selectedMessageIds: capture.messages.map((m) => m.id),
-        messages: capture.messages.map((msg) => ({
-          id: msg.id,
-          role: msg.role,
-          from: msg.authorName,
-          content: msg.text,
-          tokens: Math.ceil(msg.text.length / 4),
-          metadata: {
-            extensionMessageId: msg.id,
-            senderName: msg.authorName
-          }
-        })),
-        metadata: {
-          source: "chrome_extension",
-          host: window.location.hostname,
-          platform: platformLabel.toLowerCase()
-        }
-      }
+      const payload = buildCaptureExportPayload(capture, "chrome_extension")
 
       const response = await fetch(`${API_BASE_URL}/v1/conversations/export`, {
         method: "POST",
@@ -471,29 +475,33 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
       }
 
       await saveRecentCapture({
-        id: result?.conversation?.id ?? conversationId,
-        title:
-          conversationTitle ||
-          capture.title ||
-          capture.metadata.pageTitle ||
-          "Conversation",
+        id: result?.conversation?.id ?? payload.conversationId,
+        title: payload.title,
         source: platformLabel,
-        sourceUrl: capture.metadata.sourceUrl,
-        captureMode: "structured_conversation",
+        sourceUrl: payload.metadata.sourceUrl,
+        captureMode: capture.captureMode,
         savedAt: new Date().toISOString()
       })
 
       setExportState("success")
-      setStatusMessage("Conversation saved successfully.")
+      setStatusMessage(
+        capture.captureMode === "youtube_transcript"
+          ? "Transcript saved successfully."
+          : "Conversation saved successfully."
+      )
       console.log("[SelectiveExporter] Save success", result)
     } catch (error) {
       console.error("[SelectiveExporter] Save failed:", error)
       setExportState("error")
       setStatusMessage(
-        error instanceof Error ? error.message : "Failed to save conversation."
+        error instanceof Error
+          ? error.message
+          : capture.captureMode === "youtube_transcript"
+            ? "Failed to save transcript."
+            : "Failed to save conversation."
       )
     }
-  }, [capture, conversationTitle, exportState, platformLabel])
+  }, [capture, exportState, platformLabel])
 
   const resetExportState = useCallback(() => {
     setExportState("idle")

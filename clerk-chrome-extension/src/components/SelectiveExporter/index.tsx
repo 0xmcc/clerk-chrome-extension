@@ -55,15 +55,18 @@ export const SelectiveExporter = ({
   const [includeHiddenMessages, setIncludeHiddenMessages] = useState(false)
 
   const isStructuredCapture = capture?.captureMode === "structured_conversation"
+  const isYouTubeCapture = capture?.captureMode === "youtube_transcript"
+  const isYouTubeSurface = isYouTubeCapture || Boolean(youtubeStatus && youtubeStatus !== "idle")
   const captureTitle =
-    (capture?.captureMode === "youtube_transcript" ? capture.videoTitle : capture?.title) ||
+    (isYouTubeCapture ? capture.videoTitle : capture?.title) ||
     capture?.metadata.pageTitle || `${platformLabelRef.current} Conversation`
 
   // Derive isSignedOut for minimal churn (keeps existing prop names)
-  const isSignedOut = authStatus === "signedOut" && isStructuredCapture
+  const isSignedOut =
+    authStatus === "signedOut" && (isStructuredCapture || isYouTubeCapture)
 
   // View state management (single enum - no boolean drift)
-  const { view, setView, goToExport, goToSettings, goToConversationIndex } = useViewState()
+  const { view, goToExport, goToSettings, goToConversationIndex } = useViewState()
 
   // Settings storage
   const {
@@ -89,16 +92,26 @@ export const SelectiveExporter = ({
     )
   }, [capture, includeHiddenMessages])
   const selectedCount =
-    capture?.captureMode === "page_markdown" ? 1 : selectedMessages.length
+    capture?.captureMode === "page_markdown"
+      ? 1
+      : capture?.captureMode === "youtube_transcript"
+        ? capture.segments.length
+        : selectedMessages.length
   const summaryText =
     capture?.captureMode === "page_markdown"
       ? "Page markdown capture ready"
-      : `${selectedCount} messages detected`
+      : isYouTubeSurface
+        ? youtubeStatus === "loading"
+          ? "Transcript loading"
+          : youtubeStatus === "error" || youtubeStatus === "no_transcript"
+            ? "Transcript unavailable"
+            : `${selectedCount} segments detected`
+        : `${selectedCount} messages detected`
   const availableHistoryFormats: HistoryFormat[] =
-    capture?.captureMode === "page_markdown"
+    capture?.captureMode === "page_markdown" || isYouTubeSurface
       ? ["markdown"]
       : ["markdown", "json"]
-  const canSave = isStructuredCapture
+  const canSave = isStructuredCapture || isYouTubeCapture
 
   // Export actions
   const {
@@ -172,16 +185,6 @@ export const SelectiveExporter = ({
       hasInitializedRef.current = false
     }
   }, [isOpen, selectedCount])
-
-  // Auto-navigate to youtube_transcript view as soon as YouTube extraction begins.
-  // Bug fix: previously triggered only on capture ready — but capture is null during
-  // loading/error/no_transcript, so those states fell through to the old empty state UI.
-  // YouTubeTranscriptView handles all non-idle states internally.
-  useEffect(() => {
-    if (youtubeStatus && youtubeStatus !== "idle") {
-      setView("youtube_transcript")
-    }
-  }, [youtubeStatus, setView])
 
   const handleClose = () => {
     onClose()
@@ -303,7 +306,7 @@ export const SelectiveExporter = ({
           .analysis-markdown li { list-style: disc; margin: 4px 0; }
           .analysis-markdown strong { font-weight: 700; }
         `}</style>
-        {!capture && view !== "youtube_transcript" ? (
+        {!capture && !isYouTubeSurface ? (
           <div
             style={{
               textAlign: "center",
@@ -374,6 +377,18 @@ export const SelectiveExporter = ({
                 onSendToAI={handleSendToAI}
                 showSendToMyAI={ENABLE_SEND_TO_MY_AI && isStructuredCapture}
                 generateHistory={generateHistory}
+                previewContent={
+                  isYouTubeSurface ? (
+                    <YouTubeTranscriptView
+                      segments={capture?.captureMode === "youtube_transcript" ? capture.segments : []}
+                      status={youtubeStatus ?? "idle"}
+                      errorMessage={youtubeErrorMessage}
+                      videoId={capture?.captureMode === "youtube_transcript" ? capture.videoId : undefined}
+                      videoTitle={capture?.captureMode === "youtube_transcript" ? capture.videoTitle : undefined}
+                      videoUrl={capture?.captureMode === "youtube_transcript" ? capture.videoUrl : undefined}
+                    />
+                  ) : undefined
+                }
               />
             ) : (
               <SettingsView

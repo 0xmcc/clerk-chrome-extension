@@ -9,6 +9,7 @@ import {
   getPlatformLabel,
   type Platform
 } from "~utils/platform"
+import { deriveConversationIdFromUrl } from "~utils/conversation"
 
 export const POPUP_GET_PAGE_CONTEXT = "momentum:popup:get-page-context"
 export const POPUP_GET_CAPTURE = "momentum:popup:get-capture"
@@ -396,37 +397,4 @@ export const serializePopupCapture = (
   return null
 }
 
-export const deriveConversationIdFromUrl = (
-  input: string,
-  fallbackKey?: string
-): string => {
-  try {
-    const url = new URL(input)
-    const videoId = url.searchParams.get("v")
-    if (videoId) return videoId
-
-    const chatMatch = url.pathname.match(/\/c\/([^/?#]+)/)
-    if (chatMatch?.[1]) return chatMatch[1]
-
-    const claudeMatch = url.pathname.match(/\/chat\/([^/?#]+)/)
-    if (claudeMatch?.[1]) return claudeMatch[1]
-
-    const sanitized = `${url.hostname}${url.pathname}`
-      .replace(/[^\w-]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "")
-
-    if (sanitized) return sanitized
-  } catch {
-    // Ignore malformed URLs and fall through to the fallback key.
-  }
-
-  if (fallbackKey) {
-    return fallbackKey
-      .replace(/[^\w-]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "")
-  }
-
-  return `capture-${Date.now()}`
-}
+export { deriveConversationIdFromUrl }

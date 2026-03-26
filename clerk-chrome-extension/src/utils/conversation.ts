@@ -34,6 +34,46 @@ export const deriveConversationId = (): string => {
 }
 
 /**
+ * Derive a stable conversation ID from a source URL.
+ * Supports YouTube watch pages, ChatGPT conversations, and Claude chats.
+ *
+ * @param input - Source URL to inspect
+ * @param fallbackKey - Optional fallback identifier when URL parsing fails
+ * @returns A stable conversation identifier
+ */
+export const deriveConversationIdFromUrl = (
+  input: string,
+  fallbackKey?: string
+): string => {
+  try {
+    const url = new URL(input)
+    const videoId = url.searchParams.get("v")
+    if (videoId) return videoId
+
+    const chatMatch = url.pathname.match(/\/c\/([^/?#]+)/)
+    if (chatMatch?.[1]) return chatMatch[1]
+
+    const claudeMatch = url.pathname.match(/\/chat\/([^/?#]+)/)
+    if (claudeMatch?.[1]) return claudeMatch[1]
+
+    const sanitized = `${url.hostname}${url.pathname}`
+      .replace(/[^\w-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+
+    if (sanitized) return sanitized
+  } catch {
+    // Fall back to the provided key or a timestamp-based identifier below.
+  }
+
+  if (fallbackKey) {
+    return fallbackKey.replace(/[^\w-]/g, "-")
+  }
+
+  return `conversation-${Date.now()}`
+}
+
+/**
  * Sanitize a string for use as a filename.
  * Removes invalid characters, collapses whitespace, and replaces spaces with dashes.
  *

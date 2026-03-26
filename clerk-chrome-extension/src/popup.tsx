@@ -3,11 +3,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { CSSProperties, ReactNode } from "react"
 
 import { API_BASE_URL } from "~config/api"
+import { buildCaptureExportPayload, getCaptureCount } from "~lib/exportCapture"
 import { loadRecentCaptures, saveRecentCapture } from "~lib/recentCaptures"
-import { formatTimestamp } from "~lib/transcript-parser"
 import {
   buildFallbackPageContext,
-  deriveConversationIdFromUrl,
   POPUP_GET_CAPTURE,
   POPUP_GET_PAGE_CONTEXT,
   POPUP_RECENT_CAPTURES_KEY,
@@ -154,82 +153,6 @@ const formatRelativeTime = (value?: string | null): string => {
 
 const pluralize = (count: number, label: string) =>
   `${count} ${label}${count === 1 ? "" : "s"}`
-
-const getCaptureCount = (capture: PopupSerializableCapture): number =>
-  capture.captureMode === "structured_conversation"
-    ? capture.messages.length
-    : capture.segments.length
-
-const estimateTokens = (text: string): number => Math.max(1, Math.ceil(text.length / 4))
-
-const buildExportPayload = (capture: PopupSerializableCapture) => {
-  if (capture.captureMode === "structured_conversation") {
-    const conversationId = deriveConversationIdFromUrl(
-      capture.metadata.sourceUrl,
-      capture.conversationKey
-    )
-
-    const messages = capture.messages.map((message) => ({
-      id: message.id,
-      role: message.role,
-      content: message.text,
-      tokens: estimateTokens(message.text),
-      metadata: {
-        extensionMessageId: message.id,
-        senderName: message.authorName
-      }
-    }))
-
-    return {
-      conversationId,
-      title: capture.title || capture.metadata.pageTitle || "Conversation",
-      model: capture.metadata.platform.toLowerCase(),
-      selectedMessageIds: messages.map((message) => message.id),
-      messages,
-      metadata: {
-        source: "chrome_extension_popup",
-        sourceUrl: capture.metadata.sourceUrl,
-        host: new URL(capture.metadata.sourceUrl).hostname,
-        platform: capture.metadata.platform.toLowerCase(),
-        surface: capture.metadata.surface,
-        captureMode: "structured_conversation"
-      }
-    }
-  }
-
-  const baseConversationId =
-    capture.videoId ||
-    deriveConversationIdFromUrl(capture.videoUrl || capture.metadata.sourceUrl, capture.conversationKey)
-  const conversationId = `youtube-${baseConversationId}`
-  const messages = capture.segments.map((segment, index) => ({
-    id: `${conversationId}::segment_${String(index + 1).padStart(4, "0")}`,
-    role: "assistant" as const,
-    content: segment.text,
-    tokens: estimateTokens(segment.text),
-    metadata: {
-      seconds: segment.seconds,
-      timestamp: formatTimestamp(segment.seconds),
-      section: segment.section || null
-    }
-  }))
-
-  return {
-    conversationId,
-    title: capture.videoTitle || capture.metadata.pageTitle || "YouTube transcript",
-    model: "youtube",
-    selectedMessageIds: messages.map((message) => message.id),
-    messages,
-    metadata: {
-      source: "chrome_extension_popup",
-      sourceUrl: capture.videoUrl || capture.metadata.sourceUrl,
-      host: new URL(capture.videoUrl || capture.metadata.sourceUrl).hostname,
-      platform: "youtube",
-      surface: capture.metadata.surface,
-      captureMode: "youtube_transcript",
-      videoId: capture.videoId
-    }
-  }
-}
 
 const resolvePrimaryAction = ({
   authLoaded,
@@ -518,7 +441,10 @@ function PopupSurface() {
       }
 
       const token = await requestClerkToken()
-      const payload = buildExportPayload(response.capture)
+      const payload = buildCaptureExportPayload(
+        response.capture,
+        "chrome_extension_popup"
+      )
 
       const saveResponse = await fetch(`${API_BASE_URL}/v1/conversations/export`, {
         method: "POST",

@@ -4,11 +4,16 @@ import {
   ALL_HOST_PATTERNS,
   CHATGPT_ENDPOINTS,
   CLAUDE_ENDPOINTS,
-  YOUTUBE_ENDPOINTS,
-  isTargetSite
+  isTargetSite,
+  YOUTUBE_ENDPOINTS
 } from "./config/endpoints"
 import { IS_DEVELOPMENT } from "./config/features"
 import { installNetworkInterceptor } from "./interceptor"
+import {
+  buildDefuddleRemotePageMarkdownUrl,
+  REMOTE_PAGE_MARKDOWN_ACTION,
+  shouldAttemptRemotePageMarkdown
+} from "./lib/remotePageMarkdown"
 import { debug } from "./utils/debug"
 import { handleProxyFetchMessage } from "./utils/proxyFetch"
 
@@ -346,6 +351,68 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         isDevelopment: IS_DEVELOPMENT
       })
       sendResponse(result)
+    })()
+    return true
+  }
+
+  if (message.action === REMOTE_PAGE_MARKDOWN_ACTION) {
+    ;(async () => {
+      const sourceUrl =
+        typeof message.sourceUrl === "string" ? message.sourceUrl : ""
+
+      if (!shouldAttemptRemotePageMarkdown(sourceUrl)) {
+        sendResponse({
+          success: false,
+          status: 400,
+          error: "Remote page markdown is not available for this URL."
+        })
+        return
+      }
+
+      try {
+        const response = await fetch(
+          buildDefuddleRemotePageMarkdownUrl(sourceUrl),
+          {
+            headers: {
+              Accept: "text/markdown, text/plain;q=0.9"
+            }
+          }
+        )
+        const markdown = await response.text()
+        const contentType = response.headers.get("content-type") ?? ""
+
+        if (!response.ok) {
+          sendResponse({
+            success: false,
+            status: response.status,
+            error: `Remote page markdown request failed with status ${response.status}.`
+          })
+          return
+        }
+
+        if (contentType && !/markdown|text\/plain/i.test(contentType)) {
+          sendResponse({
+            success: false,
+            status: 502,
+            error: "Remote page markdown returned an unexpected content type."
+          })
+          return
+        }
+
+        sendResponse({
+          success: true,
+          status: response.status,
+          markdown
+        })
+      } catch (error) {
+        sendResponse({
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Remote page markdown request failed."
+        })
+      }
     })()
     return true
   }

@@ -149,7 +149,19 @@ export const ActionArea = ({
     )
   }
 
-  // Analysis view: render input + back button
+  if (view !== "analysis") {
+    if (!statusMessage) return null
+    return (
+      <div
+        style={{
+          padding: "0 20px 16px",
+          fontSize: "12px",
+          color: exportState === "error" ? DARK_THEME.danger : DARK_THEME.success
+        }}>
+        {statusMessage}
+      </div>
+    )
+  }
 
   return (
     <>

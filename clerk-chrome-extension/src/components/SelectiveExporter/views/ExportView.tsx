@@ -1,4 +1,5 @@
 import type React from "react"
+import type { ReactNode } from "react"
 import type { HistoryFormat } from "../types"
 import { DARK_THEME, HISTORY_FORMAT_OPTIONS } from "../constants"
 
@@ -13,6 +14,7 @@ interface ExportViewProps {
   onExport: () => void
   onSendToAI: () => void
   generateHistory: () => string
+  previewContent?: ReactNode
 }
 
 const ANCHOR_PREFIX = "clerk-ext-msg-"
@@ -48,7 +50,8 @@ export const ExportView = ({
   onCopy,
   onExport,
   onSendToAI,
-  generateHistory
+  generateHistory,
+  previewContent
 }: ExportViewProps) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -199,7 +202,9 @@ export const ExportView = ({
         )}
       </div>
 
-      {historyFormat === "markdown" ? (
+      {previewContent ? (
+        previewContent
+      ) : historyFormat === "markdown" ? (
         (() => {
           const text = generateHistory()
           const headerEndMatch = text.indexOf("--- END HEADER ---")
