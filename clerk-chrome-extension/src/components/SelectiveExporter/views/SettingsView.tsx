@@ -2,6 +2,7 @@ import { ConversationDepthIndicator } from "../components/ConversationDepthIndic
 import { DARK_THEME } from "../constants"
 import { AccountSection } from "./settings/AccountSection"
 import { ExportBehaviorSection } from "./settings/ExportBehaviorSection"
+import { GitHubSection } from "./settings/GitHubSection"
 import { SendToMyAISettingsSection } from "./settings/SendToMyAISettingsSection"
 
 interface SettingsViewProps {
@@ -75,5 +76,7 @@ export const SettingsView = ({
       isSignedOut={isSignedOut}
       onSignInClick={onSignInClick}
     />
+
+    <GitHubSection />
   </div>
 )

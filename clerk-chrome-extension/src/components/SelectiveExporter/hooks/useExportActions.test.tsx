@@ -298,8 +298,10 @@ describe("useExportActions", () => {
       })
     )
 
+    let savedConversationId: string | null = null
+
     await act(async () => {
-      await result.current.handleSaveToDatabase()
+      savedConversationId = await result.current.handleSaveToDatabase()
     })
 
     expect(fetch).toHaveBeenCalledWith(
@@ -326,6 +328,46 @@ describe("useExportActions", () => {
         captureMode: "youtube_transcript"
       })
     )
+    expect(savedConversationId).toBe("saved-youtube-convo")
     expect(result.current.statusMessage).toBe("Transcript saved successfully.")
+  })
+
+  it("surfaces a partial-success warning when the backend save succeeds but GitHub sync fails", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        status: "partial",
+        conversation: { id: "saved-convo" },
+        githubSync: {
+          attempted: true,
+          ok: false,
+          error: "rate limit exceeded"
+        }
+      })
+    } as unknown as Response)
+
+    const { result } = renderHook(() =>
+      useExportActions({
+        capture: structuredCapture,
+        historyFormat: "markdown",
+        platformLabel: "ChatGPT",
+        conversationTitle: "Test Conversation"
+      })
+    )
+
+    await act(async () => {
+      await result.current.handleSaveToDatabase()
+    })
+
+    expect(saveRecentCapture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "saved-convo",
+        captureMode: "structured_conversation"
+      })
+    )
+    expect(result.current.exportState).toBe("warning")
+    expect(result.current.statusMessage).toBe(
+      "Saved, but GitHub sync failed: rate limit exceeded"
+    )
   })
 })

@@ -1,13 +1,13 @@
 import type React from "react"
 import type { ReactNode } from "react"
-import type { HistoryFormat } from "../types"
+import type { ExportState, HistoryFormat } from "../types"
 import { DARK_THEME, HISTORY_FORMAT_OPTIONS } from "../constants"
 
 interface ExportViewProps {
   historyFormat: HistoryFormat
   availableHistoryFormats: HistoryFormat[]
   selectedCount: number
-  exportState: "idle" | "loading" | "success" | "error"
+  exportState: ExportState
   showSendToMyAI: boolean
   onHistoryFormatChange: (value: HistoryFormat) => void
   onCopy: () => void

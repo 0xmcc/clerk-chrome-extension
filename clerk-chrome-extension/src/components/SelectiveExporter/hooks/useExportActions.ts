@@ -144,7 +144,7 @@ interface ExportActions {
   handleCopy: () => Promise<void>
   handleExport: () => void
   handleSendToAI: () => void
-  handleSaveToDatabase: () => Promise<void>
+  handleSaveToDatabase: () => Promise<string | null>
   setHistoryFormat: (format: HistoryFormat) => void
   setExportState: (state: ExportState) => void
   setStatusMessage: (message: string) => void
@@ -434,14 +434,14 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
   }, [capture, conversationTitle, aiEmail, aiEmailFrom, aiEmailApiKey])
 
   const handleSaveToDatabase = useCallback(async () => {
-    if (!capture || capture.captureMode === "page_markdown") return
+    if (!capture || capture.captureMode === "page_markdown") return null
     if (
       (capture.captureMode === "structured_conversation" &&
         capture.messages.length === 0) ||
       (capture.captureMode === "youtube_transcript" && capture.segments.length === 0) ||
       exportState === "loading"
     ) {
-      return
+      return null
     }
 
     setExportState("loading")
@@ -483,13 +483,25 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
         savedAt: new Date().toISOString()
       })
 
-      setExportState("success")
-      setStatusMessage(
-        capture.captureMode === "youtube_transcript"
-          ? "Transcript saved successfully."
-          : "Conversation saved successfully."
-      )
+      if (result?.status === "partial") {
+        setExportState("warning")
+        setStatusMessage(
+          `Saved, but GitHub sync failed: ${
+            result?.githubSync?.error || "Unknown GitHub sync error"
+          }`
+        )
+      } else {
+        setExportState("success")
+        setStatusMessage(
+          capture.captureMode === "youtube_transcript"
+            ? "Transcript saved successfully."
+            : "Conversation saved successfully."
+        )
+      }
       console.log("[SelectiveExporter] Save success", result)
+      return typeof result?.conversation?.id === "string"
+        ? result.conversation.id
+        : null
     } catch (error) {
       console.error("[SelectiveExporter] Save failed:", error)
       setExportState("error")
@@ -500,6 +512,7 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
             ? "Failed to save transcript."
             : "Failed to save conversation."
       )
+      return null
     }
   }, [capture, exportState, platformLabel])
 

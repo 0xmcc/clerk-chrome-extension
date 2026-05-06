@@ -11,11 +11,23 @@ import {
 } from "react-router-dom"
 
 import { TransformPanel } from "./components/TransformPanel"
+import { openSignInPage } from "~utils/navigation"
 import {
   conversationThreads,
   transformOutputs,
   type TransformType
 } from "./data"
+import {
+  connectEchoGitHub,
+  getEchoConversationDetail,
+  getEchoConversationRepos,
+  getEchoGitHubStatus,
+  listEchoConversations,
+  listEchoGitHubRepos,
+  saveEchoConversationRepos,
+  type EchoGitHubRepo,
+  refreshEchoAuthStatus
+} from "./lib/echoApi"
 import { ConversationPage } from "./pages/ConversationPage"
 import { ExplainerPage } from "./pages/ExplainerPage"
 import { InstallPage } from "./pages/InstallPage"
@@ -56,6 +68,9 @@ const SpacesRoutes = () => {
   const [transformOpen, setTransformOpen] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [pendingTransformOpen, setPendingTransformOpen] = useState(false)
+  const [isSignedIn, setIsSignedIn] = useState(false)
+  const [isGitHubConnected, setIsGitHubConnected] = useState(false)
+  const [conversations, setConversations] = useState(conversationThreads)
 
   useEffect(() => {
     if (location.pathname.startsWith("/conversation") && pendingTransformOpen) {
@@ -80,6 +95,15 @@ const SpacesRoutes = () => {
     howRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
+  const handleEchoGitHubConnect = () => {
+    if (!isSignedIn) {
+      openSignInPage()
+      return
+    }
+
+    void connectEchoGitHub()
+  }
+
   const handleGenerate = (type: TransformType) => {
     setTransformType(type)
     setIsGenerating(true)
@@ -98,6 +122,45 @@ const SpacesRoutes = () => {
     }
   }
 
+  const refreshEchoState = async () => {
+    const hasSession = await refreshEchoAuthStatus()
+    setIsSignedIn(hasSession)
+
+    if (!hasSession) {
+      setIsGitHubConnected(false)
+      setConversations(conversationThreads)
+      return
+    }
+
+    try {
+      const [githubStatus, liveConversations] = await Promise.all([
+        getEchoGitHubStatus(),
+        listEchoConversations()
+      ])
+      setIsGitHubConnected(Boolean(githubStatus.connected))
+      if (liveConversations.length > 0) {
+        setConversations(liveConversations)
+      }
+    } catch {
+      setConversations(conversationThreads)
+    }
+  }
+
+  useEffect(() => {
+    void refreshEchoState()
+  }, [])
+
+  useEffect(() => {
+    if (!isSignedIn) return
+
+    const handleFocus = () => {
+      void refreshEchoState()
+    }
+
+    window.addEventListener("focus", handleFocus)
+    return () => window.removeEventListener("focus", handleFocus)
+  }, [isSignedIn])
+
   return (
     <>
       <Routes>
@@ -109,6 +172,10 @@ const SpacesRoutes = () => {
               onScrollToFeatures={scrollToFeatures}
               onScrollToPricing={scrollToPricing}
               onScrollToHow={scrollToHow}
+              onSignInClick={openSignInPage}
+              onConnectGitHub={handleEchoGitHubConnect}
+              isSignedIn={isSignedIn}
+              isGitHubConnected={isGitHubConnected}
               featuresRef={featuresRef}
               pricingRef={pricingRef}
               howRef={howRef}
@@ -141,9 +208,13 @@ const SpacesRoutes = () => {
           path="/workspace"
           element={
             <WorkspacePage
-              conversations={conversationThreads}
+              conversations={conversations}
               onOpenConversation={(id) => handleOpenConversation(id, false)}
               onTransformConversation={(id) => handleOpenConversation(id, true)}
+              isSignedIn={isSignedIn}
+              isGitHubConnected={isGitHubConnected}
+              onSignInClick={openSignInPage}
+              onConnectGitHub={handleEchoGitHubConnect}
             />
           }
         />
@@ -151,9 +222,14 @@ const SpacesRoutes = () => {
           path="/conversation/:id"
           element={
             <ConversationWrapper
+              conversations={conversations}
               onBack={() => navigate("/workspace")}
               onOpenTransform={() => setTransformOpen(true)}
               isTransformOpen={transformOpen}
+              isSignedIn={isSignedIn}
+              isGitHubConnected={isGitHubConnected}
+              onSignInClick={openSignInPage}
+              onConnectGitHub={handleEchoGitHubConnect}
             />
           }
         />
@@ -192,19 +268,97 @@ const SpacesRoutes = () => {
 }
 
 const ConversationWrapper = ({
+  conversations,
   onBack,
   onOpenTransform,
-  isTransformOpen
+  isTransformOpen,
+  isSignedIn,
+  isGitHubConnected,
+  onSignInClick,
+  onConnectGitHub
 }: {
+  conversations: typeof conversationThreads
   onBack: () => void
   onOpenTransform: () => void
   isTransformOpen: boolean
+  isSignedIn: boolean
+  isGitHubConnected: boolean
+  onSignInClick: () => void
+  onConnectGitHub: () => void
 }) => {
   const { id } = useParams<{ id: string }>()
-  const conversation = useMemo(
-    () => conversationThreads.find((c) => c.id === id) || conversationThreads[0],
-    [id]
+  const fallbackConversation = useMemo(
+    () => conversations.find((c) => c.id === id) || conversations[0] || conversationThreads[0],
+    [conversations, id]
   )
+  const [conversation, setConversation] = useState(fallbackConversation)
+  const [availableRepos, setAvailableRepos] = useState<EchoGitHubRepo[]>([])
+  const [selectedRepoFullNames, setSelectedRepoFullNames] = useState<string[]>([])
+  const [repoSelectionError, setRepoSelectionError] = useState("")
+
+  useEffect(() => {
+    setConversation(fallbackConversation)
+  }, [fallbackConversation])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadConversationState = async () => {
+      if (!id || !isSignedIn) {
+        setAvailableRepos([])
+        setSelectedRepoFullNames([])
+        setRepoSelectionError("")
+        return
+      }
+
+      try {
+        const [detail, repos, selectedRepos] = await Promise.all([
+          getEchoConversationDetail(id),
+          listEchoGitHubRepos(),
+          getEchoConversationRepos(id)
+        ])
+
+        if (cancelled) return
+
+        setConversation(detail)
+        setAvailableRepos(repos)
+        setSelectedRepoFullNames(selectedRepos)
+        setRepoSelectionError("")
+      } catch (error) {
+        if (cancelled) return
+        setRepoSelectionError(
+          error instanceof Error ? error.message : "Failed to load GitHub repos."
+        )
+      }
+    }
+
+    void loadConversationState()
+
+    return () => {
+      cancelled = true
+    }
+  }, [id, isSignedIn])
+
+  const handleToggleRepo = async (repoFullName: string) => {
+    if (!id || !isSignedIn) return
+
+    const nextSelection = selectedRepoFullNames.includes(repoFullName)
+      ? selectedRepoFullNames.filter((value) => value !== repoFullName)
+      : [...selectedRepoFullNames, repoFullName]
+
+    setSelectedRepoFullNames(nextSelection)
+    setRepoSelectionError("")
+
+    try {
+      const persistedSelection = await saveEchoConversationRepos(id, nextSelection)
+      setSelectedRepoFullNames(persistedSelection)
+    } catch (error) {
+      setRepoSelectionError(
+        error instanceof Error ? error.message : "Failed to save GitHub repos."
+      )
+      setSelectedRepoFullNames(selectedRepoFullNames)
+    }
+  }
 
   return (
     <ConversationPage
@@ -212,6 +366,14 @@ const ConversationWrapper = ({
       onBack={onBack}
       onOpenTransform={onOpenTransform}
       isTransformOpen={isTransformOpen}
+      isSignedIn={isSignedIn}
+      isGitHubConnected={isGitHubConnected}
+      availableRepos={availableRepos}
+      selectedRepoFullNames={selectedRepoFullNames}
+      onToggleRepo={handleToggleRepo}
+      onSignInClick={onSignInClick}
+      onConnectGitHub={onConnectGitHub}
+      repoSelectionError={repoSelectionError}
     />
   )
 }

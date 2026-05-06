@@ -18,6 +18,11 @@ vi.mock("~utils/navigation", () => ({
   openSignInPage: vi.fn()
 }))
 
+vi.mock("~lib/github", () => ({
+  getGitHubStatus: vi.fn().mockResolvedValue({ connected: false }),
+  getGitHubAuthUrl: vi.fn().mockResolvedValue("https://github.com/login/oauth/authorize?state=abc")
+}))
+
 vi.mock("~utils/debug", () => ({
   debug: {
     any: vi.fn()

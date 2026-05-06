@@ -1,3 +1,7 @@
+import { useEffect, useMemo, useState } from "react"
+
+import type { GitHubRepo } from "~lib/github"
+
 import type { ViewMode, ExportState } from "../types"
 import { DARK_THEME } from "../constants"
 
@@ -10,6 +14,17 @@ interface ActionAreaProps {
   analysisInput: string
   isSignedOut: boolean
   awaitingSignIn: boolean
+  githubButtonLabel?: string
+  onGitHubClick?: () => void
+  githubConnected?: boolean
+  githubRepos?: GitHubRepo[]
+  selectedGitHubRepoFullNames?: string[]
+  githubRepoMenuOpen?: boolean
+  githubReposLoading?: boolean
+  githubRepoSelectionBusy?: boolean
+  githubRepoMessage?: string
+  onGitHubRepoMenuToggle?: () => void
+  onGitHubRepoToggle?: (repoFullName: string) => void
   onAnalysisInputChange: (value: string) => void
   onAnalysisSend: () => void
   onBackToExport: () => void
@@ -23,6 +38,15 @@ const getSaveButtonText = (exportState: ExportState, isSignedOut: boolean): stri
   return isSignedOut ? "Save to my library" : "Save"
 }
 
+const getStatusColor = (exportState: ExportState): string => {
+  if (exportState === "error") return DARK_THEME.danger
+  if (exportState === "warning") return DARK_THEME.warning
+  return DARK_THEME.success
+}
+
+const isVaultRepo = (repo: GitHubRepo): boolean =>
+  /vault/i.test(repo.name) || /vault/i.test(repo.fullName)
+
 export const ActionArea = ({
   view,
   selectedCount,
@@ -32,6 +56,17 @@ export const ActionArea = ({
   analysisInput,
   isSignedOut,
   awaitingSignIn,
+  githubButtonLabel,
+  onGitHubClick,
+  githubConnected = false,
+  githubRepos = [],
+  selectedGitHubRepoFullNames = [],
+  githubRepoMenuOpen = false,
+  githubReposLoading = false,
+  githubRepoSelectionBusy = false,
+  githubRepoMessage = "",
+  onGitHubRepoMenuToggle,
+  onGitHubRepoToggle,
   onAnalysisInputChange,
   onAnalysisSend,
   onBackToExport,
@@ -39,6 +74,51 @@ export const ActionArea = ({
   onSignInClick,
   onConfirmSignedIn
 }: ActionAreaProps) => {
+  const hasGitHubSection = Boolean(githubButtonLabel || githubConnected)
+  const selectedGitHubRepoCount = selectedGitHubRepoFullNames.length
+  const [githubRepoSearch, setGitHubRepoSearch] = useState("")
+
+  useEffect(() => {
+    if (!githubRepoMenuOpen) {
+      setGitHubRepoSearch("")
+    }
+  }, [githubRepoMenuOpen])
+
+  const visibleGitHubRepos = useMemo(() => {
+    const normalizedQuery = githubRepoSearch.trim().toLowerCase()
+
+    return [...githubRepos]
+      .filter((repo) => {
+        if (!normalizedQuery) {
+          return true
+        }
+
+        return (
+          repo.fullName.toLowerCase().includes(normalizedQuery) ||
+          repo.name.toLowerCase().includes(normalizedQuery)
+        )
+      })
+      .sort((leftRepo, rightRepo) => {
+        const leftIsVaultRepo = isVaultRepo(leftRepo)
+        const rightIsVaultRepo = isVaultRepo(rightRepo)
+
+        if (leftIsVaultRepo !== rightIsVaultRepo) {
+          return leftIsVaultRepo ? -1 : 1
+        }
+
+        const leftSelected = selectedGitHubRepoFullNames.includes(leftRepo.fullName)
+        const rightSelected = selectedGitHubRepoFullNames.includes(
+          rightRepo.fullName
+        )
+
+        if (leftSelected !== rightSelected) {
+          return leftSelected ? -1 : 1
+        }
+
+        return leftRepo.fullName.localeCompare(rightRepo.fullName)
+      })
+  }, [githubRepoSearch, githubRepos, selectedGitHubRepoFullNames])
+
   // Settings view: only render status message if present
   if (view === "settings") {
     if (!statusMessage) return null
@@ -47,7 +127,7 @@ export const ActionArea = ({
         style={{
           padding: "0 20px 16px",
           fontSize: "12px",
-          color: exportState === "error" ? DARK_THEME.danger : DARK_THEME.success
+          color: getStatusColor(exportState)
         }}>
         {statusMessage}
       </div>
@@ -62,8 +142,198 @@ export const ActionArea = ({
           style={{
             padding: "16px 20px",
             borderTop: `1px solid ${DARK_THEME.border}`,
-            backgroundColor: DARK_THEME.surface
+            backgroundColor: DARK_THEME.surface,
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px"
           }}>
+          {hasGitHubSection ? (
+            <div
+              style={{
+                border: `1px solid ${DARK_THEME.border}`,
+                borderRadius: "12px",
+                padding: "14px",
+                background: DARK_THEME.panel,
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px"
+              }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  alignItems: "flex-start"
+                }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: DARK_THEME.text
+                    }}>
+                    GitHub repos
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      lineHeight: 1.5,
+                      color: DARK_THEME.muted
+                    }}>
+                    Select multiple repos to receive a copy of this conversation.
+                  </div>
+                </div>
+
+                {githubConnected ? (
+                  githubRepos.length > 0 || githubReposLoading ? (
+                    <button
+                      onClick={onGitHubRepoMenuToggle}
+                      disabled={githubReposLoading || githubRepoSelectionBusy}
+                      style={{
+                        flexShrink: 0,
+                        padding: "8px 12px",
+                        borderRadius: "8px",
+                        border: `1px solid ${DARK_THEME.borderStrong}`,
+                        background: DARK_THEME.surface,
+                        color: DARK_THEME.text,
+                        cursor:
+                          githubReposLoading || githubRepoSelectionBusy
+                            ? "not-allowed"
+                            : "pointer",
+                        opacity:
+                          githubReposLoading || githubRepoSelectionBusy ? 0.7 : 1,
+                        fontSize: "12px",
+                        fontWeight: 500
+                      }}>
+                      Choose repos
+                    </button>
+                  ) : null
+                ) : githubButtonLabel && onGitHubClick ? (
+                  <button
+                    onClick={onGitHubClick}
+                    style={{
+                      flexShrink: 0,
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: `1px solid ${DARK_THEME.border}`,
+                      background: DARK_THEME.surface,
+                      color: DARK_THEME.text,
+                      cursor: "pointer",
+                      fontSize: "12px",
+                      fontWeight: 500
+                    }}>
+                    {githubButtonLabel}
+                  </button>
+                ) : null}
+              </div>
+
+              {!githubConnected ? (
+                <div style={{ fontSize: "12px", color: DARK_THEME.muted }}>
+                  Connect GitHub to choose repositories for conversation sync.
+                </div>
+              ) : githubReposLoading ? (
+                <div style={{ fontSize: "12px", color: DARK_THEME.muted }}>
+                  Loading GitHub repos...
+                </div>
+              ) : githubRepoMenuOpen ? (
+                githubRepos.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <input
+                      type="search"
+                      placeholder="Search repos"
+                      value={githubRepoSearch}
+                      onChange={(event) => setGitHubRepoSearch(event.target.value)}
+                      disabled={githubRepoSelectionBusy}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        border: `1px solid ${DARK_THEME.border}`,
+                        background: DARK_THEME.surface,
+                        color: DARK_THEME.text,
+                        fontSize: "12px",
+                        outline: "none"
+                      }}
+                    />
+                    <div
+                      data-testid="github-repo-list"
+                      style={{
+                        maxHeight: "220px",
+                        overflowY: "auto",
+                        paddingRight: "4px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "8px"
+                      }}>
+                      {visibleGitHubRepos.length > 0 ? (
+                        visibleGitHubRepos.map((repo) => (
+                          <label
+                            key={repo.fullName}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "10px",
+                              borderRadius: "10px",
+                              border: `1px solid ${DARK_THEME.border}`,
+                              background: DARK_THEME.surface,
+                              padding: "10px 12px",
+                              fontSize: "12px",
+                              color: DARK_THEME.text,
+                              cursor: githubRepoSelectionBusy
+                                ? "not-allowed"
+                                : "pointer",
+                              opacity: githubRepoSelectionBusy ? 0.7 : 1
+                            }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedGitHubRepoFullNames.includes(
+                                repo.fullName
+                              )}
+                              disabled={githubRepoSelectionBusy}
+                              onChange={() => onGitHubRepoToggle?.(repo.fullName)}
+                            />
+                            <span>{repo.fullName}</span>
+                          </label>
+                        ))
+                      ) : (
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: DARK_THEME.muted,
+                            padding: "8px 4px"
+                          }}>
+                          No repos match that search.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: "12px", color: DARK_THEME.muted }}>
+                    No GitHub repos are available yet.
+                  </div>
+                )
+              ) : (
+                <div style={{ fontSize: "12px", color: DARK_THEME.muted }}>
+                  {selectedGitHubRepoCount > 0
+                    ? `${selectedGitHubRepoCount} repo${selectedGitHubRepoCount === 1 ? "" : "s"} selected`
+                    : "No repos selected yet."}
+                </div>
+              )}
+
+              {githubRepoMessage ? (
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: githubRepoMessage.toLowerCase().includes("failed")
+                      ? DARK_THEME.danger
+                      : DARK_THEME.muted
+                  }}>
+                  {githubRepoMessage}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <button
             onClick={onSave}
             disabled={!canSave || selectedCount === 0 || exportState === "loading"}
@@ -124,7 +394,7 @@ export const ActionArea = ({
             style={{
               padding: "0 20px 16px",
               fontSize: "12px",
-              color: exportState === "error" ? DARK_THEME.danger : DARK_THEME.success
+              color: getStatusColor(exportState)
             }}>
             {exportState === "error" && statusMessage.toLowerCase().includes("sign in") ? (
               <>
@@ -156,7 +426,7 @@ export const ActionArea = ({
         style={{
           padding: "0 20px 16px",
           fontSize: "12px",
-          color: exportState === "error" ? DARK_THEME.danger : DARK_THEME.success
+          color: getStatusColor(exportState)
         }}>
         {statusMessage}
       </div>
@@ -249,7 +519,7 @@ export const ActionArea = ({
           style={{
             padding: "0 20px 16px",
             fontSize: "12px",
-            color: exportState === "error" ? DARK_THEME.danger : DARK_THEME.success
+            color: getStatusColor(exportState)
           }}>
           {exportState === "error" && statusMessage.toLowerCase().includes("sign in") ? (
             <>

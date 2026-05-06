@@ -56,7 +56,7 @@ export type ChatEntry = {
 /**
  * Export operation state.
  */
-export type ExportState = "idle" | "loading" | "success" | "error"
+export type ExportState = "idle" | "loading" | "success" | "warning" | "error"
 
 /**
  * View mode for the exporter panel.

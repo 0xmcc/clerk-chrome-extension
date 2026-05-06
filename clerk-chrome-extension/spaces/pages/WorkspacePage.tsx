@@ -6,18 +6,38 @@ type WorkspacePageProps = {
   conversations: ConversationThread[]
   onOpenConversation: (conversationId: string) => void
   onTransformConversation: (conversationId: string) => void
+  isSignedIn: boolean
+  isGitHubConnected: boolean
+  onSignInClick: () => void
+  onConnectGitHub: () => void
 }
 
 export const WorkspacePage = ({
   conversations,
   onOpenConversation,
-  onTransformConversation
+  onTransformConversation,
+  isSignedIn,
+  isGitHubConnected,
+  onSignInClick,
+  onConnectGitHub
 }: WorkspacePageProps) => {
   return (
     <div className="plasmo-space-y-8 plasmo-px-6 plasmo-pb-16">
       <header className="plasmo-flex plasmo-items-center plasmo-justify-between">
         <div className="plasmo-text-xl plasmo-font-semibold">spaces</div>
         <div className="plasmo-flex plasmo-items-center plasmo-gap-3">
+          {!isSignedIn ? (
+            <Button variant="secondary" size="sm" onClick={onSignInClick}>
+              Sign in
+            </Button>
+          ) : null}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onConnectGitHub}
+          >
+            {isGitHubConnected ? "GitHub connected" : "Connect GitHub"}
+          </Button>
           <StatPill>
             <span className="plasmo-h-2 plasmo-w-2 plasmo-rounded-full plasmo-bg-[#22c55e]" />
             Extension active

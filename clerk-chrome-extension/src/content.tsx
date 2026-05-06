@@ -21,9 +21,15 @@ function logRescanOnOpen(step: string, details?: Record<string, unknown>) {
 }
 
 export const config: PlasmoCSConfig = {
+  // Plasmo's manifest extraction expects literal match patterns here.
   matches: [
-    "http://*/*",
-    "https://*/*"
+    "https://chat.openai.com/*",
+    "https://chatgpt.com/*",
+    "https://claude.ai/*",
+    "https://*.claude.ai/*",
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "https://www.youtube.com/*"
   ]
 }
 

@@ -33,6 +33,7 @@ describe("SettingsView", () => {
     expect(screen.getByText("Send to My AI")).toBeInTheDocument()
     expect(screen.getByText("Export Behavior")).toBeInTheDocument()
     expect(screen.getByText("Account")).toBeInTheDocument()
+    expect(screen.getByText("GitHub")).toBeInTheDocument()
   })
 
   it("hides the Send to My AI section when the feature flag is disabled", () => {
@@ -41,6 +42,7 @@ describe("SettingsView", () => {
     expect(screen.queryByText("Send to My AI")).not.toBeInTheDocument()
     expect(screen.getByText("Export Behavior")).toBeInTheDocument()
     expect(screen.getByText("Account")).toBeInTheDocument()
+    expect(screen.getByText("GitHub")).toBeInTheDocument()
   })
 
   it("passes the includeHidden prop through to the export behavior checkbox", () => {

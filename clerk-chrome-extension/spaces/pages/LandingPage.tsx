@@ -8,6 +8,10 @@ type LandingPageProps = {
   onScrollToFeatures: () => void
   onScrollToPricing: () => void
   onScrollToHow: () => void
+  onSignInClick: () => void
+  onConnectGitHub: () => void
+  isSignedIn: boolean
+  isGitHubConnected: boolean
   featuresRef: RefObject<HTMLDivElement>
   pricingRef: RefObject<HTMLDivElement>
   howRef: RefObject<HTMLDivElement>
@@ -39,6 +43,10 @@ export const LandingPage = ({
   onScrollToFeatures,
   onScrollToPricing,
   onScrollToHow,
+  onSignInClick,
+  onConnectGitHub,
+  isSignedIn,
+  isGitHubConnected,
   featuresRef,
   pricingRef,
   howRef
@@ -57,6 +65,14 @@ export const LandingPage = ({
           <button className="plasmo-text-[#a1a1aa] hover:plasmo-text-white" onClick={onScrollToPricing}>
             Pricing
           </button>
+          {!isSignedIn ? (
+            <Button size="sm" variant="secondary" onClick={onSignInClick}>
+              Sign in
+            </Button>
+          ) : null}
+          <Button size="sm" variant="secondary" onClick={onConnectGitHub}>
+            {isGitHubConnected ? "GitHub connected" : "Connect GitHub"}
+          </Button>
           <Button size="sm" variant="primary" onClick={onStart}>
             Get started
           </Button>

@@ -8,6 +8,16 @@ import {
 } from "react"
 
 import { ENABLE_SEND_TO_MY_AI } from "~config/features"
+import { loadRecentCaptures } from "~lib/recentCaptures"
+import {
+  getConversationGitHubRepos,
+  getGitHubAuthUrl,
+  getGitHubStatus,
+  listGitHubRepos,
+  saveConversationGitHubRepos,
+  type GitHubRepo,
+  type GitHubStatus
+} from "~lib/github"
 import { requestClerkAuthRefresh, requestClerkSignOut } from "~utils/clerk"
 import { debug } from "~utils/debug"
 import type { HistoryFormat } from "./types"
@@ -53,6 +63,14 @@ export const SelectiveExporter = ({
   >("unknown")
   const [awaitingSignIn, setAwaitingSignIn] = useState(false)
   const [includeHiddenMessages, setIncludeHiddenMessages] = useState(false)
+  const [githubStatus, setGitHubStatus] = useState<GitHubStatus>({ connected: false })
+  const [savedConversationId, setSavedConversationId] = useState<string | null>(null)
+  const [availableGitHubRepos, setAvailableGitHubRepos] = useState<GitHubRepo[]>([])
+  const [selectedGitHubRepoFullNames, setSelectedGitHubRepoFullNames] = useState<string[]>([])
+  const [githubRepoMessage, setGitHubRepoMessage] = useState("")
+  const [isGitHubRepoMenuOpen, setIsGitHubRepoMenuOpen] = useState(false)
+  const [isGitHubReposLoading, setIsGitHubReposLoading] = useState(false)
+  const [isSavingGitHubRepos, setIsSavingGitHubRepos] = useState(false)
 
   const isStructuredCapture = capture?.captureMode === "structured_conversation"
   const isYouTubeCapture = capture?.captureMode === "youtube_transcript"
@@ -112,6 +130,17 @@ export const SelectiveExporter = ({
       ? ["markdown"]
       : ["markdown", "json"]
   const canSave = isStructuredCapture || isYouTubeCapture
+  const currentCaptureSourceUrl = useMemo(() => {
+    if (!capture || capture.captureMode === "page_markdown") {
+      return null
+    }
+
+    if (capture.captureMode === "youtube_transcript") {
+      return capture.videoUrl || capture.metadata.sourceUrl
+    }
+
+    return capture.metadata.sourceUrl
+  }, [capture])
 
   // Export actions
   const {
@@ -174,6 +203,13 @@ export const SelectiveExporter = ({
     goToExport()
     resetAnalysisState()
     resetContainers()
+    setSavedConversationId(null)
+    setAvailableGitHubRepos([])
+    setSelectedGitHubRepoFullNames([])
+    setGitHubRepoMessage("")
+    setIsGitHubRepoMenuOpen(false)
+    setIsGitHubReposLoading(false)
+    setIsSavingGitHubRepos(false)
   }, [conversationKey, goToExport, resetAnalysisState, resetContainers])
 
   // Track initialization state
@@ -243,7 +279,10 @@ export const SelectiveExporter = ({
     setAwaitingSignIn(false)
 
     if (result.hasSession) {
-      handleSaveToDatabase() // Auto-save on success
+      const conversationId = await handleSaveToDatabase()
+      if (conversationId) {
+        setSavedConversationId(conversationId)
+      }
     } else {
       setStatusMessage(
         "Sign in not detected yet. Please try again in a moment."
@@ -254,6 +293,202 @@ export const SelectiveExporter = ({
   const handleHistoryMenuChange = (value: "markdown" | "json") => {
     setHistoryFormat(value)
   }
+
+  const handleSave = useCallback(async () => {
+    const conversationId = await handleSaveToDatabase()
+    if (conversationId) {
+      setSavedConversationId(conversationId)
+    }
+    return conversationId
+  }, [handleSaveToDatabase])
+
+  const refreshGitHubStatus = useCallback(async () => {
+    if (authStatus !== "signedIn") {
+      setGitHubStatus({ connected: false })
+      return
+    }
+
+    try {
+      const nextStatus = await getGitHubStatus()
+      setGitHubStatus(nextStatus)
+    } catch {
+      setGitHubStatus({ connected: false })
+    }
+  }, [authStatus])
+
+  useEffect(() => {
+    if (!isOpen) return
+    void refreshGitHubStatus()
+  }, [isOpen, refreshGitHubStatus])
+
+  useEffect(() => {
+    if (authStatus !== "signedIn") return
+
+    const handleFocus = () => {
+      void refreshGitHubStatus()
+    }
+
+    window.addEventListener("focus", handleFocus)
+    return () => window.removeEventListener("focus", handleFocus)
+  }, [authStatus, refreshGitHubStatus])
+
+  const handleGitHubClick = useCallback(async () => {
+    if (authStatus !== "signedIn") {
+      handleSignInClick()
+      return
+    }
+
+    if (githubStatus.connected) {
+      return
+    }
+
+    const url = await getGitHubAuthUrl()
+
+    if (chrome?.tabs?.create) {
+      chrome.tabs.create({ url })
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer")
+    }
+  }, [authStatus, githubStatus.connected, handleSignInClick])
+
+  useEffect(() => {
+    if (
+      !isOpen ||
+      authStatus !== "signedIn" ||
+      !githubStatus.connected ||
+      !canSave ||
+      !currentCaptureSourceUrl ||
+      !capture
+    ) {
+      setAvailableGitHubRepos([])
+      setSelectedGitHubRepoFullNames([])
+      setGitHubRepoMessage("")
+      setIsGitHubRepoMenuOpen(false)
+      setIsGitHubReposLoading(false)
+      return
+    }
+
+    let cancelled = false
+
+    const loadGitHubRepoState = async () => {
+      setIsGitHubReposLoading(true)
+      setGitHubRepoMessage("")
+
+      try {
+        const [repos, recentCaptures] = await Promise.all([
+          listGitHubRepos(),
+          loadRecentCaptures()
+        ])
+
+        if (cancelled) return
+
+        setAvailableGitHubRepos(repos)
+
+        const matchingCapture = recentCaptures.find(
+          (recentCapture) =>
+            recentCapture.captureMode === capture.captureMode &&
+            recentCapture.sourceUrl === currentCaptureSourceUrl
+        )
+        const conversationId = matchingCapture?.id ?? null
+
+        setSavedConversationId(conversationId)
+
+        if (!conversationId) {
+          setSelectedGitHubRepoFullNames([])
+          return
+        }
+
+        const selectedRepos = await getConversationGitHubRepos(conversationId)
+
+        if (cancelled) return
+
+        setSelectedGitHubRepoFullNames(selectedRepos)
+      } catch (error) {
+        if (cancelled) return
+
+        setAvailableGitHubRepos([])
+        setSelectedGitHubRepoFullNames([])
+        setGitHubRepoMessage(
+          error instanceof Error ? error.message : "Failed to load GitHub repos."
+        )
+      } finally {
+        if (!cancelled) {
+          setIsGitHubReposLoading(false)
+        }
+      }
+    }
+
+    void loadGitHubRepoState()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    authStatus,
+    canSave,
+    capture,
+    currentCaptureSourceUrl,
+    githubStatus.connected,
+    isOpen
+  ])
+
+  const handleToggleGitHubRepo = useCallback(
+    async (repoFullName: string) => {
+      if (
+        authStatus !== "signedIn" ||
+        !githubStatus.connected ||
+        !canSave ||
+        isSavingGitHubRepos
+      ) {
+        return
+      }
+
+      setIsSavingGitHubRepos(true)
+      setGitHubRepoMessage("")
+
+      try {
+        let conversationId = savedConversationId
+
+        if (!conversationId) {
+          setGitHubRepoMessage("Saving conversation before updating GitHub repos...")
+          conversationId = await handleSave()
+
+          if (!conversationId) {
+            setGitHubRepoMessage("Save this conversation first to choose GitHub repos.")
+            return
+          }
+        }
+
+        const nextSelection = selectedGitHubRepoFullNames.includes(repoFullName)
+          ? selectedGitHubRepoFullNames.filter((value) => value !== repoFullName)
+          : [...selectedGitHubRepoFullNames, repoFullName]
+
+        const savedRepos = await saveConversationGitHubRepos(
+          conversationId,
+          nextSelection
+        )
+
+        setSavedConversationId(conversationId)
+        setSelectedGitHubRepoFullNames(savedRepos)
+        setGitHubRepoMessage("")
+      } catch (error) {
+        setGitHubRepoMessage(
+          error instanceof Error ? error.message : "Failed to save GitHub repos."
+        )
+      } finally {
+        setIsSavingGitHubRepos(false)
+      }
+    },
+    [
+      authStatus,
+      canSave,
+      githubStatus.connected,
+      handleSave,
+      isSavingGitHubRepos,
+      savedConversationId,
+      selectedGitHubRepoFullNames
+    ]
+  )
 
   if (!isOpen) return null
 
@@ -436,10 +671,29 @@ export const SelectiveExporter = ({
         analysisInput={analysisInput}
         isSignedOut={isSignedOut}
         awaitingSignIn={awaitingSignIn}
+        githubButtonLabel={
+          authStatus === "signedIn"
+            ? githubStatus.connected
+              ? undefined
+              : "Connect GitHub"
+            : undefined
+        }
+        githubConnected={githubStatus.connected}
+        onGitHubClick={handleGitHubClick}
+        githubRepos={availableGitHubRepos}
+        selectedGitHubRepoFullNames={selectedGitHubRepoFullNames}
+        githubRepoMenuOpen={isGitHubRepoMenuOpen}
+        githubReposLoading={isGitHubReposLoading}
+        githubRepoSelectionBusy={isSavingGitHubRepos}
+        githubRepoMessage={githubRepoMessage}
+        onGitHubRepoMenuToggle={() =>
+          setIsGitHubRepoMenuOpen((currentValue) => !currentValue)
+        }
+        onGitHubRepoToggle={handleToggleGitHubRepo}
         onAnalysisInputChange={setAnalysisInput}
         onAnalysisSend={handleAnalysisSend}
         onBackToExport={goToExport}
-        onSave={handleSaveToDatabase}
+        onSave={handleSave}
         onSignInClick={handleSignInClick}
         onConfirmSignedIn={handleConfirmSignedIn}
       />
