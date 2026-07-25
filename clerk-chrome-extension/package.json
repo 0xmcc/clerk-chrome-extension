@@ -69,7 +69,9 @@
       "$CLERK_FRONTEND_API/*",
       "https://api.agentmail.to/*",
       "https://defuddle.md/*",
-      "https://www.youtube.com/*"
+      "https://www.youtube.com/*",
+      "http://127.0.0.1/*",
+      "http://localhost/*"
     ]
   }
 }

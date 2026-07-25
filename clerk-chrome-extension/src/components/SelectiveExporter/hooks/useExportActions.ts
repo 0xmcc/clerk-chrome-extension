@@ -8,6 +8,7 @@ import {
   buildYouTubeTranscriptMarkdown
 } from "~lib/exportCapture"
 import { saveRecentCapture } from "~lib/recentCaptures"
+import { syncCaptureToMomentum } from "../services/momentum"
 import { requestClerkToken } from "~utils/clerk"
 import { deriveConversationId, sanitizeFilename } from "~utils/conversation"
 import { detectPlatform, getPlatformLabel } from "~utils/platform"
@@ -132,6 +133,8 @@ interface UseExportActionsParams {
   aiEmailFrom?: string
   aiEmailApiKey?: string
   aiEmailProvider?: string
+  momentumSyncUrl?: string
+  momentumSyncToken?: string
 }
 
 interface ExportActionsState {
@@ -145,6 +148,7 @@ interface ExportActions {
   handleExport: () => void
   handleSendToAI: () => void
   handleSaveToDatabase: () => Promise<string | null>
+  handleSyncToMomentum: () => Promise<void>
   setHistoryFormat: (format: HistoryFormat) => void
   setExportState: (state: ExportState) => void
   setStatusMessage: (message: string) => void
@@ -165,7 +169,9 @@ export const useExportActions = ({
   aiEmail,
   aiEmailFrom,
   aiEmailApiKey,
-  aiEmailProvider
+  aiEmailProvider,
+  momentumSyncUrl,
+  momentumSyncToken
 }: UseExportActionsParams): ExportActionsState & ExportActions => {
   const [exportState, setExportState] = useState<ExportState>("idle")
   const [statusMessage, setStatusMessage] = useState("")
@@ -516,6 +522,51 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
     }
   }, [capture, exportState, platformLabel])
 
+  const handleSyncToMomentum = useCallback(async () => {
+    if (!capture || capture.captureMode === "page_markdown") return
+    if (
+      (capture.captureMode === "structured_conversation" &&
+        capture.messages.length === 0) ||
+      (capture.captureMode === "youtube_transcript" &&
+        capture.segments.length === 0) ||
+      exportState === "loading"
+    ) {
+      return
+    }
+
+    if (!momentumSyncUrl || !momentumSyncToken) {
+      setExportState("error")
+      setStatusMessage(
+        "Set the momentum Local Sync URL and token in Settings first."
+      )
+      return
+    }
+
+    setExportState("loading")
+    setStatusMessage("Syncing to momentum...")
+
+    try {
+      const result = await syncCaptureToMomentum(capture, {
+        url: momentumSyncUrl,
+        token: momentumSyncToken
+      })
+
+      if (!result.success) {
+        throw new Error(
+          result.error || `Sync failed with status ${result.status ?? "unknown"}`
+        )
+      }
+
+      setExportState("success")
+      setStatusMessage("Synced to momentum.")
+    } catch (error) {
+      setExportState("error")
+      setStatusMessage(
+        error instanceof Error ? error.message : "Momentum sync failed."
+      )
+    }
+  }, [capture, exportState, momentumSyncUrl, momentumSyncToken])
+
   const resetExportState = useCallback(() => {
     setExportState("idle")
     setStatusMessage("")
@@ -529,6 +580,7 @@ Do not repeat or summarize the conversation unless necessary. Continue from wher
     handleExport,
     handleSendToAI,
     handleSaveToDatabase,
+    handleSyncToMomentum,
     setHistoryFormat: setHistoryFormatSafe,
     setExportState,
     setStatusMessage,

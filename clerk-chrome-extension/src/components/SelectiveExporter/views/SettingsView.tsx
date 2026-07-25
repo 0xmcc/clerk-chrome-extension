@@ -3,6 +3,7 @@ import { DARK_THEME } from "../constants"
 import { AccountSection } from "./settings/AccountSection"
 import { ExportBehaviorSection } from "./settings/ExportBehaviorSection"
 import { GitHubSection } from "./settings/GitHubSection"
+import { MomentumSyncSection } from "./settings/MomentumSyncSection"
 import { SendToMyAISettingsSection } from "./settings/SendToMyAISettingsSection"
 
 interface SettingsViewProps {
@@ -22,6 +23,10 @@ interface SettingsViewProps {
   includeHidden: boolean
   onIncludeHiddenChange: (value: boolean) => void
   showSendToMyAI: boolean
+  momentumSyncUrl: string
+  momentumSyncToken: string
+  onMomentumSyncUrlChange: (value: string) => void
+  onMomentumSyncTokenChange: (value: string) => void
 }
 
 export const SettingsView = ({
@@ -40,7 +45,11 @@ export const SettingsView = ({
   onSignInClick,
   includeHidden,
   onIncludeHiddenChange,
-  showSendToMyAI
+  showSendToMyAI,
+  momentumSyncUrl,
+  momentumSyncToken,
+  onMomentumSyncUrlChange,
+  onMomentumSyncTokenChange
 }: SettingsViewProps) => (
   <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
     <div
@@ -68,6 +77,13 @@ export const SettingsView = ({
     <ExportBehaviorSection
       includeHidden={includeHidden}
       onIncludeHiddenChange={onIncludeHiddenChange}
+    />
+
+    <MomentumSyncSection
+      momentumSyncUrl={momentumSyncUrl}
+      momentumSyncToken={momentumSyncToken}
+      onMomentumSyncUrlChange={onMomentumSyncUrlChange}
+      onMomentumSyncTokenChange={onMomentumSyncTokenChange}
     />
 
     <AccountSection

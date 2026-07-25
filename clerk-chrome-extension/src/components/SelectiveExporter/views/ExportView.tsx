@@ -13,6 +13,7 @@ interface ExportViewProps {
   onCopy: () => void
   onExport: () => void
   onSendToAI: () => void
+  onSyncToMomentum?: () => void
   generateHistory: () => string
   previewContent?: ReactNode
 }
@@ -50,6 +51,7 @@ export const ExportView = ({
   onCopy,
   onExport,
   onSendToAI,
+  onSyncToMomentum,
   generateHistory,
   previewContent
 }: ExportViewProps) => {
@@ -198,6 +200,46 @@ export const ExportView = ({
               <polyline points="22,6 12,13 2,6" />
             </svg>
             {exportState === "loading" ? "Sending..." : "Send to AI"}
+          </button>
+        )}
+
+        {onSyncToMomentum && (
+          <button
+            onClick={onSyncToMomentum}
+            disabled={selectedCount === 0 || exportState === "loading"}
+            title="Sync this conversation to your local momentum archive"
+            style={{
+              border: `1px solid ${DARK_THEME.border}`,
+              borderRadius: "10px",
+              padding: "8px 12px",
+              fontSize: "12px",
+              background: selectedCount === 0 || exportState === "loading" ? DARK_THEME.surface : DARK_THEME.panel,
+              color: selectedCount === 0 || exportState === "loading" ? DARK_THEME.muted : DARK_THEME.text,
+              cursor: selectedCount === 0 || exportState === "loading" ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              transition: "all 0.2s"
+            }}
+            onMouseEnter={(e) => {
+              if (selectedCount > 0 && exportState !== "loading") {
+                e.currentTarget.style.background = DARK_THEME.surface
+                e.currentTarget.style.borderColor = DARK_THEME.accent
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (selectedCount > 0 && exportState !== "loading") {
+                e.currentTarget.style.background = DARK_THEME.panel
+                e.currentTarget.style.borderColor = DARK_THEME.border
+              }
+            }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12a9 9 0 0 1-9 9c-2.5 0-4.8-1-6.4-2.6L3 16" />
+              <path d="M3 12a9 9 0 0 1 9-9c2.5 0 4.8 1 6.4 2.6L21 8" />
+              <polyline points="21 3 21 8 16 8" />
+              <polyline points="3 21 3 16 8 16" />
+            </svg>
+            {exportState === "loading" ? "Syncing..." : "Sync to momentum"}
           </button>
         )}
       </div>

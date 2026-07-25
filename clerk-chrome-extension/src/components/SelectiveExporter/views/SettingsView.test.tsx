@@ -22,7 +22,11 @@ const baseProps = {
   onSignInClick: vi.fn(),
   includeHidden: false,
   onIncludeHiddenChange: vi.fn(),
-  showSendToMyAI: true
+  showSendToMyAI: true,
+  momentumSyncUrl: "http://127.0.0.1:4319",
+  momentumSyncToken: "",
+  onMomentumSyncUrlChange: vi.fn(),
+  onMomentumSyncTokenChange: vi.fn()
 }
 
 describe("SettingsView", () => {

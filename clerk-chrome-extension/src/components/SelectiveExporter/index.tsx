@@ -98,7 +98,11 @@ export const SelectiveExporter = ({
     aiEmailProvider,
     setAiEmailProvider,
     aiEmailApiKey,
-    setAiEmailApiKey
+    setAiEmailApiKey,
+    momentumSyncUrl,
+    setMomentumSyncUrl,
+    momentumSyncToken,
+    setMomentumSyncToken
   } = useSettingsStorage()
 
   // Get messages in order (must be before early return to maintain hook order)
@@ -151,6 +155,7 @@ export const SelectiveExporter = ({
     handleExport,
     handleSendToAI,
     handleSaveToDatabase,
+    handleSyncToMomentum,
     setHistoryFormat,
     setExportState,
     setStatusMessage,
@@ -166,7 +171,9 @@ export const SelectiveExporter = ({
     aiEmail,
     aiEmailFrom,
     aiEmailApiKey,
-    aiEmailProvider
+    aiEmailProvider,
+    momentumSyncUrl,
+    momentumSyncToken
   })
 
   // Analysis actions
@@ -610,6 +617,7 @@ export const SelectiveExporter = ({
                 onCopy={handleCopy}
                 onExport={handleExport}
                 onSendToAI={handleSendToAI}
+                onSyncToMomentum={handleSyncToMomentum}
                 showSendToMyAI={ENABLE_SEND_TO_MY_AI && isStructuredCapture}
                 generateHistory={generateHistory}
                 previewContent={
@@ -643,6 +651,10 @@ export const SelectiveExporter = ({
                 includeHidden={includeHiddenMessages}
                 onIncludeHiddenChange={setIncludeHiddenMessages}
                 showSendToMyAI={ENABLE_SEND_TO_MY_AI}
+                momentumSyncUrl={momentumSyncUrl}
+                momentumSyncToken={momentumSyncToken}
+                onMomentumSyncUrlChange={setMomentumSyncUrl}
+                onMomentumSyncTokenChange={setMomentumSyncToken}
               />
             )}
           </div>

@@ -8,6 +8,8 @@ interface SettingsState {
   aiEmailFrom: string
   aiEmailProvider: string
   aiEmailApiKey: string
+  momentumSyncUrl: string
+  momentumSyncToken: string
 }
 
 interface SettingsActions {
@@ -18,6 +20,8 @@ interface SettingsActions {
   setAiEmailFrom: (value: string) => void
   setAiEmailProvider: (value: string) => void
   setAiEmailApiKey: (value: string) => void
+  setMomentumSyncUrl: (value: string) => void
+  setMomentumSyncToken: (value: string) => void
 }
 
 /**
@@ -32,6 +36,10 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
   const [aiEmailFrom, setAiEmailFromState] = useState("")
   const [aiEmailProvider, setAiEmailProviderState] = useState("agentmail")
   const [aiEmailApiKey, setAiEmailApiKeyState] = useState("")
+  const [momentumSyncUrl, setMomentumSyncUrlState] = useState(
+    "http://127.0.0.1:4319"
+  )
+  const [momentumSyncToken, setMomentumSyncTokenState] = useState("")
 
   // Load from chrome.storage on mount
   useEffect(() => {
@@ -43,7 +51,9 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
         "aiEmail",
         "aiEmailFrom",
         "aiEmailProvider",
-        "aiEmailApiKey"
+        "aiEmailApiKey",
+        "momentumSyncUrl",
+        "momentumSyncToken"
       ],
       (result) => {
         if (result.analysisSystemPrompt)
@@ -57,6 +67,10 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
         if (result.aiEmailProvider)
           setAiEmailProviderState(result.aiEmailProvider)
         if (result.aiEmailApiKey) setAiEmailApiKeyState(result.aiEmailApiKey)
+        if (result.momentumSyncUrl)
+          setMomentumSyncUrlState(result.momentumSyncUrl)
+        if (result.momentumSyncToken)
+          setMomentumSyncTokenState(result.momentumSyncToken)
       }
     )
   }, [])
@@ -96,6 +110,16 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
     chrome.storage.local.set({ aiEmailApiKey: value })
   }
 
+  const setMomentumSyncUrl = (value: string) => {
+    setMomentumSyncUrlState(value)
+    chrome.storage.local.set({ momentumSyncUrl: value })
+  }
+
+  const setMomentumSyncToken = (value: string) => {
+    setMomentumSyncTokenState(value)
+    chrome.storage.local.set({ momentumSyncToken: value })
+  }
+
   return {
     analysisSystemPrompt,
     followupSystemPrompt,
@@ -110,6 +134,10 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
     aiEmailProvider,
     setAiEmailProvider,
     aiEmailApiKey,
-    setAiEmailApiKey
+    setAiEmailApiKey,
+    momentumSyncUrl,
+    setMomentumSyncUrl,
+    momentumSyncToken,
+    setMomentumSyncToken
   }
 }
