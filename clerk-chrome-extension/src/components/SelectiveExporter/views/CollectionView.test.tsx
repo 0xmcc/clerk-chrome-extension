@@ -57,6 +57,31 @@ describe("CollectionView", () => {
     expect(within(unsyncedRow).getByLabelText("Not synced")).toBeInTheDocument()
   })
 
+  it("states the sync state in words, not just a dot the eye can miss", () => {
+    render(
+      <CollectionView
+        {...baseProps}
+        conversations={[conv("synced"), conv("fresh")]}
+        syncedIds={["synced"]}
+      />
+    )
+
+    const syncedRow = screen.getByRole("button", { name: /Conversation synced/ })
+    const unsyncedRow = screen.getByRole("button", { name: /Conversation fresh/ })
+
+    expect(within(syncedRow).getByText("Synced")).toBeVisible()
+    expect(within(unsyncedRow).getByText("Not synced")).toBeVisible()
+  })
+
+  it("labels the unknown state in words too", () => {
+    render(
+      <CollectionView {...baseProps} conversations={[conv("a")]} status="error" />
+    )
+
+    const row = screen.getByRole("button", { name: /Conversation a/ })
+    expect(within(row).getByText("Unknown")).toBeVisible()
+  })
+
   it("selects a conversation on click, returning to the detail view", () => {
     const onSelect = vi.fn()
     render(
