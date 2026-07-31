@@ -31,33 +31,72 @@ function relativeTime(ms: number): string {
   return `${Math.floor(diff / 86_400_000)}d ago`
 }
 
-const StatusDot = ({
-  state
-}: {
-  state: "synced" | "unsynced" | "unknown"
-}) => {
-  const config = {
-    synced: { label: "Synced", color: DARK_THEME.accent, filled: true },
-    unsynced: { label: "Not synced", color: DARK_THEME.muted, filled: false },
-    unknown: { label: "Sync status unknown", color: DARK_THEME.muted, filled: false }
-  }[state]
+type RowSyncState = "synced" | "unsynced" | "unknown"
+
+/**
+ * Sync state as a readable badge. A bare dot is too easy to miss in a dense
+ * list, and answering "is this one archived?" at a glance is the entire job of
+ * this view — so the state is spelled out, with colour as a secondary cue.
+ */
+const StatusBadge = ({ state }: { state: RowSyncState }) => {
+  const config: Record<
+    RowSyncState,
+    { text: string; aria: string; color: string; background: string }
+  > = {
+    synced: {
+      text: "Synced",
+      aria: "Synced",
+      color: DARK_THEME.accent,
+      background: "rgba(139, 122, 255, 0.14)"
+    },
+    unsynced: {
+      text: "Not synced",
+      aria: "Not synced",
+      color: DARK_THEME.muted,
+      background: "transparent"
+    },
+    unknown: {
+      text: "Unknown",
+      aria: "Sync status unknown",
+      color: DARK_THEME.muted,
+      background: "transparent"
+    }
+  }
+  const { text, aria, color, background } = config[state]
 
   return (
     <span
-      aria-label={config.label}
-      title={config.label}
-      role="img"
+      aria-label={aria}
+      title={aria}
       style={{
+        alignItems: "center",
+        background,
+        border:
+          state === "synced" ? "none" : `1px solid ${DARK_THEME.borderSubtle}`,
+        borderRadius: "10px",
+        color,
+        display: "inline-flex",
         flexShrink: 0,
-        width: "7px",
-        height: "7px",
-        borderRadius: "50%",
-        marginTop: "5px",
-        background: config.filled ? config.color : "transparent",
-        border: config.filled ? "none" : `1.5px solid ${config.color}`,
-        opacity: state === "unknown" ? 0.4 : 1
-      }}
-    />
+        fontSize: "10px",
+        gap: "4px",
+        lineHeight: 1,
+        opacity: state === "unknown" ? 0.75 : 1,
+        padding: "3px 7px",
+        whiteSpace: "nowrap"
+      }}>
+      <span
+        aria-hidden="true"
+        style={{
+          width: "5px",
+          height: "5px",
+          borderRadius: "50%",
+          flexShrink: 0,
+          background: state === "synced" ? DARK_THEME.accent : "transparent",
+          border: state === "synced" ? "none" : `1px solid ${color}`
+        }}
+      />
+      {text}
+    </span>
   )
 }
 
@@ -240,8 +279,8 @@ export const CollectionView = ({
                 }}
                 style={{
                   display: "flex",
-                  alignItems: "flex-start",
-                  gap: "8px",
+                  alignItems: "center",
+                  gap: "10px",
                   padding: "8px 10px",
                   borderRadius: "6px",
                   cursor: "pointer",
@@ -258,7 +297,6 @@ export const CollectionView = ({
                 onMouseLeave={(e) => {
                   if (!isActive) e.currentTarget.style.background = "transparent"
                 }}>
-                <StatusDot state={state} />
                 <span
                   style={{
                     display: "flex",
@@ -291,6 +329,7 @@ export const CollectionView = ({
                     <span>{relativeTime(conv.lastSeenAt)}</span>
                   </span>
                 </span>
+                <StatusBadge state={state} />
               </div>
             )
           })
