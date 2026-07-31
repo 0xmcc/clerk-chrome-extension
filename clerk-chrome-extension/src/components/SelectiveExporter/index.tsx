@@ -38,7 +38,8 @@ import { AnalysisView } from "./views/AnalysisView"
 import { ExportView } from "./views/ExportView"
 import { Header } from "./views/Header"
 import { LinkedInHelperView } from "./views/LinkedInHelperView"
-import { MessageIndexView } from "./views/MessageIndexView"
+import { useMomentumSyncStatus } from "./hooks/useMomentumSyncStatus"
+import { CollectionView } from "./views/CollectionView"
 import { SettingsView } from "./views/SettingsView"
 import { SubHeader } from "./views/SubHeader"
 import { YouTubeTranscriptView } from "./views/YouTubeTranscriptView"
@@ -104,6 +105,21 @@ export const SelectiveExporter = ({
     momentumSyncToken,
     setMomentumSyncToken
   } = useSettingsStorage()
+
+  // Sync state for the collection view. Only queried while that view is open.
+  const conversationIds = useMemo(
+    () => conversations.map((conversation) => conversation.id),
+    [conversations]
+  )
+  const {
+    syncedIds: momentumSyncedIds,
+    status: momentumSyncStatus,
+    refetch: refetchMomentumSyncStatus
+  } = useMomentumSyncStatus(conversationIds, {
+    url: momentumSyncUrl,
+    token: momentumSyncToken,
+    enabled: view === "conversation_index"
+  })
 
   // Get messages in order (must be before early return to maintain hook order)
   const selectedMessages = useMemo(() => {
@@ -599,9 +615,12 @@ export const SelectiveExporter = ({
                 formatAnalysisText={formatAnalysisText}
               />
             ) : view === "conversation_index" ? (
-              <MessageIndexView
+              <CollectionView
                 conversations={conversations}
+                syncedIds={momentumSyncedIds}
+                status={momentumSyncStatus}
                 activeConvoKey={activeConvoKey}
+                onRetry={refetchMomentumSyncStatus}
                 onSelect={(key) => {
                   onSelectConversation?.(key)
                   goToExport()

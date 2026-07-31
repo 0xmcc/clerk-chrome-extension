@@ -16,7 +16,10 @@ import {
 } from "./lib/remotePageMarkdown"
 import { debug } from "./utils/debug"
 import { handleProxyFetchMessage } from "./utils/proxyFetch"
-import { handleMomentumSyncMessage } from "./utils/momentumSync"
+import {
+  handleMomentumStatusMessage,
+  handleMomentumSyncMessage
+} from "./utils/momentumSync"
 
 const publishableKey = process.env.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY
 const syncHost = process.env.PLASMO_PUBLIC_CLERK_SYNC_HOST
@@ -359,6 +362,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "momentumSync") {
     ;(async () => {
       const result = await handleMomentumSyncMessage(message)
+      sendResponse(result)
+    })()
+    return true
+  }
+
+  if (message.action === "momentumStatus") {
+    ;(async () => {
+      const result = await handleMomentumStatusMessage(message)
       sendResponse(result)
     })()
     return true
