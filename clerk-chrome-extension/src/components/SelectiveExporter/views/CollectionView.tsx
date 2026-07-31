@@ -95,14 +95,44 @@ export const CollectionView = ({
 
   if (conversations.length === 0) {
     return (
-      <div
-        style={{
-          color: DARK_THEME.muted,
-          fontSize: "13px",
-          textAlign: "center",
-          padding: "32px 0"
-        }}>
-        No conversations captured yet
+      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <div
+          style={{
+            alignItems: "center",
+            display: "flex",
+            flex: 1,
+            flexDirection: "column",
+            gap: "6px",
+            justifyContent: "center",
+            padding: "40px 24px",
+            textAlign: "center"
+          }}>
+          <span style={{ color: DARK_THEME.text, fontSize: "13px" }}>
+            No conversations captured yet
+          </span>
+          <span
+            style={{
+              color: DARK_THEME.muted,
+              fontSize: "11px",
+              lineHeight: 1.5,
+              maxWidth: "260px"
+            }}>
+            Open a conversation and it shows up here, with whether it has been
+            saved to your local archive.
+          </span>
+        </div>
+        <div
+          role="contentinfo"
+          style={{
+            borderTop: `1px solid ${DARK_THEME.borderSubtle}`,
+            color: DARK_THEME.muted,
+            fontSize: "10px",
+            marginTop: "6px",
+            padding: "6px 10px 2px",
+            textAlign: "right"
+          }}>
+          0 conversations
+        </div>
       </div>
     )
   }
