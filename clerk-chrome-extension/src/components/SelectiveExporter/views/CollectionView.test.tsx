@@ -164,10 +164,20 @@ describe("CollectionView", () => {
     expect(onRetry).toHaveBeenCalled()
   })
 
-  it("shows an empty state when nothing has been captured", () => {
+  it("shows an empty state that explains itself instead of looking like a blank panel", () => {
     render(<CollectionView {...baseProps} conversations={[]} />)
 
     expect(screen.getByText(/no conversations captured yet/i)).toBeInTheDocument()
+    // Must say *why* it is empty and what to do, or it reads as a broken panel.
+    expect(
+      screen.getByText(/open a conversation|browse|visit/i)
+    ).toBeInTheDocument()
+  })
+
+  it("still shows the footer count in the empty state so the view never looks dead", () => {
+    render(<CollectionView {...baseProps} conversations={[]} />)
+
+    expect(screen.getByRole("contentinfo")).toBeInTheDocument()
   })
 
   it("orders conversations most recently seen first", () => {
