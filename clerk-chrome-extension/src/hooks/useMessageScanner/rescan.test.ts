@@ -77,4 +77,46 @@ describe("createRescanHandler", () => {
       })
     )
   })
+
+  it("fetches the selected conversation instead of the conversation in the current URL", async () => {
+    const selectedId = "saved-conversation"
+    const modernUrl =
+      `/api/organizations/org-123/chat_conversations/${selectedId}?tree=True&rendering_mode=messages&render_all_tools=true&return_dangling_human_message=true`
+
+    vi.mocked(fetch).mockResolvedValue(
+      makeJsonResponse(`https://claude.ai${modernUrl}`, {
+        chat_messages: [{ uuid: "msg-1", sender: "human", text: "Saved message" }]
+      })
+    )
+
+    const { createRescanHandler } = await import("./rescan")
+    const handleInterceptorEvent = vi.fn()
+    const rescan = createRescanHandler({
+      capturedPlatform: "claude",
+      updateAllDerivedState: vi.fn(),
+      handleInterceptorEvent,
+      storeRef: {
+        current: new Map<string, Conversation>([
+          [
+            `claude:${selectedId}`,
+            {
+              id: selectedId,
+              platform: "claude",
+              orgId: "org-123",
+              messages: [],
+              hasFullHistory: false,
+              lastSeenAt: 0
+            }
+          ]
+        ])
+      }
+    })
+
+    await rescan(selectedId)
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      modernUrl,
+      expect.objectContaining({ credentials: "include" })
+    )
+  })
 })

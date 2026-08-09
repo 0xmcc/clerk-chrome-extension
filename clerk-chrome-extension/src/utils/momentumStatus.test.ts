@@ -91,4 +91,31 @@ describe("handleMomentumStatusMessage", () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain("ECONNREFUSED")
   })
+
+  it("recognizes a running older server when its status endpoint is unavailable", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "Not found" }), { status: 404 }))
+      .mockResolvedValueOnce(okResponse({ conversations: 10, messages: 20 }))
+
+    const result = await handleMomentumStatusMessage(
+      {
+        action: "momentumStatus",
+        url: "http://127.0.0.1:4319",
+        token: "tok",
+        ids: ["a"]
+      },
+      { fetchImpl }
+    )
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { statusUnsupported: true, synced: [] }
+    })
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      "http://127.0.0.1:4319/stats",
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer tok" }) })
+    )
+  })
 })

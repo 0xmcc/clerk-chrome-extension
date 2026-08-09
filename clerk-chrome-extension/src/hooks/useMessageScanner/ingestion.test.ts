@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
-import { createIngestionPipeline } from "./ingestion"
+import { createClaudeIngestionPipeline, createIngestionPipeline } from "./ingestion"
 import type { Conversation } from "./types"
 
 // Stub window.location for URL construction
@@ -63,6 +63,35 @@ describe("createIngestionPipeline", () => {
     await vi.runAllTimersAsync()
     expect(vi.mocked(fetch)).not.toHaveBeenCalled()
     expect(deps.upsertMany).not.toHaveBeenCalled()
+  })
+
+  it("retries when an early trigger runs before the auth token is available", async () => {
+    let authToken: string | null = null
+    const deps = makeDeps({ getAuthToken: vi.fn(() => authToken) })
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(makeListResponse(3, 3))
+    } as unknown as Response)
+
+    const pipeline = createIngestionPipeline(deps)
+
+    // Opening Collection View during page startup can trigger this before
+    // ChatGPT's authenticated traffic has exposed its token.
+    pipeline.trigger()
+    await vi.runAllTimersAsync()
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+
+    authToken = "late-jwt-token"
+    pipeline.trigger()
+    await vi.runAllTimersAsync()
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
+    expect(deps.upsertMany).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "conv-0" }),
+        expect.objectContaining({ id: "conv-2" })
+      ])
+    )
   })
 
   it("single page: fetches once and terminates when offset >= total", async () => {
@@ -200,6 +229,149 @@ describe("createIngestionPipeline", () => {
   })
 })
 
+describe("createClaudeIngestionPipeline", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubGlobal("fetch", vi.fn())
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("loads Claude's conversation index once an organization is available", async () => {
+    const upsertMany = vi.fn()
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        chat_conversations: [
+          {
+            uuid: "claude-conv-1",
+            name: "Claude conversation",
+            created_at: "2025-01-01T00:00:00.000Z",
+            updated_at: "2025-01-02T00:00:00.000Z"
+          }
+        ]
+      })
+    } as unknown as Response)
+
+    const pipeline = createClaudeIngestionPipeline({
+      getOrgId: () => "org-123",
+      upsertMany
+    })
+
+    pipeline.trigger()
+    await vi.runAllTimersAsync()
+
+    const [calledUrl, calledOptions] = vi.mocked(fetch).mock.calls[0]
+    expect(String(calledUrl)).toContain(
+      "/api/organizations/org-123/chat_conversations"
+    )
+    expect(String(calledUrl)).toContain("limit=100")
+    expect(calledOptions).toEqual(
+      expect.objectContaining({
+        credentials: "include",
+        headers: { accept: "application/json" }
+      })
+    )
+    expect(upsertMany).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: "claude-conv-1",
+        platform: "claude",
+        orgId: "org-123",
+        title: "Claude conversation",
+        messages: [],
+        hasFullHistory: false
+      })
+    ])
+  })
+
+  it("does not lock out a later load when the organization is not known yet", async () => {
+    let orgId: string | null = null
+    const upsertMany = vi.fn()
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ chat_conversations: [] })
+    } as unknown as Response)
+
+    const pipeline = createClaudeIngestionPipeline({
+      getOrgId: () => orgId,
+      upsertMany
+    })
+
+    pipeline.trigger()
+    await vi.runAllTimersAsync()
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+
+    orgId = "org-123"
+    pipeline.trigger()
+    await vi.runAllTimersAsync()
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
+  })
+
+  it("continues through Claude's paginated index until every conversation is loaded", async () => {
+    const upsertMany = vi.fn()
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          total: 150,
+          chat_conversations: Array.from({ length: 100 }, (_, index) => ({
+            uuid: `claude-conv-${index}`,
+            name: `Conversation ${index}`
+          }))
+        })
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          total: 150,
+          chat_conversations: Array.from({ length: 50 }, (_, index) => ({
+            uuid: `claude-conv-${index + 100}`,
+            name: `Conversation ${index + 100}`
+          }))
+        })
+      } as unknown as Response)
+
+    const pipeline = createClaudeIngestionPipeline({
+      getOrgId: () => "org-123",
+      upsertMany
+    })
+
+    pipeline.trigger()
+    await vi.runAllTimersAsync()
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2)
+    const urls = vi.mocked(fetch).mock.calls.map(([url]) => String(url))
+    expect(urls[0]).toContain("limit=100")
+    expect(urls[0]).toContain("offset=0")
+    expect(urls[1]).toContain("offset=100")
+    expect(upsertMany.mock.calls.flatMap(([conversations]) => conversations)).toHaveLength(150)
+  })
+
+  it("uses Claude's total even when the API caps a page below the requested limit", async () => {
+    const upsertMany = vi.fn()
+    const page = (offset: number) => ({
+      total_count: 100,
+      chat_conversations: Array.from({ length: 50 }, (_, index) => ({
+        uuid: `claude-conv-${offset + index}`
+      }))
+    })
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(page(0)) } as unknown as Response)
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(page(50)) } as unknown as Response)
+
+    createClaudeIngestionPipeline({
+      getOrgId: () => "org-123",
+      upsertMany
+    }).trigger()
+    await vi.runAllTimersAsync()
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2)
+    expect(String(vi.mocked(fetch).mock.calls[1][0])).toContain("offset=50")
+  })
+})
+
 describe("handlers onChatGPTListIntercepted integration", () => {
   it("callback is called after list upsert, not after detail events", async () => {
     const { createInterceptorEventHandler } = await import("./handlers")
@@ -251,5 +423,67 @@ describe("handlers onChatGPTListIntercepted integration", () => {
     })
 
     expect(onChatGPTListIntercepted).not.toHaveBeenCalled()
+  })
+
+  it("notifies the collection loader when an authenticated detail request arrives", async () => {
+    const { createInterceptorEventHandler } = await import("./handlers")
+    const onChatGPTAuthObserved = vi.fn()
+    const handler = createInterceptorEventHandler({
+      capturedPlatform: "chatgpt",
+      upsertMany: vi.fn(),
+      updateActiveMessagesFromStore: vi.fn(),
+      onChatGPTAuthObserved
+    })
+
+    handler({
+      source: "__echo_network_interceptor__",
+      url: "https://chatgpt.com/backend-api/conversation/c1",
+      method: "GET",
+      status: 200,
+      ok: true,
+      ts: Date.now(),
+      headers: { authorization: "Bearer late-jwt-token" },
+      data: {
+        id: "c1",
+        title: "Active conversation",
+        current_node: "node1",
+        mapping: {
+          node1: {
+            parent: null,
+            message: {
+              author: { role: "user" },
+              content: { content_type: "text", parts: ["hello"] }
+            }
+          }
+        }
+      }
+    })
+
+    expect(onChatGPTAuthObserved).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("handlers Claude collection integration", () => {
+  it("notifies the collection loader when Claude traffic identifies an organization", async () => {
+    const { createInterceptorEventHandler } = await import("./handlers")
+    const onClaudeOrganizationObserved = vi.fn()
+    const handler = createInterceptorEventHandler({
+      capturedPlatform: "claude",
+      upsertMany: vi.fn(),
+      updateActiveMessagesFromStore: vi.fn(),
+      onClaudeOrganizationObserved
+    })
+
+    handler({
+      source: "__echo_network_interceptor__",
+      url: "https://claude.ai/api/organizations/org-123/chat_conversations/conv-456",
+      method: "GET",
+      status: 200,
+      ok: true,
+      ts: Date.now(),
+      data: { chat_messages: [] }
+    })
+
+    expect(onClaudeOrganizationObserved).toHaveBeenCalledTimes(1)
   })
 })

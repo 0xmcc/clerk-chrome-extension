@@ -3,6 +3,8 @@ export interface Message {
   role: "user" | "assistant" | "system" | "tool"
   text: string
   authorName: string
+  /** Original platform message time, normalized to unix milliseconds. */
+  createdAt?: number
   // Kept for backward-compatibility with existing consumers/types.
   // In network mode this is a detached node (NOT scraped from DOM).
   node: Element

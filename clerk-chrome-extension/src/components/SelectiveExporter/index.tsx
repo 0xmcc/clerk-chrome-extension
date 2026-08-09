@@ -8,7 +8,6 @@ import {
 } from "react"
 
 import { ENABLE_SEND_TO_MY_AI } from "~config/features"
-import { loadRecentCaptures } from "~lib/recentCaptures"
 import {
   getConversationGitHubRepos,
   getGitHubAuthUrl,
@@ -18,9 +17,10 @@ import {
   type GitHubRepo,
   type GitHubStatus
 } from "~lib/github"
+import { loadRecentCaptures } from "~lib/recentCaptures"
 import { requestClerkAuthRefresh, requestClerkSignOut } from "~utils/clerk"
+import { conversationsNeedingSync } from "~utils/conversationSyncState"
 import { debug } from "~utils/debug"
-import type { HistoryFormat } from "./types"
 import { openSignInPage } from "~utils/navigation"
 import { detectPlatform, getPlatformLabel } from "~utils/platform"
 
@@ -32,14 +32,15 @@ import {
   useSettingsStorage,
   useViewState
 } from "./hooks"
-import type { SelectiveExporterProps } from "./types"
+import { useBulkMomentumSync } from "./hooks/useBulkMomentumSync"
+import { useMomentumSyncStatus } from "./hooks/useMomentumSyncStatus"
+import type { HistoryFormat, SelectiveExporterProps } from "./types"
 import { ActionArea } from "./views/ActionArea"
 import { AnalysisView } from "./views/AnalysisView"
+import { CollectionView } from "./views/CollectionView"
 import { ExportView } from "./views/ExportView"
 import { Header } from "./views/Header"
 import { LinkedInHelperView } from "./views/LinkedInHelperView"
-import { useMomentumSyncStatus } from "./hooks/useMomentumSyncStatus"
-import { CollectionView } from "./views/CollectionView"
 import { SettingsView } from "./views/SettingsView"
 import { SubHeader } from "./views/SubHeader"
 import { YouTubeTranscriptView } from "./views/YouTubeTranscriptView"
@@ -53,6 +54,7 @@ export const SelectiveExporter = ({
   conversations = [],
   activeConvoKey,
   onSelectConversation,
+  onLoadConversation,
   youtubeStatus,
   youtubeErrorMessage
 }: SelectiveExporterProps) => {
@@ -64,10 +66,17 @@ export const SelectiveExporter = ({
   >("unknown")
   const [awaitingSignIn, setAwaitingSignIn] = useState(false)
   const [includeHiddenMessages, setIncludeHiddenMessages] = useState(false)
-  const [githubStatus, setGitHubStatus] = useState<GitHubStatus>({ connected: false })
-  const [savedConversationId, setSavedConversationId] = useState<string | null>(null)
-  const [availableGitHubRepos, setAvailableGitHubRepos] = useState<GitHubRepo[]>([])
-  const [selectedGitHubRepoFullNames, setSelectedGitHubRepoFullNames] = useState<string[]>([])
+  const [githubStatus, setGitHubStatus] = useState<GitHubStatus>({
+    connected: false
+  })
+  const [savedConversationId, setSavedConversationId] = useState<string | null>(
+    null
+  )
+  const [availableGitHubRepos, setAvailableGitHubRepos] = useState<
+    GitHubRepo[]
+  >([])
+  const [selectedGitHubRepoFullNames, setSelectedGitHubRepoFullNames] =
+    useState<string[]>([])
   const [githubRepoMessage, setGitHubRepoMessage] = useState("")
   const [isGitHubRepoMenuOpen, setIsGitHubRepoMenuOpen] = useState(false)
   const [isGitHubReposLoading, setIsGitHubReposLoading] = useState(false)
@@ -75,17 +84,20 @@ export const SelectiveExporter = ({
 
   const isStructuredCapture = capture?.captureMode === "structured_conversation"
   const isYouTubeCapture = capture?.captureMode === "youtube_transcript"
-  const isYouTubeSurface = isYouTubeCapture || Boolean(youtubeStatus && youtubeStatus !== "idle")
+  const isYouTubeSurface =
+    isYouTubeCapture || Boolean(youtubeStatus && youtubeStatus !== "idle")
   const captureTitle =
     (isYouTubeCapture ? capture.videoTitle : capture?.title) ||
-    capture?.metadata.pageTitle || `${platformLabelRef.current} Conversation`
+    capture?.metadata.pageTitle ||
+    `${platformLabelRef.current} Conversation`
 
   // Derive isSignedOut for minimal churn (keeps existing prop names)
   const isSignedOut =
     authStatus === "signedOut" && (isStructuredCapture || isYouTubeCapture)
 
   // View state management (single enum - no boolean drift)
-  const { view, goToExport, goToSettings, goToConversationIndex } = useViewState()
+  const { view, goToExport, goToSettings, goToConversationIndex } =
+    useViewState()
 
   // Settings storage
   const {
@@ -103,7 +115,9 @@ export const SelectiveExporter = ({
     momentumSyncUrl,
     setMomentumSyncUrl,
     momentumSyncToken,
-    setMomentumSyncToken
+    setMomentumSyncToken,
+    conversationDateMode,
+    setConversationDateMode
   } = useSettingsStorage()
 
   // Sync state for the collection view. Only queried while that view is open.
@@ -113,12 +127,34 @@ export const SelectiveExporter = ({
   )
   const {
     syncedIds: momentumSyncedIds,
+    syncedAt: momentumSyncedAt,
     status: momentumSyncStatus,
     refetch: refetchMomentumSyncStatus
   } = useMomentumSyncStatus(conversationIds, {
     url: momentumSyncUrl,
     token: momentumSyncToken,
     enabled: view === "conversation_index"
+  })
+  const momentumConversationsNeedingSync = useMemo(
+    () =>
+      conversationsNeedingSync(
+        conversations,
+        momentumSyncedIds,
+        momentumSyncedAt
+      ),
+    [conversations, momentumSyncedAt, momentumSyncedIds]
+  )
+  const {
+    state: bulkMomentumSync,
+    sync: syncConversationsToMomentum,
+    retryFailed: retryFailedMomentumSyncs
+  } = useBulkMomentumSync({
+    url: momentumSyncUrl,
+    token: momentumSyncToken,
+    onComplete: refetchMomentumSyncStatus,
+    loadConversation: onLoadConversation
+      ? (conversation) => onLoadConversation(conversation.id)
+      : undefined
   })
 
   // Get messages in order (must be before early return to maintain hook order)
@@ -178,9 +214,10 @@ export const SelectiveExporter = ({
     generateHistory,
     resetExportState
   } = useExportActions({
-    capture: capture?.captureMode === "structured_conversation"
-      ? { ...capture, messages: selectedMessages }
-      : capture,
+    capture:
+      capture?.captureMode === "structured_conversation"
+        ? { ...capture, messages: selectedMessages }
+        : capture,
     historyFormat: "markdown",
     platformLabel: platformLabelRef.current,
     conversationTitle: captureTitle,
@@ -432,7 +469,9 @@ export const SelectiveExporter = ({
         setAvailableGitHubRepos([])
         setSelectedGitHubRepoFullNames([])
         setGitHubRepoMessage(
-          error instanceof Error ? error.message : "Failed to load GitHub repos."
+          error instanceof Error
+            ? error.message
+            : "Failed to load GitHub repos."
         )
       } finally {
         if (!cancelled) {
@@ -473,17 +512,23 @@ export const SelectiveExporter = ({
         let conversationId = savedConversationId
 
         if (!conversationId) {
-          setGitHubRepoMessage("Saving conversation before updating GitHub repos...")
+          setGitHubRepoMessage(
+            "Saving conversation before updating GitHub repos..."
+          )
           conversationId = await handleSave()
 
           if (!conversationId) {
-            setGitHubRepoMessage("Save this conversation first to choose GitHub repos.")
+            setGitHubRepoMessage(
+              "Save this conversation first to choose GitHub repos."
+            )
             return
           }
         }
 
         const nextSelection = selectedGitHubRepoFullNames.includes(repoFullName)
-          ? selectedGitHubRepoFullNames.filter((value) => value !== repoFullName)
+          ? selectedGitHubRepoFullNames.filter(
+              (value) => value !== repoFullName
+            )
           : [...selectedGitHubRepoFullNames, repoFullName]
 
         const savedRepos = await saveConversationGitHubRepos(
@@ -496,7 +541,9 @@ export const SelectiveExporter = ({
         setGitHubRepoMessage("")
       } catch (error) {
         setGitHubRepoMessage(
-          error instanceof Error ? error.message : "Failed to save GitHub repos."
+          error instanceof Error
+            ? error.message
+            : "Failed to save GitHub repos."
         )
       } finally {
         setIsSavingGitHubRepos(false)
@@ -590,7 +637,11 @@ export const SelectiveExporter = ({
             }}>
             {view === "youtube_transcript" ? (
               <YouTubeTranscriptView
-                segments={capture?.captureMode === "youtube_transcript" ? capture.segments : []}
+                segments={
+                  capture?.captureMode === "youtube_transcript"
+                    ? capture.segments
+                    : []
+                }
                 status={youtubeStatus ?? "idle"}
                 errorMessage={youtubeErrorMessage}
                 videoId={
@@ -618,9 +669,22 @@ export const SelectiveExporter = ({
               <CollectionView
                 conversations={conversations}
                 syncedIds={momentumSyncedIds}
+                syncedAt={momentumSyncedAt}
                 status={momentumSyncStatus}
                 activeConvoKey={activeConvoKey}
+                dateMode={conversationDateMode}
+                onDateModeChange={setConversationDateMode}
                 onRetry={refetchMomentumSyncStatus}
+                bulkSync={bulkMomentumSync}
+                onSyncUnsynced={() => {
+                  if (momentumSyncStatus !== "ready") return
+                  syncConversationsToMomentum(momentumConversationsNeedingSync)
+                }}
+                onResyncAll={() => {
+                  if (momentumSyncStatus !== "ready") return
+                  syncConversationsToMomentum(conversations)
+                }}
+                onRetryFailedSyncs={retryFailedMomentumSyncs}
                 onSelect={(key) => {
                   onSelectConversation?.(key)
                   goToExport()
@@ -642,12 +706,28 @@ export const SelectiveExporter = ({
                 previewContent={
                   isYouTubeSurface ? (
                     <YouTubeTranscriptView
-                      segments={capture?.captureMode === "youtube_transcript" ? capture.segments : []}
+                      segments={
+                        capture?.captureMode === "youtube_transcript"
+                          ? capture.segments
+                          : []
+                      }
                       status={youtubeStatus ?? "idle"}
                       errorMessage={youtubeErrorMessage}
-                      videoId={capture?.captureMode === "youtube_transcript" ? capture.videoId : undefined}
-                      videoTitle={capture?.captureMode === "youtube_transcript" ? capture.videoTitle : undefined}
-                      videoUrl={capture?.captureMode === "youtube_transcript" ? capture.videoUrl : undefined}
+                      videoId={
+                        capture?.captureMode === "youtube_transcript"
+                          ? capture.videoId
+                          : undefined
+                      }
+                      videoTitle={
+                        capture?.captureMode === "youtube_transcript"
+                          ? capture.videoTitle
+                          : undefined
+                      }
+                      videoUrl={
+                        capture?.captureMode === "youtube_transcript"
+                          ? capture.videoUrl
+                          : undefined
+                      }
                     />
                   ) : undefined
                 }

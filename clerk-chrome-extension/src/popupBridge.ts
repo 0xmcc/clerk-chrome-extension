@@ -34,12 +34,15 @@ export interface PopupSerializableMessage {
   role: "user" | "assistant" | "system" | "tool"
   text: string
   authorName: string
+  createdAt?: number
 }
 
 export interface PopupStructuredConversationCapture {
   captureMode: "structured_conversation"
   conversationKey: string
   title?: string
+  createdAt?: number
+  updatedAt?: number
   messages: PopupSerializableMessage[]
   metadata: CaptureMetadata
 }
@@ -372,11 +375,14 @@ export const serializePopupCapture = (
       captureMode: "structured_conversation",
       conversationKey: capture.conversationKey,
       title: capture.title,
+      createdAt: capture.createdAt,
+      updatedAt: capture.updatedAt,
       messages: capture.messages.map((message) => ({
         id: message.id,
         role: message.role,
         text: message.text,
-        authorName: message.authorName
+        authorName: message.authorName,
+        createdAt: message.createdAt
       })),
       metadata: capture.metadata
     }

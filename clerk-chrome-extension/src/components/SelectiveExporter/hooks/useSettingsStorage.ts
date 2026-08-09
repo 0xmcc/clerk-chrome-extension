@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
 
+import type { ConversationDateMode } from "../types"
+
 interface SettingsState {
   analysisSystemPrompt: string
   followupSystemPrompt: string
@@ -10,6 +12,7 @@ interface SettingsState {
   aiEmailApiKey: string
   momentumSyncUrl: string
   momentumSyncToken: string
+  conversationDateMode: ConversationDateMode
 }
 
 interface SettingsActions {
@@ -22,6 +25,7 @@ interface SettingsActions {
   setAiEmailApiKey: (value: string) => void
   setMomentumSyncUrl: (value: string) => void
   setMomentumSyncToken: (value: string) => void
+  setConversationDateMode: (value: ConversationDateMode) => void
 }
 
 /**
@@ -40,6 +44,8 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
     "http://127.0.0.1:4319"
   )
   const [momentumSyncToken, setMomentumSyncTokenState] = useState("")
+  const [conversationDateMode, setConversationDateModeState] =
+    useState<ConversationDateMode>("last_message")
 
   // Load from chrome.storage on mount
   useEffect(() => {
@@ -53,7 +59,8 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
         "aiEmailProvider",
         "aiEmailApiKey",
         "momentumSyncUrl",
-        "momentumSyncToken"
+        "momentumSyncToken",
+        "conversationDateMode"
       ],
       (result) => {
         if (result.analysisSystemPrompt)
@@ -71,6 +78,12 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
           setMomentumSyncUrlState(result.momentumSyncUrl)
         if (result.momentumSyncToken)
           setMomentumSyncTokenState(result.momentumSyncToken)
+        if (
+          result.conversationDateMode === "created" ||
+          result.conversationDateMode === "last_message"
+        ) {
+          setConversationDateModeState(result.conversationDateMode)
+        }
       }
     )
   }, [])
@@ -120,6 +133,11 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
     chrome.storage.local.set({ momentumSyncToken: value })
   }
 
+  const setConversationDateMode = (value: ConversationDateMode) => {
+    setConversationDateModeState(value)
+    chrome.storage.local.set({ conversationDateMode: value })
+  }
+
   return {
     analysisSystemPrompt,
     followupSystemPrompt,
@@ -138,6 +156,8 @@ export const useSettingsStorage = (): SettingsState & SettingsActions => {
     momentumSyncUrl,
     setMomentumSyncUrl,
     momentumSyncToken,
-    setMomentumSyncToken
+    setMomentumSyncToken,
+    conversationDateMode,
+    setConversationDateMode
   }
 }

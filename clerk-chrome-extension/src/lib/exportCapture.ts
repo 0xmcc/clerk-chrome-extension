@@ -8,6 +8,7 @@ interface ExportPayloadMessage {
   role: "user" | "assistant" | "system" | "tool"
   content: string
   tokens: number
+  createTime?: number
   metadata: Record<string, unknown>
 }
 
@@ -15,6 +16,8 @@ export interface CaptureExportPayload {
   conversationId: string
   title: string
   model: string
+  createTime?: number
+  updateTime?: number
   selectedMessageIds: string[]
   messages: ExportPayloadMessage[]
   metadata: {
@@ -33,12 +36,15 @@ interface SerializableStructuredMessage {
   role: "user" | "assistant" | "system" | "tool"
   text: string
   authorName?: string
+  createdAt?: number
 }
 
 interface SerializableStructuredCapture {
   captureMode: "structured_conversation"
   conversationKey: string
   title?: string
+  createdAt?: number
+  updatedAt?: number
   messages: SerializableStructuredMessage[]
   metadata: CaptureMetadata
 }
@@ -59,6 +65,11 @@ export type SerializableExportCapture =
 
 export const estimateTokens = (text: string): number =>
   Math.max(1, Math.ceil(text.length / 4))
+
+const unixMillisToSeconds = (value: number | undefined): number | undefined =>
+  typeof value === "number" && Number.isFinite(value)
+    ? Math.trunc(value / 1000)
+    : undefined
 
 export const getCaptureCount = (capture: SerializableExportCapture): number =>
   capture.captureMode === "structured_conversation"
@@ -88,6 +99,7 @@ export const buildCaptureExportPayload = (
       role: message.role,
       content: message.text,
       tokens: estimateTokens(message.text),
+      createTime: unixMillisToSeconds(message.createdAt),
       metadata: {
         extensionMessageId: message.id,
         senderName: message.authorName
@@ -98,6 +110,8 @@ export const buildCaptureExportPayload = (
       conversationId,
       title: capture.title || capture.metadata.pageTitle || "Conversation",
       model: capture.metadata.platform.toLowerCase(),
+      createTime: unixMillisToSeconds(capture.createdAt),
+      updateTime: unixMillisToSeconds(capture.updatedAt),
       selectedMessageIds: messages.map((message) => message.id),
       messages,
       metadata: {

@@ -3,6 +3,19 @@ import {
   INTERCEPTOR_READY_SIGNAL,
   INTERCEPTOR_SOURCE
 } from "~config/interceptor"
+import type { InterceptorEvent } from "./types"
+
+export interface InterceptorPayload {
+  source: string
+  url: string
+  method?: string
+  status?: number
+  ok?: boolean
+  ts?: number
+  data?: unknown
+  headers?: Record<string, string>
+  _seq?: number
+}
 
 export const READY_SIGNAL_RETRY_INTERVAL_MS = 250
 export const READY_SIGNAL_MAX_ATTEMPTS = 20
@@ -21,16 +34,7 @@ export const isInterceptorReadyAckEvent = (event: MessageEvent): boolean => {
 
 export const isInterceptorPayloadEvent = (
   event: MessageEvent
-): event is MessageEvent<{
-  source: string
-  url: string
-  method?: string
-  status?: number
-  ok?: boolean
-  ts?: number
-  data?: unknown
-  _seq?: number
-}> => {
+): event is MessageEvent<InterceptorPayload> => {
   return (
     isSameWindowMessageEvent(event) &&
     typeof event.data === "object" &&
@@ -38,6 +42,20 @@ export const isInterceptorPayloadEvent = (
     (event.data as { source?: string }).source === INTERCEPTOR_SOURCE
   )
 }
+
+/** Convert the window payload without dropping request metadata such as auth headers. */
+export const toInterceptorEvent = (
+  data: InterceptorPayload
+): InterceptorEvent => ({
+  source: data.source,
+  url: data.url,
+  method: data.method,
+  status: data.status,
+  ok: data.ok,
+  ts: data.ts,
+  data: data.data,
+  headers: data.headers
+})
 
 export const startReadySignalHandshake = (): (() => void) => {
   let attempts = 0

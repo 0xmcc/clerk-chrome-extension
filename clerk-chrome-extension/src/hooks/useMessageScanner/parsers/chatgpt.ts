@@ -105,6 +105,7 @@ const parseTree = (
       role,
       text,
       authorName,
+      createdAt: toMillis(msg?.create_time),
       node: createDetachedNode(id)
     })
   }
@@ -158,7 +159,7 @@ const parseLinear = (
   const platformLabel = getPlatformLabel("chatgpt")
 
   // Convert to Message objects
-  return allNodes.map(({ node }, idx) => {
+  return allNodes.map(({ node, createTime }, idx) => {
     const msg = node.message as Record<string, unknown>
     const author = msg?.author as Record<string, unknown>
     const role = roleFromChatGPTAuthor(author?.role)
@@ -171,6 +172,7 @@ const parseLinear = (
       role,
       text,
       authorName,
+      createdAt: toMillis(createTime),
       node: createDetachedNode(id)
     }
   })

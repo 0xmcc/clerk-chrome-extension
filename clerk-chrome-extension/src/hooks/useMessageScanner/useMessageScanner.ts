@@ -1,19 +1,31 @@
-import { useCallback, useEffect, useMemo, useState, useRef } from "react"
-import { INTERCEPTOR_SOURCE } from "~config/interceptor"
-import { createIngestionPipeline } from "./ingestion"
-import { getChatGPTAuthToken, loadPersistedState } from "./store"
-import { detectPlatform } from "~utils/platform"
-import { debug } from "~utils/debug"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import type { InterceptorEvent } from "./types"
-import { isCapturedPlatform, getConversationKey, getActiveConversationIdFromUrl } from "./utils"
-import { useConversationStore, useActiveMessages } from "./state"
+import { debug } from "~utils/debug"
+import { detectPlatform } from "~utils/platform"
+
 import { createInterceptorEventHandler } from "./handlers"
-import { createRescanHandler } from "./rescan"
 import {
   isInterceptorPayloadEvent,
-  startReadySignalHandshake
+  startReadySignalHandshake,
+  toInterceptorEvent
 } from "./handshake"
+import {
+  createClaudeIngestionPipeline,
+  createIngestionPipeline
+} from "./ingestion"
+import { createRescanHandler } from "./rescan"
+import { useActiveMessages, useConversationStore } from "./state"
+import {
+  getChatGPTAuthToken,
+  getClaudeOrgId,
+  loadPersistedState
+} from "./store"
+import type { InterceptorEvent } from "./types"
+import {
+  getActiveConversationIdFromUrl,
+  getConversationKey,
+  isCapturedPlatform
+} from "./utils"
 
 // Instrumentation helper for message flow tracking
 function logFlow(step: string, details?: Record<string, unknown>) {
@@ -45,14 +57,23 @@ export const useMessageScanner = () => {
   } = useConversationStore()
 
   // Active messages state
-  const { messages, conversationTitle, updateActiveMessagesFromStore, activeMessageCount } = useActiveMessages(capturedPlatform, storeRef)
+  const {
+    messages,
+    conversationTitle,
+    updateActiveMessagesFromStore,
+    activeMessageCount
+  } = useActiveMessages(capturedPlatform, storeRef)
 
   // Conversation key for URL change detection
-  const [conversationKey, setConversationKey] = useState<string>(getConversationKey())
+  const [conversationKey, setConversationKey] =
+    useState<string>(getConversationKey())
 
   // Compute stable activeConvoKey for guard checks
-  const activeId = capturedPlatform ? getActiveConversationIdFromUrl(capturedPlatform) : null
-  const activeConvoKey = capturedPlatform && activeId ? `${capturedPlatform}:${activeId}` : null
+  const activeId = capturedPlatform
+    ? getActiveConversationIdFromUrl(capturedPlatform)
+    : null
+  const activeConvoKey =
+    capturedPlatform && activeId ? `${capturedPlatform}:${activeId}` : null
 
   // Split update functions - no callback nesting
   const updateAllDerivedState = useCallback(() => {
@@ -60,23 +81,34 @@ export const useMessageScanner = () => {
     updateActiveMessagesFromStore()
   }, [updateConversationListFromStore, updateActiveMessagesFromStore])
 
-  // Ingestion pipeline — created once per platform, chatgpt only
-  const ingestionPipelineRef = useRef<ReturnType<typeof createIngestionPipeline> | null>(null)
+  // Ingestion pipeline — created once per supported platform.
+  const ingestionPipelineRef = useRef<ReturnType<
+    typeof createIngestionPipeline
+  > | null>(null)
   if (!ingestionPipelineRef.current && capturedPlatform === "chatgpt") {
     ingestionPipelineRef.current = createIngestionPipeline({
       upsertMany,
-      getAuthToken: getChatGPTAuthToken,
+      getAuthToken: getChatGPTAuthToken
+    })
+  }
+  if (!ingestionPipelineRef.current && capturedPlatform === "claude") {
+    ingestionPipelineRef.current = createClaudeIngestionPipeline({
+      upsertMany,
+      getOrgId: getClaudeOrgId
     })
   }
 
   // Create interceptor handler ONCE with useMemo (not per-event)
   const interceptorHandler = useMemo(
-    () => createInterceptorEventHandler({
-      capturedPlatform,
-      upsertMany,
-      updateActiveMessagesFromStore,
-      onChatGPTListIntercepted: () => ingestionPipelineRef.current?.trigger(),
-    }),
+    () =>
+      createInterceptorEventHandler({
+        capturedPlatform,
+        upsertMany,
+        updateActiveMessagesFromStore,
+        onChatGPTListIntercepted: () => ingestionPipelineRef.current?.trigger(),
+        onChatGPTAuthObserved: () => ingestionPipelineRef.current?.trigger(),
+        onClaudeOrganizationObserved: () => ingestionPipelineRef.current?.trigger()
+      }),
     [capturedPlatform, upsertMany, updateActiveMessagesFromStore]
   )
 
@@ -88,15 +120,20 @@ export const useMessageScanner = () => {
   )
 
   // Create rescan handler
-  const rescan = useCallback(async () => {
-    const handler = createRescanHandler({
-      capturedPlatform,
-      updateAllDerivedState,
-      handleInterceptorEvent,
-      storeRef
-    })
-    await handler()
-  }, [capturedPlatform, updateAllDerivedState, handleInterceptorEvent, storeRef])
+  const rescan = useCallback(
+    async (conversationId?: string) => {
+      const handler = createRescanHandler({
+        capturedPlatform,
+        updateAllDerivedState,
+        handleInterceptorEvent,
+        storeRef
+      })
+      await handler(conversationId)
+      if (!conversationId || !capturedPlatform) return undefined
+      return storeRef.current.get(`${capturedPlatform}:${conversationId}`)
+    },
+    [capturedPlatform, updateAllDerivedState, handleInterceptorEvent, storeRef]
+  )
 
   // Effect: Restore persisted conversations and auth token on mount (survives page refresh)
   useEffect(() => {
@@ -104,7 +141,11 @@ export const useMessageScanner = () => {
       if (conversations.length > 0) {
         upsertMany(conversations)
       }
-      if (authTokenRestored && capturedPlatform === "chatgpt" && ingestionPipelineRef.current) {
+      if (
+        authTokenRestored &&
+        capturedPlatform === "chatgpt" &&
+        ingestionPipelineRef.current
+      ) {
         ingestionPipelineRef.current.trigger()
       }
     })
@@ -133,15 +174,7 @@ export const useMessageScanner = () => {
         url: data.url
       })
 
-      handleInterceptorEvent({
-        source: INTERCEPTOR_SOURCE,
-        url: data.url,
-        method: data.method,
-        status: data.status,
-        ok: data.ok,
-        ts: data.ts,
-        data: data.data
-      })
+      handleInterceptorEvent(toInterceptorEvent(data))
 
       processedMessageCount.current++
       logFlow("MESSAGE_PROCESS_COMPLETE", {
@@ -178,7 +211,10 @@ export const useMessageScanner = () => {
 
   // Effect: URL change detection - always update state, throttled rescan
   useEffect(() => {
-    debug.any(["messages", "scanner"], "Setting up URL change detection interval")
+    debug.any(
+      ["messages", "scanner"],
+      "Setting up URL change detection interval"
+    )
     const interval = window.setInterval(() => {
       const nextKey = getConversationKey()
       if (nextKey !== conversationKey) {
@@ -195,14 +231,18 @@ export const useMessageScanner = () => {
         updateAllDerivedState()
 
         // Compute activeConvoKey for this URL
-        const nextActiveId = capturedPlatform ? getActiveConversationIdFromUrl(capturedPlatform) : null
-        const nextActiveConvoKey = capturedPlatform && nextActiveId
-          ? `${capturedPlatform}:${nextActiveId}`
+        const nextActiveId = capturedPlatform
+          ? getActiveConversationIdFromUrl(capturedPlatform)
           : null
+        const nextActiveConvoKey =
+          capturedPlatform && nextActiveId
+            ? `${capturedPlatform}:${nextActiveId}`
+            : null
 
         // Throttled rescan with cooldown-based retry (not permanent lockout)
         if (nextActiveConvoKey) {
-          const lastAttempt = rescanAttemptsRef.current.get(nextActiveConvoKey) ?? 0
+          const lastAttempt =
+            rescanAttemptsRef.current.get(nextActiveConvoKey) ?? 0
           const now = Date.now()
           const convo = storeRef.current.get(nextActiveConvoKey)
 
@@ -216,8 +256,14 @@ export const useMessageScanner = () => {
           })
 
           // Only rescan if: missing/empty AND (never tried OR cooldown expired)
-          if ((!convo || !convo.messages.length) && (now - lastAttempt > RESCAN_COOLDOWN_MS)) {
-            debug.any(["messages", "scanner"], "URL change: Conversation missing/incomplete, triggering rescan in 300ms")
+          if (
+            (!convo || !convo.messages.length) &&
+            now - lastAttempt > RESCAN_COOLDOWN_MS
+          ) {
+            debug.any(
+              ["messages", "scanner"],
+              "URL change: Conversation missing/incomplete, triggering rescan in 300ms"
+            )
             rescanAttemptsRef.current.set(nextActiveConvoKey, now)
             setTimeout(() => rescan(), 300)
           }
@@ -226,10 +272,19 @@ export const useMessageScanner = () => {
     }, 400)
 
     return () => {
-      debug.any(["messages", "scanner"], "Cleaning up URL change detection interval")
+      debug.any(
+        ["messages", "scanner"],
+        "Cleaning up URL change detection interval"
+      )
       window.clearInterval(interval)
     }
-  }, [conversationKey, updateAllDerivedState, capturedPlatform, storeRef, rescan])
+  }, [
+    conversationKey,
+    updateAllDerivedState,
+    capturedPlatform,
+    storeRef,
+    rescan
+  ])
 
   return {
     messages,

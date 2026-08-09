@@ -30,6 +30,7 @@ describe("useMomentumSyncStatus", () => {
 
     await waitFor(() => expect(result.current.status).toBe("ready"))
     expect(result.current.syncedIds).toEqual(["a"])
+    expect(result.current.syncedAt).toEqual({ a: 1 })
   })
 
   it("reports error when the server is unreachable", async () => {
@@ -44,6 +45,24 @@ describe("useMomentumSyncStatus", () => {
     )
 
     await waitFor(() => expect(result.current.status).toBe("error"))
+    expect(result.current.syncedIds).toEqual([])
+  })
+
+  it("reports an available server with unsupported per-conversation status", async () => {
+    sendMessage.mockResolvedValue({
+      success: true,
+      data: { synced: [], statusUnsupported: true }
+    })
+
+    const { result } = renderHook(() =>
+      useMomentumSyncStatus(ids, {
+        url: "http://127.0.0.1:4319",
+        token: "tok",
+        enabled: true
+      })
+    )
+
+    await waitFor(() => expect(result.current.status).toBe("unsupported"))
     expect(result.current.syncedIds).toEqual([])
   })
 

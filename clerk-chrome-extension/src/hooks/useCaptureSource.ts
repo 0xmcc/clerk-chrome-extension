@@ -22,6 +22,8 @@ interface UseCaptureSourceParams {
   messages: Message[]
   conversationKey: string
   conversationTitle?: string
+  conversationCreatedAt?: number
+  conversationUpdatedAt?: number
   youtubeSegments?: TranscriptSegment[]
   youtubeStatus?: TranscriptStatus
   youtubeTitle?: string
@@ -41,6 +43,8 @@ export const useCaptureSource = ({
   messages,
   conversationKey,
   conversationTitle,
+  conversationCreatedAt,
+  conversationUpdatedAt,
   youtubeSegments,
   youtubeStatus,
   youtubeTitle
@@ -106,6 +110,8 @@ export const useCaptureSource = ({
           captureMode: "structured_conversation",
           conversationKey,
           title: conversationTitle,
+          createdAt: conversationCreatedAt,
+          updatedAt: conversationUpdatedAt,
           messages,
           metadata: {
             sourceUrl,
@@ -136,7 +142,9 @@ export const useCaptureSource = ({
     return null
   }, [
     conversationKey,
+    conversationCreatedAt,
     conversationTitle,
+    conversationUpdatedAt,
     isOpen,
     messages,
     pageTitle,

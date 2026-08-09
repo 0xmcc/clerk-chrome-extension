@@ -102,15 +102,23 @@ describe("useCaptureSource", () => {
             role: "user",
             text: "Hello",
             authorName: "User",
+            createdAt: 1_700_000_010_000,
             node: document.createElement("div")
           }
         ],
         conversationKey: "chatgpt:test",
-        conversationTitle: "Test Chat"
+        conversationTitle: "Test Chat",
+        conversationCreatedAt: 1_700_000_000_000,
+        conversationUpdatedAt: 1_700_000_100_000
       })
     )
 
-    expect(result.current.capture?.captureMode).toBe("structured_conversation")
+    expect(result.current.capture).toMatchObject({
+      captureMode: "structured_conversation",
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_100_000,
+      messages: [{ createdAt: 1_700_000_010_000 }]
+    })
     expect(resolvePageMarkdownCaptureMock).not.toHaveBeenCalled()
   })
 })

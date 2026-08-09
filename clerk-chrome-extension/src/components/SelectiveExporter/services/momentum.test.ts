@@ -6,9 +6,21 @@ const capture: SerializableExportCapture = {
   captureMode: "structured_conversation",
   conversationKey: "abc-123",
   title: "Selling Desk Converter Photo",
+  createdAt: 1_700_000_000_000,
+  updatedAt: 1_700_000_100_000,
   messages: [
-    { id: "m1", role: "user", text: "give me the perfect prompt" },
-    { id: "m2", role: "assistant", text: "here is a clear pattern" }
+    {
+      id: "m1",
+      role: "user",
+      text: "give me the perfect prompt",
+      createdAt: 1_700_000_010_000
+    },
+    {
+      id: "m2",
+      role: "assistant",
+      text: "here is a clear pattern",
+      createdAt: 1_700_000_020_000
+    }
   ],
   metadata: {
     sourceUrl: "https://chatgpt.com/c/abc-123",
@@ -39,6 +51,12 @@ describe("syncCaptureToMomentum", () => {
     expect(sent.token).toBe("tok")
     expect(sent.payload.title).toBe("Selling Desk Converter Photo")
     expect(sent.payload.messages).toHaveLength(2)
+    expect(sent.payload.createTime).toBe(1_700_000_000)
+    expect(sent.payload.updateTime).toBe(1_700_000_100)
+    expect(sent.payload.messages.map((message: { createTime?: number }) => message.createTime)).toEqual([
+      1_700_000_010,
+      1_700_000_020
+    ])
     expect(sent.payload.metadata.capturedAt).toBe("2026-07-25T10:00:00.000Z")
     expect(sent.payload.metadata.source).toBe("extension")
   })

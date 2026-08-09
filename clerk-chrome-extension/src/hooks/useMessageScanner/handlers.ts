@@ -18,10 +18,21 @@ export interface InterceptorEventHandlerDeps {
   upsertMany: (conversations: Conversation[]) => void
   updateActiveMessagesFromStore: () => void
   onChatGPTListIntercepted?: () => void
+  /** Called after any ChatGPT request exposes an authorization token. */
+  onChatGPTAuthObserved?: () => void
+  /** Called after Claude traffic identifies an organization. */
+  onClaudeOrganizationObserved?: () => void
 }
 
 export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps) => {
-  const { capturedPlatform, upsertMany, updateActiveMessagesFromStore, onChatGPTListIntercepted } = deps
+  const {
+    capturedPlatform,
+    upsertMany,
+    updateActiveMessagesFromStore,
+    onChatGPTListIntercepted,
+    onChatGPTAuthObserved,
+    onClaudeOrganizationObserved
+  } = deps
 
   return (evt: InterceptorEvent) => {
     logFlow("HANDLER_ENTRY", { url: evt?.url, hasData: !!evt?.data })
@@ -65,6 +76,7 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
           tokenPrefix: extractedAuthToken.substring(0, 30) + "..."
         })
         setChatGPTAuthToken(extractedAuthToken)
+        onChatGPTAuthObserved?.()
       } else if (evt.headers) {
         logFlow("CHATGPT_AUTH_TOKEN_MISSING", { 
           hasHeaders: true,
@@ -140,6 +152,7 @@ export const createInterceptorEventHandler = (deps: InterceptorEventHandlerDeps)
       const extractedOrgId = extractClaudeOrgId(url.pathname)
       if (extractedOrgId) {
         setClaudeOrgId(extractedOrgId)
+        onClaudeOrganizationObserved?.()
       }
 
       if (matchClaudeList(url)) {

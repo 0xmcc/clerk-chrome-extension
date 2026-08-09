@@ -235,9 +235,13 @@ export function buildClaudeDetailUrls(orgId: string, conversationId: string): st
  * Build Claude conversation list URLs (returns both possible formats).
  */
 export function buildClaudeListUrls(orgId: string): string[] {
-  const templates = Array.isArray(ENDPOINTS.claude.list) 
-    ? ENDPOINTS.claude.list 
+  const templates = Array.isArray(ENDPOINTS.claude.list)
+    ? [...ENDPOINTS.claude.list]
     : [ENDPOINTS.claude.list]
+
+  // Claude's current UI uses `chat_conversations`; retain the older endpoint
+  // as a fallback for organizations still served by the legacy API.
+  templates.sort((a, b) => Number(b.includes("/chat_conversations")) - Number(a.includes("/chat_conversations")))
   
   return templates.map(template => 
     fillTemplate(template, { orgId })

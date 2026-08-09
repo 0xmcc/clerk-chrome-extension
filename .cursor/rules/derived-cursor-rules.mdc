@@ -1,0 +1,93 @@
+---
+description: AI rules derived by SpecStory from the project AI interaction history
+applyTo: *
+---
+
+## PROJECT OVERVIEW
+
+The Chrome extension should be positioned as universal search over all user data, specifically AI work and captured context from sources like ChatGPT, Claude, and web pages. The extension's primary function is to capture, normalize, and sync data, while the app focuses on search, filter, inspect, and reuse functionalities. Exporting becomes a secondary action within this framework.
+
+## CODE STYLE
+
+## FOLDER ORGANIZATION
+
+## TECH STACK
+
+## PROJECT-SPECIFIC STANDARDS
+
+- The application should distinguish between two product surfaces: an in-page exporter drawer for live capture and a broader app for workspace management.
+- The in-page exporter (SelectiveExporter) is scoped to the currently open conversation and assumes a single active capture. It is driven by one `capture` plus one `conversationKey`, and it resets when the active conversation changes in `src/components/SelectiveExporter/index.tsx`.
+- The broader app models a workspace with a conversations list and a dedicated conversation route in `spaces/SpacesApp.tsx`, `spaces/pages/WorkspacePage.tsx`, and `spaces/pages/ConversationPage.tsx`.
+- The workspace app should feature a conversation index (searchable/filterable list), conversation detail (transcript viewer with actions), and bulk actions (export selected, filtered, or all).
+- "Export all" functionality should not load every transcript into the index page client-side. Implement a background/server-side job or a batched API flow for scalability. The save flow should continue to treat conversations as durable backend records via `POST /v1/conversations/export` in `src/components/SelectiveExporter/hooks/useExportActions.ts`.
+- The WorkspacePage should function as a search/results page, not a plain inbox list. The ConversationPage should serve as the detail viewer.
+- Treat `WorkspacePage` as a search/results page, not a plain inbox list.
+- Keep `ConversationPage` as the detail viewer.
+- Move export to a secondary action on results/detail.
+- For universal search functionality, use the ChatGPT list endpoint (`/backend-api/conversations`) to build the master index of all conversation IDs/titles/timestamps. This endpoint alone is not sufficient to fetch all conversation contents. The detail endpoint should be used as the hydration endpoint.
+- When retrieving the entire list of conversations from the ChatGPT list endpoint, paginate using the `offset` and `limit` parameters.
+- Implement a two-phase ingestion pipeline: Phase 1 indexes lightweight metadata for every conversation quickly. Phase 2 hydrates full transcripts incrementally, prioritized by recency, user opens, or search demand.
+- Store distinct entities for `conversation summary records` and `conversation content records` rather than one overloaded blob.
+- When implementing the two-phase ChatGPT conversation ingestion pipeline (described in detail in the document "2026-03-08_07-51Z-two-phase-chatgpt-conversation-ingestion-pipeline.md"), be aware that the cached ChatGPT auth token currently includes the full `Bearer ...` value. Therefore, the fetch helper in `src/hooks/useMessageScanner/ingestion.ts` must strip the `Bearer ` prefix from the token before adding it to the `Authorization` header, to avoid sending `Bearer Bearer ...`.
+- Adopt a lazy hydration strategy where full transcripts are fetched only when the user opens a conversation or when the UI actually needs message bodies. The scanner already has a lazy detail-fetch path tied to navigation.
+- The preferred ingestion pipeline should follow these steps:
+    1. Intercept the first list response and cache auth as today.
+    2. Run a background metadata-only pagination pass over `/backend-api/conversations`.
+    3. Upsert shells with `hasFullHistory: false`.
+    4. Do not proactively fetch transcript details in bulk.
+    5. Let existing URL-driven rescan hydrate a conversation when the user opens it.
+    6. Optionally add a manual “hydrate now” action from the conversation list if prefetch on explicit user intent is desired.
+- When creating new skills, follow these guidelines:
+    - Skills can be stored either as personal skills in `~/.cursor/skills/` or as project skills in `.cursor/skills/`.
+    - When translating external content into a skill, choose whether to adapt it for Cursor/Codex tooling or keep it as close to the original wording as possible. If adapting, use `AskQuestion` instead of `AskUserQuestion`, `ReadFile` instead of tools like web fetch, and the existing tools `rg` and `Glob`.
+    - When creating a skill, prioritize a concise, direct translation, maintaining the original structure and directives. Aim for the skill to be around 150-200 lines and verify that it stays under 500 lines.
+- The ingestion pipeline should now only focus on Phase 1 (metadata indexing). Phase 2 (hydration) is handled lazily by `rescan.ts` when a conversation is opened. The revised plan is as follows:
+    1. Intercept first list response and cache auth as today.
+    2. Run a background **metadata-only pagination pass** over `/backend-api/conversations`.
+    3. Upsert shells with `hasFullHistory: false`.
+    4. Do **not** proactively fetch transcript details in bulk.
+    5. Let existing URL-driven rescan hydrate a conversation when the user opens it.
+    6. Optionally add a manual “hydrate now” action from the conversation list if you want prefetch on explicit user intent.
+- To avoid a trigger deadlock if ChatGPT never loads its list page first, accept that indexing starts on the next page navigation or explicit list fetch.
+- Accept in-memory only for now. Adding IndexedDB is a separate architectural decision.
+- Extract `buildChatGPTFetchHeaders(authToken: string): Record<string, string)` to `store.ts` or a new `src/hooks/useMessageScanner/chatgptFetch.ts` — reused by both `rescan.ts` and `ingestion.ts`.
+- Pass a stable callback `() => ingestionPipelineRef.current?.trigger()` to the handler deps — no timing issue, no ref mutation race.
+- Write `ingestion.test.ts` alongside the new file covering: idempotency, no-auth abort, single-page termination, multi-page pagination, cancellation, and API error handling.
+- Add a handlers integration test to `ingestion.test.ts`.
+- React re-renders on every `upsertMany` call are acceptable as-is since React 18 batching handles this.
+- Detect if response returns fewer than requested items and log a warning. If it's consistently less, lower the limit.
+- Use `total` from the response (`json.total`) to know when we've fetched everything, rather than relying on `items.length < limit`.
+- The ChatGPT Full Conversation Index (Phase 1) plan should incorporate the following:
+    - Phase 2 hydration dropped (lazy rescan handles it).
+    - Auth token normalization required before extracting a shared fetch helper (strips accidental double-Bearer bug).
+    - `ingestion.ts` must use `ENDPOINTS.chatgpt.list` from `endpoints.ts`, not a hardcoded path.
+    - Handler receives a plain callback (`onChatGPTListIntercepted`) instead of a pipeline ref (avoids React ref timing issue).
+    - Pagination terminates using `json.total` from response, not `items.length < limit` (correctness fix). Also, ensure a fallback is implemented if `total` is absent or malformed.
+    - Tests required: `ingestion.test.ts`.
+- The implementation for the ChatGPT Full Conversation Index (Phase 1) plan should include the following:
+    - In `src/config/endpoints.ts`, add `normalizeChatGPTAuthToken()` and `buildChatGPTFetchHeaders()`.
+    - In `src/hooks/useMessageScanner/store.ts`, normalize token on cache in `setChatGPTAuthToken`.
+    - Create a new file `src/hooks/useMessageScanner/ingestion.ts` for the Phase 1 pipeline.
+    - Create a new file `src/hooks/useMessageScanner/ingestion.test.ts` for unit tests.
+    - In `src/hooks/useMessageScanner/handlers.ts`, add `onChatGPTListIntercepted?: () => void` to deps.
+    - In `src/hooks/useMessageScanner/useMessageScanner.ts`, create the pipeline, pass a callback to the handler, and cancel on unmount.
+- When implementing the ChatGPT Full Conversation Index (Phase 1) plan:
+    - Be aware that the first intercepted list response already provides page 0 data, and the ingestion process should be modified to avoid refetching this data unnecessarily.
+    - Be aware that the filters `is_archived=false` and `is_starred=false` may violate the stated "full conversation index" goal if "full" means truly full.
+    - Consider that `buildChatGPTFetchHeaders()` in `endpoints.ts` may not be the ideal module placement, as it is transport/auth behavior, not endpoint definition.
+
+## WORKFLOW & RELEASE RULES
+
+## REFERENCE EXAMPLES
+
+## PROJECT DOCUMENTATION & CONTEXT SYSTEM
+
+## DEBUGGING
+
+## FINAL DOs AND DON'Ts
+
+- When encountering a "file save conflict" error (e.g., "The content of the file is newer"), **always** prioritize the on-disk version of the file.
+    - Click `Compare` to verify the differences.
+    - Keep the `newer file contents on disk`.
+    - **Never** use the `Overwrite` option unless you are certain your open buffer should replace the current file on disk.
+    - Alternatively, close the tab without saving and reopen the file to reload the latest version from disk.

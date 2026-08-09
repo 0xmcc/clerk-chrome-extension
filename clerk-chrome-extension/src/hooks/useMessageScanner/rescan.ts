@@ -102,7 +102,7 @@ const extractChatGPTAuthTokenFromDOM = (): string | null => {
 export const createRescanHandler = (deps: RescanHandlerDeps) => {
   const { capturedPlatform, updateAllDerivedState, handleInterceptorEvent, storeRef } = deps
 
-  return async () => {
+  return async (conversationId?: string) => {
     logRescan("========== RESCAN START ==========", {
       capturedPlatform,
       storeSize: storeRef.current.size,
@@ -118,8 +118,12 @@ export const createRescanHandler = (deps: RescanHandlerDeps) => {
     }
 
     logRescan("STEP 3: Extracting activeId", { capturedPlatform })
-    const activeId = getActiveConversationIdFromUrl(capturedPlatform)
-    logRescan("STEP 3: Result", { activeId, currentPath: window.location.pathname })
+    const activeId = conversationId ?? getActiveConversationIdFromUrl(capturedPlatform)
+    logRescan("STEP 3: Result", {
+      activeId,
+      requestedConversationId: conversationId,
+      currentPath: window.location.pathname
+    })
 
     if (!activeId) {
       logRescan("STEP 4: EXIT - No active conversation ID")

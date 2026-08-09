@@ -24,6 +24,9 @@ export interface StructuredConversationCapture {
   captureMode: "structured_conversation"
   conversationKey: string
   title?: string
+  /** Original platform conversation times, normalized to unix milliseconds. */
+  createdAt?: number
+  updatedAt?: number
   messages: Message[]
   metadata: CaptureMetadata
 }

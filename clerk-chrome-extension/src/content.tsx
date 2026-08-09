@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import cssText from "data-text:~style.css"
 import type { PlasmoCSConfig } from "plasmo"
 
@@ -89,6 +89,30 @@ const PlasmoOverlay = () => {
   const displayMessages = selectedConvo ? selectedConvo.messages : messages
   const displayTitle = selectedConvo ? selectedConvo.title : conversationTitle
   const displayConvoKey = selectedConvoKey ?? conversationKey
+  const displayConvo =
+    selectedConvo ??
+    (activeConvoKey
+      ? conversations.find(
+          (conversation) =>
+            `${conversation.platform}:${conversation.id}` === activeConvoKey
+        ) ?? null
+      : null)
+
+  const handleSelectConversation = useCallback(
+    (convoKey: string) => {
+      setSelectedConvoKey(convoKey)
+      const conversation = conversations.find(
+        (item) => `${item.platform}:${item.id}` === convoKey
+      )
+
+      // Collection rows start as lightweight metadata. Fetch the transcript on
+      // demand so opening an archived row does not render an empty detail view.
+      if (conversation && conversation.messages.length === 0) {
+        void rescan(conversation.id)
+      }
+    },
+    [conversations, rescan]
+  )
 
   const { segments: youtubeSegments, status: youtubeStatus, errorMessage: youtubeErrorMessage, videoTitle: youtubeTitle } = useYouTubeTranscript()
 
@@ -97,6 +121,8 @@ const PlasmoOverlay = () => {
     messages: displayMessages,
     conversationKey: displayConvoKey,
     conversationTitle: displayTitle,
+    conversationCreatedAt: displayConvo?.createdAt,
+    conversationUpdatedAt: displayConvo?.updatedAt,
     youtubeSegments,
     youtubeStatus,
     youtubeTitle
@@ -230,7 +256,8 @@ const PlasmoOverlay = () => {
         emptyStateMessage={emptyStateMessage}
         conversations={conversations}
         activeConvoKey={selectedConvoKey ?? activeConvoKey}
-        onSelectConversation={setSelectedConvoKey}
+        onSelectConversation={handleSelectConversation}
+        onLoadConversation={(convoId) => rescan(convoId)}
         youtubeStatus={youtubeStatus}
         youtubeErrorMessage={youtubeErrorMessage}
       />

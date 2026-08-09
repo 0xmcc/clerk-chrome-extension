@@ -13,6 +13,8 @@ interface UseMomentumSyncStatusConfig {
 
 interface MomentumSyncStatusState {
   syncedIds: string[]
+  /** Conversation id -> archive import time in unix seconds. */
+  syncedAt: Record<string, number>
   status: CollectionSyncStatus
   refetch: () => void
 }
@@ -29,6 +31,7 @@ export const useMomentumSyncStatus = (
   { url, token, enabled }: UseMomentumSyncStatusConfig
 ): MomentumSyncStatusState => {
   const [syncedIds, setSyncedIds] = useState<string[]>([])
+  const [syncedAt, setSyncedAt] = useState<Record<string, number>>({})
   const [status, setStatus] = useState<CollectionSyncStatus>("loading")
   const [nonce, setNonce] = useState(0)
 
@@ -44,6 +47,7 @@ export const useMomentumSyncStatus = (
 
     if (url.trim() === "" || token.trim() === "") {
       setSyncedIds([])
+      setSyncedAt({})
       setStatus("error")
       return
     }
@@ -52,6 +56,7 @@ export const useMomentumSyncStatus = (
 
     if (ids.length === 0) {
       setSyncedIds([])
+      setSyncedAt({})
       setStatus("ready")
       return
     }
@@ -70,18 +75,38 @@ export const useMomentumSyncStatus = (
 
         if (cancelled) return
 
-        const data = result?.data as { synced?: unknown } | undefined
+        const data = result?.data as
+          | {
+              synced?: unknown
+              syncedAt?: unknown
+              statusUnsupported?: unknown
+            }
+          | undefined
         if (result?.success === true && Array.isArray(data?.synced)) {
           setSyncedIds(data.synced.filter((id): id is string => typeof id === "string"))
-          setStatus("ready")
+          const rawSyncedAt =
+            typeof data.syncedAt === "object" && data.syncedAt !== null
+              ? (data.syncedAt as Record<string, unknown>)
+              : {}
+          setSyncedAt(
+            Object.fromEntries(
+              Object.entries(rawSyncedAt).filter(
+                (entry): entry is [string, number] =>
+                  typeof entry[1] === "number" && Number.isFinite(entry[1])
+              )
+            )
+          )
+          setStatus(data.statusUnsupported === true ? "unsupported" : "ready")
           return
         }
 
         setSyncedIds([])
+        setSyncedAt({})
         setStatus("error")
       } catch {
         if (!cancelled) {
           setSyncedIds([])
+          setSyncedAt({})
           setStatus("error")
         }
       }
@@ -92,5 +117,5 @@ export const useMomentumSyncStatus = (
     }
   }, [idKey, url, token, enabled, nonce])
 
-  return { syncedIds, status, refetch }
+  return { syncedIds, syncedAt, status, refetch }
 }

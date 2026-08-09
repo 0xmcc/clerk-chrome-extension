@@ -4,7 +4,8 @@ import {
   READY_SIGNAL_MAX_ATTEMPTS,
   READY_SIGNAL_RETRY_INTERVAL_MS,
   isInterceptorPayloadEvent,
-  startReadySignalHandshake
+  startReadySignalHandshake,
+  toInterceptorEvent
 } from "./handshake"
 import {
   INTERCEPTOR_READY_ACK_SIGNAL,
@@ -69,5 +70,20 @@ describe("isInterceptorPayloadEvent", () => {
         })
       )
     ).toBe(true)
+  })
+
+  it("preserves request headers when converting an intercepted payload", () => {
+    expect(
+      toInterceptorEvent({
+        source: INTERCEPTOR_SOURCE,
+        url: "/backend-api/conversation/c1",
+        headers: { authorization: "Bearer late-jwt-token" },
+        data: { id: "c1" }
+      })
+    ).toMatchObject({
+      url: "/backend-api/conversation/c1",
+      headers: { authorization: "Bearer late-jwt-token" },
+      data: { id: "c1" }
+    })
   })
 })

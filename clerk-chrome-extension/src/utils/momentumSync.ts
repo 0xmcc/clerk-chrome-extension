@@ -53,6 +53,8 @@ const buildCapturesUrl = (base: URL): string => {
 
 const buildStatusUrl = (base: URL): string => `${base.origin}/conversations/status`
 
+const buildStatsUrl = (base: URL): string => `${base.origin}/stats`
+
 export interface MomentumStatusMessage {
   action: "momentumStatus"
   url?: unknown
@@ -106,6 +108,24 @@ export const handleMomentumStatusMessage = async (
       data = JSON.parse(text)
     } catch {
       data = text
+    }
+
+    // Earlier `momentum serve` releases support authenticated `/stats` but not
+    // the per-conversation status endpoint. Verify that server is reachable
+    // and authenticated so the UI can distinguish an upgrade requirement from
+    // an offline server without claiming any conversations are unsynced.
+    if (response.status === 404) {
+      const statsResponse = await fetchImpl(buildStatsUrl(base), {
+        headers: { Authorization: `Bearer ${message.token}` }
+      })
+
+      if (statsResponse.ok) {
+        return {
+          success: true,
+          status: statsResponse.status,
+          data: { synced: [], syncedAt: {}, statusUnsupported: true }
+        }
+      }
     }
 
     return { success: response.ok, status: response.status, data }

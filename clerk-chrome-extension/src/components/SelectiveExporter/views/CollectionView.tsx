@@ -1,37 +1,85 @@
 import { useMemo, useState } from "react"
 
 import type { Conversation } from "~hooks/useMessageScanner/types"
+import {
+  getConversationSyncState,
+  type ConversationSyncState
+} from "~utils/conversationSyncState"
 
 import { DARK_THEME } from "../constants"
+import type { ConversationDateMode } from "../types"
 
 /**
- * Reachability of the local momentum sync API. `error` is deliberately distinct
- * from "not synced": if we cannot reach the server we do not know the state, and
- * claiming everything is unsynced would be a lie the user might act on.
+ * Availability of per-conversation sync state. `error` and `unsupported` are
+ * deliberately distinct from "not synced": if the server is unavailable or
+ * predates the status API, we do not know the state and must not claim that
+ * every conversation is unsynced.
  */
-export type CollectionSyncStatus = "loading" | "ready" | "error"
+export type CollectionSyncStatus = "loading" | "ready" | "unsupported" | "error"
+
+export interface CollectionBulkSyncState {
+  state: "idle" | "syncing" | "success" | "error"
+  completed: number
+  total: number
+  failed: number
+}
 
 interface CollectionViewProps {
   conversations: Conversation[]
   /** Conversation ids known to be in the archive. */
   syncedIds: string[]
+  /** Conversation id -> archive import time in unix seconds. */
+  syncedAt: Record<string, number>
   status: CollectionSyncStatus
   activeConvoKey?: string
   onSelect: (convoKey: string) => void
+  dateMode: ConversationDateMode
+  onDateModeChange: (mode: ConversationDateMode) => void
   onRetry?: () => void
+  bulkSync?: CollectionBulkSyncState
+  onSyncUnsynced?: () => void
+  onResyncAll?: () => void
+  onRetryFailedSyncs?: () => void
 }
 
 type Filter = "all" | "unsynced"
 
-function relativeTime(ms: number): string {
-  const diff = Date.now() - ms
-  if (diff < 60_000) return "just now"
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
-  return `${Math.floor(diff / 86_400_000)}d ago`
+const conversationDate = (
+  conversation: Conversation,
+  mode: ConversationDateMode
+): number | undefined => {
+  if (mode === "created") return conversation.createdAt
+
+  const finalMessageTime = conversation.messages.reduce<number | undefined>(
+    (latest, message) =>
+      message.createdAt != null &&
+      (latest == null || message.createdAt > latest)
+        ? message.createdAt
+        : latest,
+    undefined
+  )
+
+  return finalMessageTime ?? conversation.updatedAt
 }
 
-type RowSyncState = "synced" | "unsynced" | "unknown"
+const formatDate = (timestamp: number | undefined): string =>
+  timestamp == null
+    ? "Unknown"
+    : new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+      }).format(timestamp)
+
+const conversationDateLabel = (
+  conversation: Conversation,
+  mode: ConversationDateMode
+): string =>
+  `${mode === "created" ? "Created" : "Last message"} ${formatDate(
+    conversationDate(conversation, mode)
+  )}`
+
+type RowSyncState = ConversationSyncState | "unknown"
 
 /**
  * Sync state as a readable badge. A bare dot is too easy to miss in a dense
@@ -48,6 +96,12 @@ const StatusBadge = ({ state }: { state: RowSyncState }) => {
       aria: "Synced",
       color: DARK_THEME.accent,
       background: "rgba(139, 122, 255, 0.14)"
+    },
+    stale: {
+      text: "Needs sync",
+      aria: "Needs sync",
+      color: DARK_THEME.warning,
+      background: "rgba(251, 191, 36, 0.12)"
     },
     unsynced: {
       text: "Not synced",
@@ -91,7 +145,12 @@ const StatusBadge = ({ state }: { state: RowSyncState }) => {
           height: "5px",
           borderRadius: "50%",
           flexShrink: 0,
-          background: state === "synced" ? DARK_THEME.accent : "transparent",
+          background:
+            state === "synced"
+              ? DARK_THEME.accent
+              : state === "stale"
+                ? DARK_THEME.warning
+                : "transparent",
           border: state === "synced" ? "none" : `1px solid ${color}`
         }}
       />
@@ -103,23 +162,39 @@ const StatusBadge = ({ state }: { state: RowSyncState }) => {
 export const CollectionView = ({
   conversations,
   syncedIds,
+  syncedAt,
   status,
   activeConvoKey,
   onSelect,
-  onRetry
+  dateMode,
+  onDateModeChange,
+  onRetry,
+  bulkSync = { state: "idle", completed: 0, total: 0, failed: 0 },
+  onSyncUnsynced,
+  onResyncAll,
+  onRetryFailedSyncs
 }: CollectionViewProps) => {
   const [filter, setFilter] = useState<Filter>("all")
 
   const syncedSet = useMemo(() => new Set(syncedIds), [syncedIds])
 
   const sorted = useMemo(
-    () => [...conversations].sort((a, b) => b.lastSeenAt - a.lastSeenAt),
-    [conversations]
+    () =>
+      [...conversations].sort(
+        (a, b) =>
+          (conversationDate(b, dateMode) ?? 0) -
+          (conversationDate(a, dateMode) ?? 0)
+      ),
+    [conversations, dateMode]
   )
 
-  const stateFor = (conv: Conversation): "synced" | "unsynced" | "unknown" => {
-    if (status === "error") return "unknown"
-    return syncedSet.has(conv.id) ? "synced" : "unsynced"
+  const stateFor = (conv: Conversation): RowSyncState => {
+    if (status === "error" || status === "unsupported") return "unknown"
+    return getConversationSyncState(
+      conv,
+      syncedSet.has(conv.id),
+      syncedAt[conv.id]
+    )
   }
 
   const visible = useMemo(
@@ -127,10 +202,24 @@ export const CollectionView = ({
       filter === "unsynced"
         ? sorted.filter((c) => stateFor(c) !== "synced")
         : sorted,
-    [sorted, filter, syncedSet, status]
+    [sorted, filter, syncedSet, syncedAt, status]
   )
 
-  const syncedCount = sorted.filter((c) => syncedSet.has(c.id)).length
+  const syncedCount = sorted.filter((c) => stateFor(c) === "synced").length
+  const staleCount = sorted.filter((c) => stateFor(c) === "stale").length
+  const pendingCount = sorted.length - syncedCount
+  const isResync = pendingCount === 0
+  const canBulkSync = status === "ready" && sorted.length > 0
+  const bulkLabel =
+    bulkSync.state === "syncing"
+      ? `Syncing ${bulkSync.completed} of ${bulkSync.total}`
+      : isResync
+        ? `Re-sync all ${sorted.length} conversation${sorted.length === 1 ? "" : "s"}`
+        : staleCount === pendingCount
+          ? `Sync ${staleCount} update${staleCount === 1 ? "" : "s"}`
+          : staleCount > 0
+            ? `Sync ${pendingCount} conversations`
+            : `Sync ${pendingCount} unsynced conversation${pendingCount === 1 ? "" : "s"}`
 
   if (conversations.length === 0) {
     return (
@@ -178,7 +267,57 @@ export const CollectionView = ({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {status === "error" && (
+      <div
+        style={{
+          alignItems: "center",
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: "10px"
+        }}>
+        <span style={{ color: DARK_THEME.muted, fontSize: "11px" }}>
+          Date shown
+        </span>
+        <div
+          role="group"
+          aria-label="Date shown"
+          style={{
+            background: DARK_THEME.borderSubtle,
+            borderRadius: "5px",
+            display: "flex",
+            gap: "2px",
+            padding: "2px"
+          }}>
+          {(
+            [
+              ["last_message", "Last message"],
+              ["created", "Created"]
+            ] as const
+          ).map(([mode, label]) => {
+            const selected = dateMode === mode
+            return (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onDateModeChange(mode)}
+                style={{
+                  background: selected ? DARK_THEME.surface : "transparent",
+                  border: "none",
+                  borderRadius: "4px",
+                  color: selected ? DARK_THEME.text : DARK_THEME.muted,
+                  cursor: "pointer",
+                  fontSize: "10px",
+                  fontWeight: selected ? 600 : 400,
+                  padding: "4px 7px"
+                }}>
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {(status === "error" || status === "unsupported") && (
         <div
           style={{
             display: "flex",
@@ -192,7 +331,11 @@ export const CollectionView = ({
             fontSize: "11px",
             color: DARK_THEME.muted
           }}>
-          <span>Sync server unreachable</span>
+          <span>
+            {status === "unsupported"
+              ? "Sync status endpoint unavailable"
+              : "Sync server unreachable"}
+          </span>
           <button
             type="button"
             onClick={onRetry}
@@ -207,6 +350,83 @@ export const CollectionView = ({
             }}>
             Retry
           </button>
+        </div>
+      )}
+
+      {status === "ready" && (
+        <div style={{ marginBottom: "10px" }}>
+          <button
+            type="button"
+            onClick={isResync ? onResyncAll : onSyncUnsynced}
+            disabled={!canBulkSync || bulkSync.state === "syncing"}
+            aria-label={bulkLabel}
+            style={{
+              alignItems: "center",
+              background:
+                canBulkSync && bulkSync.state !== "syncing"
+                  ? DARK_THEME.accent
+                  : DARK_THEME.borderSubtle,
+              border: "none",
+              borderRadius: "6px",
+              color:
+                canBulkSync && bulkSync.state !== "syncing"
+                  ? "#fff"
+                  : DARK_THEME.muted,
+              cursor:
+                canBulkSync && bulkSync.state !== "syncing"
+                  ? "pointer"
+                  : "not-allowed",
+              display: "flex",
+              fontSize: "12px",
+              fontWeight: 600,
+              justifyContent: "center",
+              minHeight: "32px",
+              padding: "7px 10px",
+              width: "100%"
+            }}>
+            {bulkLabel}
+          </button>
+          {bulkSync.state === "syncing" && (
+            <div
+              aria-live="polite"
+              style={{
+                color: DARK_THEME.muted,
+                fontSize: "11px",
+                marginTop: "5px"
+              }}>
+              Syncing {bulkSync.completed} of {bulkSync.total} conversations
+            </div>
+          )}
+          {bulkSync.state === "error" && (
+            <div
+              aria-live="polite"
+              style={{
+                alignItems: "center",
+                color: DARK_THEME.muted,
+                display: "flex",
+                fontSize: "11px",
+                justifyContent: "space-between",
+                marginTop: "5px"
+              }}>
+              <span>
+                {bulkSync.completed} synced · {bulkSync.failed} failed
+              </span>
+              <button
+                type="button"
+                onClick={onRetryFailedSyncs}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: DARK_THEME.accent,
+                  cursor: "pointer",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  padding: 0
+                }}>
+                Retry failed sync
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -284,7 +504,9 @@ export const CollectionView = ({
                   padding: "8px 10px",
                   borderRadius: "6px",
                   cursor: "pointer",
-                  background: isActive ? DARK_THEME.borderSubtle : "transparent",
+                  background: isActive
+                    ? DARK_THEME.borderSubtle
+                    : "transparent",
                   borderLeft: isActive
                     ? `2px solid ${DARK_THEME.accent}`
                     : "2px solid transparent",
@@ -295,7 +517,8 @@ export const CollectionView = ({
                     e.currentTarget.style.background = DARK_THEME.borderSubtle
                 }}
                 onMouseLeave={(e) => {
-                  if (!isActive) e.currentTarget.style.background = "transparent"
+                  if (!isActive)
+                    e.currentTarget.style.background = "transparent"
                 }}>
                 <span
                   style={{
@@ -326,7 +549,7 @@ export const CollectionView = ({
                       {conv.platform === "claude" ? "Claude" : "ChatGPT"}
                     </span>
                     <span>·</span>
-                    <span>{relativeTime(conv.lastSeenAt)}</span>
+                    <span>{conversationDateLabel(conv, dateMode)}</span>
                   </span>
                 </span>
                 <StatusBadge state={state} />

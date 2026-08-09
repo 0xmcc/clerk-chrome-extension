@@ -4,6 +4,19 @@
 
 Reduce future breakage when Claude changes its internal API paths or response shape.
 
+## Implemented: Conversation Collection Loading
+
+The conversation collection now loads proactively on Claude, matching the
+existing ChatGPT behavior. Once intercepted Claude traffic reveals an
+organization id, the extension requests the paginated `chat_conversations`
+index, adds lightweight conversation metadata to the shared collection, and
+falls back to the legacy `conversations` endpoint if needed.
+
+The loader requests up to 100 conversations per page, respects an API-provided
+`total` or `total_count`, and stops safely if the API returns duplicate or empty
+pages. Selecting a row still uses the existing detail-rescan path to retrieve
+its transcript only when needed.
+
 ## Next Implementation
 
 Implement runtime learning for Claude conversation detail requests.
