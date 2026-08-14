@@ -7,7 +7,8 @@
 
 import { getSupabaseClient } from "./supabase"
 import type { TweetData } from "./tweet-extractor"
-import { extractTweetData, findTweetArticle } from "./tweet-extractor"
+import { extractTweetData, expandLongPost, findTweetArticle } from "./tweet-extractor"
+import { resolveMediaFromSyndication } from "./media-resolver"
 
 // ---------------------------------------------------------------------------
 // Save tweet
@@ -31,6 +32,7 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
     try {
       const quotedArticle = findTweetArticle(tweetData.quoted_tweet_id)
       if (quotedArticle) {
+        await expandLongPost(quotedArticle)
         const quotedData = extractTweetData(quotedArticle)
         if (quotedData) {
           await saveTweet(quotedData)
@@ -56,6 +58,7 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
     try {
       const parentArticle = findTweetArticle(tweetData.in_reply_to_tweet_id)
       if (parentArticle) {
+        await expandLongPost(parentArticle)
         const parentData = extractTweetData(parentArticle)
         if (parentData) {
           await saveTweet(parentData)
@@ -68,8 +71,18 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
     }
   }
 
+  // X exposes video and GIFs only as blob: URLs, which die with the tab. When
+  // the DOM gave us nothing durable, resolve the real video.twimg.com /
+  // pbs.twimg.com URLs before writing — otherwise the row records media that
+  // can never be fetched again. Best-effort: keep the DOM media on failure.
+  let media = tweetData.media
+  if (media.some((m) => !m.url)) {
+    const resolved = await resolveMediaFromSyndication(tweetData.tweet_id)
+    if (resolved.length > 0) media = resolved
+  }
+
   // Compute content type flags
-  const has_media = tweetData.media.length > 0
+  const has_media = media.length > 0
   const has_article = tweetData.link_cards.length > 0  // Has rich preview card
   const has_link = tweetData.urls.length > 0  // Has any URL (card or plain)
   const has_quote = tweetData.quoted_tweet_id !== null
@@ -88,7 +101,7 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
       author_avatar_url: tweetData.author_avatar_url,
       timestamp: tweetData.timestamp,
       source_url: tweetData.source_url,
-      media: tweetData.media,
+      media,
       link_cards: tweetData.link_cards,
       quoted_tweet_id: tweetData.quoted_tweet_id,
       in_reply_to_tweet_id: tweetData.in_reply_to_tweet_id,

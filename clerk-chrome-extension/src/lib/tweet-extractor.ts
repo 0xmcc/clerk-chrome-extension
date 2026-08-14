@@ -11,7 +11,11 @@
 
 export interface TweetMedia {
   type: "image" | "video" | "gif"
-  url: string
+  /**
+   * null when the only source X exposed was an unfetchable blob: URL. Recorded
+   * rather than dropped so the row stays auditable — see isDurableMediaUrl.
+   */
+  url: string | null
 }
 
 export interface TweetLinkCard {
@@ -167,8 +171,55 @@ function extractAuthorAvatarUrl(article: Element): string {
   return ""
 }
 
+const SHOW_MORE_SELECTOR = '[data-testid="tweet-text-show-more-link"]'
+
+/**
+ * Expand a collapsed long-form post before its text is read.
+ *
+ * X renders posts over ~280 chars collapsed: the tweetText node holds only a
+ * preview plus a "Show more" control, so reading textContent captures the
+ * truncated preview and silently loses the rest of the body. Clicking the
+ * control expands it in place.
+ *
+ * The control is an anchor to the status page, so a plain click would navigate
+ * away mid-save. A capture-phase preventDefault suppresses the navigation
+ * while still letting X's own handler run and do the expansion. Best-effort:
+ * resolves false if there's nothing to expand or the text never grows.
+ */
+export async function expandLongPost(article: Element): Promise<boolean> {
+  const link = article.querySelector<HTMLElement>(SHOW_MORE_SELECTOR)
+  if (!link) return false
+
+  const measure = () =>
+    article.querySelector('[data-testid="tweetText"]')?.textContent?.length ?? 0
+  const before = measure()
+
+  const suppressNavigation = (event: Event) => event.preventDefault()
+  document.addEventListener("click", suppressNavigation, true)
+
+  try {
+    link.click()
+
+    // X re-renders asynchronously; poll briefly rather than guessing a delay.
+    for (let attempt = 0; attempt < 20; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 25))
+      if (measure() > before) return true
+      if (!article.querySelector(SHOW_MORE_SELECTOR)) return measure() > before
+    }
+    return false
+  } catch (err) {
+    console.warn("[TweetSaver] Long-post expansion failed", err)
+    return false
+  } finally {
+    document.removeEventListener("click", suppressNavigation, true)
+  }
+}
+
 /**
  * Extract tweet text from the article's tweetText div.
+ *
+ * Call expandLongPost(article) first — otherwise long-form posts yield only
+ * the collapsed preview.
  */
 function extractTweetText(article: Element): string {
   // Twitter wraps tweet text in div[data-testid="tweetText"]
@@ -223,7 +274,19 @@ function extractSourceUrl(article: Element): string {
 /**
  * Extract media (images, videos, GIFs) from the tweet.
  */
-function extractMedia(article: Element): TweetMedia[] {
+/**
+ * Whether a URL will still resolve after this tab closes.
+ *
+ * X plays video and GIFs through MSE, so `video.src` is a `blob:` URL bound to
+ * the document that created it. Persisting one produces a row whose media can
+ * never be fetched again, indistinguishable from a healthy row. Only http(s)
+ * survives the trip to the database.
+ */
+export function isDurableMediaUrl(url?: string | null): boolean {
+  return typeof url === "string" && /^https?:\/\//i.test(url)
+}
+
+export function extractMedia(article: Element): TweetMedia[] {
   const media: TweetMedia[] = []
   const seen = new Set<string>()
 
@@ -247,9 +310,19 @@ function extractMedia(article: Element): TweetMedia[] {
   const videos = article.querySelectorAll("video")
   for (const video of videos) {
     if (quotedTweet?.contains(video)) continue
-    const src = video.src || video.querySelector("source")?.src
-    if (src && !seen.has(src)) {
-      seen.add(src)
+    // Prefer any durable source: the poster thumbnail is a real pbs.twimg.com
+    // URL, while video.src is typically an unusable blob:. Never fall back to
+    // the blob — a null url records "we had media we cannot re-fetch", which is
+    // auditable, where a blob silently pretends to be a working reference.
+    const candidates = [
+      (video as HTMLVideoElement).poster,
+      video.src,
+      video.querySelector("source")?.src
+    ]
+    const src = candidates.find(isDurableMediaUrl) ?? null
+    const dedupeKey = src ?? video.src ?? video.querySelector("source")?.src
+    if (dedupeKey && !seen.has(dedupeKey)) {
+      seen.add(dedupeKey)
       // Check if it's a GIF (Twitter marks them)
       const isGif = video.closest('[data-testid="videoPlayer"]')
         ?.querySelector('[data-testid="gifLabel"]') !== null ||

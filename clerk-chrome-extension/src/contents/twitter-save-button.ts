@@ -7,7 +7,7 @@
  */
 
 import type { PlasmoCSConfig } from "plasmo"
-import { extractTweetData } from "~lib/tweet-extractor"
+import { extractTweetData, expandLongPost } from "~lib/tweet-extractor"
 import { saveTweet, checkSavedTweets } from "~lib/tweet-saver"
 import { ENABLE_TWEET_BOOKMARK } from "~config/features"
 
@@ -539,6 +539,7 @@ function createSaveButton(article: Element): HTMLButtonElement | null {
     setButtonState(btn, "saving")
 
     try {
+      await expandLongPost(article)
       const tweetData = extractTweetData(article)
       if (!tweetData) {
         console.error("[TweetSaver] Could not extract tweet data")
@@ -750,6 +751,7 @@ async function bulkSaveArticles(
     }
 
     try {
+      await expandLongPost(article)
       const tweetData = extractTweetData(article)
       if (!tweetData) {
         skipped++
@@ -837,7 +839,7 @@ function autoScrollAndSave(
     }
 
     // Extract all currently visible articles into the save queue
-    function extractVisibleArticles() {
+    async function extractVisibleArticles() {
       const articles = document.querySelectorAll("article")
       for (const article of articles) {
         const tweetId = getTweetIdFromArticle(article)
@@ -845,6 +847,7 @@ function autoScrollAndSave(
 
         savedTweetIds.add(tweetId)
 
+        await expandLongPost(article)
         const tweetData = extractTweetData(article)
         if (!tweetData) {
           stats.skipped++
@@ -897,7 +900,7 @@ function autoScrollAndSave(
       }
 
       // Extract tweets from DOM immediately (fast, sync-ish)
-      extractVisibleArticles()
+      void extractVisibleArticles()
 
       // Kick off async saves without blocking the scroll
       processSaveQueue()
@@ -937,7 +940,7 @@ function autoScrollAndSave(
       } else if (Date.now() - idleStart >= idleMs) {
         // No new tweets found — we've reached the end
         console.log(`[TweetSaver] End of list detected. ${uniqueCount} unique tweets found.`)
-        extractVisibleArticles() // one final pass
+        void extractVisibleArticles() // one final pass
         clearInterval(timer)
         processSaveQueue().then(() => {
           callbacks.onComplete?.(stats)
