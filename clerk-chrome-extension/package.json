@@ -65,6 +65,7 @@
       "https://*.claude.ai/*",
       "https://x.com/*",
       "https://twitter.com/*",
+      "https://www.linkedin.com/*",
       "$PLASMO_PUBLIC_CLERK_SYNC_HOST/*",
       "$CLERK_FRONTEND_API/*",
       "https://api.agentmail.to/*",

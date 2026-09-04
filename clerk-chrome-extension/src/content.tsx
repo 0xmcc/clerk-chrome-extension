@@ -1,12 +1,17 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import cssText from "data-text:~style.css"
 import type { PlasmoCSConfig } from "plasmo"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import { FloatingButton } from "~features/floating-button"
 import { SelectiveExporter } from "~components/SelectiveExporter"
+import { FloatingButton } from "~features/floating-button"
 import { useCaptureSource } from "~hooks/useCaptureSource"
 import { useMessageScanner } from "~hooks/useMessageScanner"
 import { useYouTubeTranscript } from "~hooks/useYouTubeTranscript"
+import {
+  downloadLinkedInContacts,
+  isLinkedInPeopleSearchPage,
+  scrapeLinkedInContacts
+} from "~lib/linkedin-contacts"
 import {
   buildLivePageContext,
   POPUP_GET_CAPTURE,
@@ -29,7 +34,8 @@ export const config: PlasmoCSConfig = {
     "https://*.claude.ai/*",
     "https://x.com/*",
     "https://twitter.com/*",
-    "https://www.youtube.com/*"
+    "https://www.youtube.com/*",
+    "https://www.linkedin.com/*"
   ]
 }
 
@@ -69,12 +75,40 @@ const RESCAN_ON_OPEN_COOLDOWN_MS = 10000
 const PlasmoOverlay = () => {
   const [isExporterOpen, setIsExporterOpen] = useState(false)
   const [selectedConvoKey, setSelectedConvoKey] = useState<string | null>(null)
+  const isLinkedInPeopleSearch = isLinkedInPeopleSearchPage(
+    window.location.href
+  )
+
+  const handleFloatingButtonClick = useCallback(() => {
+    if (!isLinkedInPeopleSearch) {
+      setIsExporterOpen(true)
+      return
+    }
+
+    const contacts = scrapeLinkedInContacts(document)
+    if (contacts.length === 0) {
+      window.alert(
+        "No LinkedIn contacts were found. Wait for the search results to load and try again."
+      )
+      return
+    }
+
+    downloadLinkedInContacts(contacts)
+  }, [isLinkedInPeopleSearch])
 
   // Track rescan-on-open attempts with timestamp for cooldown-based retry
   const rescanOnOpenAttemptsRef = useRef<Map<string, number>>(new Map())
 
   // Always-on scanner - no props, returns stable activeConvoKey and activeMessageCount for guards
-  const { messages, conversationTitle, conversationKey, rescan, activeConvoKey, activeMessageCount, conversations } = useMessageScanner()
+  const {
+    messages,
+    conversationTitle,
+    conversationKey,
+    rescan,
+    activeConvoKey,
+    activeMessageCount,
+    conversations
+  } = useMessageScanner()
 
   // Clear selected conversation when the URL changes
   useEffect(() => {
@@ -83,7 +117,12 @@ const PlasmoOverlay = () => {
 
   // When a conversation is selected from the index, show its data in the panel
   const selectedConvo = useMemo(
-    () => selectedConvoKey ? conversations.find(c => `${c.platform}:${c.id}` === selectedConvoKey) ?? null : null,
+    () =>
+      selectedConvoKey
+        ? conversations.find(
+            (c) => `${c.platform}:${c.id}` === selectedConvoKey
+          ) ?? null
+        : null,
     [selectedConvoKey, conversations]
   )
   const displayMessages = selectedConvo ? selectedConvo.messages : messages
@@ -114,7 +153,12 @@ const PlasmoOverlay = () => {
     [conversations, rescan]
   )
 
-  const { segments: youtubeSegments, status: youtubeStatus, errorMessage: youtubeErrorMessage, videoTitle: youtubeTitle } = useYouTubeTranscript()
+  const {
+    segments: youtubeSegments,
+    status: youtubeStatus,
+    errorMessage: youtubeErrorMessage,
+    videoTitle: youtubeTitle
+  } = useYouTubeTranscript()
 
   const { capture, emptyStateMessage } = useCaptureSource({
     isOpen: isExporterOpen,
@@ -247,7 +291,15 @@ const PlasmoOverlay = () => {
 
   return (
     <>
-      <FloatingButton onOpenExporter={() => setIsExporterOpen(true)} />
+      <FloatingButton
+        onOpenExporter={handleFloatingButtonClick}
+        label={
+          isLinkedInPeopleSearch
+            ? "Export LinkedIn contacts as JSON"
+            : "Capture this page for AI"
+        }
+        icon={isLinkedInPeopleSearch ? "{}" : "✨"}
+      />
       <SelectiveExporter
         isOpen={isExporterOpen}
         onClose={() => setIsExporterOpen(false)}

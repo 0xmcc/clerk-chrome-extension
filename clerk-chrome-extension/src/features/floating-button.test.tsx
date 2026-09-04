@@ -24,6 +24,16 @@ describe("FloatingButton", () => {
     expect(onOpenExporter).toHaveBeenCalledTimes(1)
   })
 
+  it("can identify the launcher as a LinkedIn JSON export action", () => {
+    render(
+      <FloatingButton label="Export LinkedIn contacts as JSON" icon="{}" />
+    )
+
+    expect(
+      screen.getByRole("button", { name: "Export LinkedIn contacts as JSON" })
+    ).toHaveTextContent("{}")
+  })
+
   it("opens the options page on right click", () => {
     render(<FloatingButton />)
 
