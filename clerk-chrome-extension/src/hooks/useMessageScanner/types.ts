@@ -1,3 +1,5 @@
+import type { MessageImage } from "~lib/messageImages"
+
 export interface Message {
   id: string
   role: "user" | "assistant" | "system" | "tool"
@@ -5,6 +7,8 @@ export interface Message {
   authorName: string
   /** Original platform message time, normalized to unix milliseconds. */
   createdAt?: number
+  /** Externally fetchable image attachments associated with this message. */
+  images?: MessageImage[]
   // Kept for backward-compatibility with existing consumers/types.
   // In network mode this is a detached node (NOT scraped from DOM).
   node: Element

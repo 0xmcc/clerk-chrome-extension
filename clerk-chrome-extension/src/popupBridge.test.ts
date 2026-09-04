@@ -18,6 +18,12 @@ describe("serializePopupCapture", () => {
             text: "Question",
             authorName: "You",
             createdAt: 1_700_000_010_000,
+            images: [
+              {
+                url: "https://files.example.com/uploads/photo.png",
+                name: "photo.png"
+              }
+            ],
             node: document.createElement("div")
           }
         ],
@@ -32,7 +38,17 @@ describe("serializePopupCapture", () => {
     ).toMatchObject({
       createdAt: 1_700_000_000_000,
       updatedAt: 1_700_000_100_000,
-      messages: [{ createdAt: 1_700_000_010_000 }]
+      messages: [
+        {
+          createdAt: 1_700_000_010_000,
+          images: [
+            {
+              url: "https://files.example.com/uploads/photo.png",
+              name: "photo.png"
+            }
+          ]
+        }
+      ]
     })
   })
 })

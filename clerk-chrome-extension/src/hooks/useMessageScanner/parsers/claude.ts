@@ -1,4 +1,5 @@
 import { getPlatformLabel } from "~utils/platform"
+import { collectMessageImages } from "~lib/messageImages"
 import type { Conversation, Message } from "../types"
 import { toMillis, normalizeText, createDetachedNode, generateStableMessageId } from "../utils"
 
@@ -132,6 +133,7 @@ export const parseClaudeDetail = (orgId: string, uuid: string, json: unknown): P
         id,
         role,
         text,
+        images: collectMessageImages(m),
         authorName,
         node: createDetachedNode(id)
       } as Message

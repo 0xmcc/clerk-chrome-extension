@@ -113,7 +113,12 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
       has_link,
       has_quote,
       article_url,
-      urls: tweetData.urls
+      urls: tweetData.urls,
+      // Only write metrics when we actually read some. An empty object would
+      // overwrite good API-sourced counts with nothing on a re-save.
+      ...(Object.keys(tweetData.public_metrics ?? {}).length > 0
+        ? { public_metrics: tweetData.public_metrics }
+        : {})
     },
     { onConflict: "tweet_id" }
   )

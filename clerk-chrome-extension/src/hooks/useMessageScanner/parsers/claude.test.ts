@@ -14,6 +14,36 @@ describe("extractClaudeText", () => {
 })
 
 describe("parseClaudeDetail", () => {
+  it("keeps image blocks with externally fetchable source URLs", () => {
+    const parsed = parseClaudeDetail("org-123", "conv-with-image", {
+      chat_messages: [
+        {
+          sender: "human",
+          content: [
+            { type: "text", text: "Please inspect this image." },
+            {
+              type: "image",
+              name: "diagram.png",
+              source: {
+                type: "url",
+                url: "https://files.example.com/uploads/diagram.png"
+              }
+            }
+          ]
+        }
+      ]
+    })
+
+    expect(parsed.messages[0]).toMatchObject({
+      images: [
+        {
+          url: "https://files.example.com/uploads/diagram.png",
+          name: "diagram.png"
+        }
+      ]
+    })
+  })
+
   it("keeps chat_messages that use content blocks instead of top-level text", () => {
     const parsed = parseClaudeDetail("org-123", "conv-456", {
       chat_messages: [

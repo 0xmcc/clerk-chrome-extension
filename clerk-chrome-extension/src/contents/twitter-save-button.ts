@@ -1,6 +1,6 @@
 /**
  * Plasmo content script: injects a "Save" button into Twitter/X tweet action rows,
- * and a bulk "Save All ↑" button on bookmarks pages.
+ * and a bulk "Scroll & Save All" button on bookmarks pages.
  *
  * Uses vanilla DOM manipulation (not React/TSX) since we're injecting directly
  * into Twitter's DOM rather than rendering a shadow DOM overlay.
@@ -76,7 +76,7 @@ function injectStyles(): void {
       100% { color: rgb(113, 118, 123); }
     }
 
-    /* Bulk Save All button */
+    /* Bulk scroll-and-save button */
     .tweet-saver-bulk-btn {
       display: inline-flex;
       align-items: center;
@@ -711,77 +711,30 @@ async function batchCheckVisibleTweets(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Bulk Save All — bookmarks page
+// Bulk scroll-and-save — bookmarks page
 // ---------------------------------------------------------------------------
 
 const BULK_BTN_ID = "__tweet-saver-bulk"
 
-function isBookmarksPage(): boolean {
-  return /\/i\/bookmarks/.test(window.location.pathname)
+/**
+ * Whether the current page lists saved posts, which is where the bulk
+ * scroll-and-save controls belong.
+ *
+ * X moved bookmarks from /i/bookmarks to /i/history (a combined page with
+ * Bookmarks and Likes tabs) without keeping the old path, so a check for
+ * /i/bookmarks alone silently stops matching and the bulk button disappears.
+ * Both are accepted: the old path still redirects for some sessions.
+ *
+ * Takes pathname as a parameter so it is testable without stubbing location.
+ */
+export function isBookmarksPage(
+  pathname: string = window.location.pathname
+): boolean {
+  return /\/i\/(bookmarks|history)/.test(pathname)
 }
 
 function removeBulkButton(): void {
   document.getElementById(BULK_BTN_ID)?.remove()
-}
-
-// ---------------------------------------------------------------------------
-// Bulk save helper — saves all currently-loaded articles, updating a button
-// ---------------------------------------------------------------------------
-
-async function bulkSaveArticles(
-  btn: HTMLButtonElement,
-  resetLabel: string
-): Promise<void> {
-  btn.disabled = true
-
-  const articles = Array.from(document.querySelectorAll("article"))
-  const total = articles.length
-  let saved = 0
-  let skipped = 0
-  let failed = 0
-
-  btn.textContent = `0/${total}…`
-
-  for (const article of articles) {
-    const existingBtn = article.querySelector(`[${BUTTON_ATTR}]`) as HTMLButtonElement | null
-    if (existingBtn?.getAttribute("data-state") === "saved") {
-      skipped++
-      btn.textContent = `${saved + skipped + failed}/${total}…`
-      continue
-    }
-
-    try {
-      await expandLongPost(article)
-      const tweetData = extractTweetData(article)
-      if (!tweetData) {
-        skipped++
-        btn.textContent = `${saved + skipped + failed}/${total}…`
-        continue
-      }
-
-      if (existingBtn) setButtonState(existingBtn, "saving")
-
-      await saveTweet(tweetData)
-      saved++
-
-      if (existingBtn) setButtonState(existingBtn, "saved")
-    } catch (err) {
-      console.error("[TweetSaver] Bulk save error for article:", err)
-      failed++
-      if (existingBtn) setButtonState(existingBtn, "error")
-    }
-
-    btn.textContent = `${saved + skipped + failed}/${total}…`
-  }
-
-  btn.textContent = `✓ ${saved} saved, ${skipped} skipped, ${failed} failed`
-  btn.classList.add("done")
-
-  setTimeout(() => {
-    btn.disabled = false
-    btn.classList.remove("done")
-    btn.textContent = resetLabel
-  }, 5000)
 }
 
 // ---------------------------------------------------------------------------
@@ -960,7 +913,7 @@ function autoScrollAndSave(
 }
 
 // ---------------------------------------------------------------------------
-// Inject bulk buttons (Save All + Scroll & Save All)
+// Inject the bulk Scroll & Save All button
 // ---------------------------------------------------------------------------
 
 function injectBulkButton(): void {
@@ -970,17 +923,6 @@ function injectBulkButton(): void {
   const container = document.createElement("div")
   container.id = BULK_BTN_ID
   container.className = "tweet-saver-bulk-container"
-
-  // --- "Save All ↑" button (existing behavior — saves visible tweets) ---
-  const saveAllBtn = document.createElement("button")
-  saveAllBtn.className = "tweet-saver-bulk-btn"
-  saveAllBtn.textContent = "Save All ↑"
-  saveAllBtn.title = "Save currently loaded tweets to Supabase"
-
-  saveAllBtn.addEventListener("click", async () => {
-    if (saveAllBtn.disabled) return
-    await bulkSaveArticles(saveAllBtn, "Save All ↑")
-  })
 
   // --- "Scroll & Save All" button (auto-scroll then save) ---
   const scrollSaveBtn = document.createElement("button")
@@ -1001,9 +943,6 @@ function injectBulkButton(): void {
       scrollAbortController.abort()
       return
     }
-
-    // Disable the other button while scrolling
-    saveAllBtn.disabled = true
 
     scrollAbortController = new AbortController()
     const { signal } = scrollAbortController
@@ -1061,11 +1000,8 @@ function injectBulkButton(): void {
       scrollSaveBtn.textContent = "Scroll & Save All"
     }, 5000)
 
-    // Re-enable the other button
-    saveAllBtn.disabled = false
   })
 
-  container.appendChild(saveAllBtn)
   container.appendChild(scrollSaveBtn)
 
   // Insert after the primary column header (h2 area)

@@ -1,4 +1,5 @@
 import type { ExportCapture, CaptureMetadata } from "~lib/capture"
+import type { MessageImage } from "~lib/messageImages"
 import {
   isChatGPTConversationSurface,
   isClaudeChatSurface
@@ -35,6 +36,7 @@ export interface PopupSerializableMessage {
   text: string
   authorName: string
   createdAt?: number
+  images?: MessageImage[]
 }
 
 export interface PopupStructuredConversationCapture {
@@ -382,7 +384,8 @@ export const serializePopupCapture = (
         role: message.role,
         text: message.text,
         authorName: message.authorName,
-        createdAt: message.createdAt
+        createdAt: message.createdAt,
+        images: message.images
       })),
       metadata: capture.metadata
     }

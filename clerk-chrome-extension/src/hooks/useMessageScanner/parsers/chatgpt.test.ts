@@ -3,6 +3,41 @@ import { describe, expect, it } from "vitest"
 import { parseChatGPTDetail } from "./chatgpt"
 
 describe("parseChatGPTDetail", () => {
+  it("keeps image attachments alongside the message text", () => {
+    const parsed = parseChatGPTDetail("conv-with-image", {
+      current_node: "user-node",
+      mapping: {
+        "user-node": {
+          parent: null,
+          message: {
+            author: { role: "user" },
+            content: {
+              content_type: "multimodal_text",
+              parts: [
+                "What is in this image?",
+                {
+                  content_type: "image_asset_pointer",
+                  asset_pointer: "https://files.example.com/uploads/cat.png",
+                  name: "cat.png"
+                }
+              ]
+            }
+          }
+        }
+      }
+    })
+
+    expect(parsed.messages[0]).toMatchObject({
+      text: "What is in this image?",
+      images: [
+        {
+          url: "https://files.example.com/uploads/cat.png",
+          name: "cat.png"
+        }
+      ]
+    })
+  })
+
   it("preserves ChatGPT's real conversation and message timestamps", () => {
     const parsed = parseChatGPTDetail("conv-123", {
       title: "Timestamped conversation",

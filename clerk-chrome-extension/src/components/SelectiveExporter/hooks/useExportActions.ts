@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react"
 import { API_BASE_URL } from "~config/api"
 import { ENABLE_SEND_TO_MY_AI } from "~config/features"
 import type { ExportCapture, StructuredConversationCapture } from "~lib/capture"
+import { appendImageMarkdown } from "~lib/messageImages"
 import {
   buildCaptureExportPayload,
   buildYouTubeTranscriptMarkdown
@@ -236,7 +237,7 @@ export const useExportActions = ({
           msg.authorName || (msg.role === "user" ? "User" : "Assistant")
         const msgIdMatch = msg.id.match(/m_\d+$/)
         const refId = msgIdMatch ? `[${msgIdMatch[0]}] ` : ""
-        return `**${refId}${fromLabel}**\n${msg.text}\n`
+        return `**${refId}${fromLabel}**\n${appendImageMarkdown(msg.text, msg.images)}\n`
       })
       .join("\n")
     return `${header}\n\n${body}`
@@ -252,7 +253,8 @@ export const useExportActions = ({
       id: msg.id,
       role: msg.role,
       from: msg.authorName,
-      text: msg.text
+      text: msg.text,
+      images: msg.images ?? []
     }))
   }, [capture])
 
@@ -377,7 +379,7 @@ export const useExportActions = ({
         const msgIdMatch = msg.id.match(/m_\d+$/)
         const refId = msgIdMatch ? `[${msgIdMatch[0]}] ` : ""
         transcriptLines.push(`**${refId}${fromLabel}**`)
-        transcriptLines.push(msg.text)
+        transcriptLines.push(appendImageMarkdown(msg.text, msg.images))
         transcriptLines.push("")
       })
 

@@ -25,6 +25,12 @@ const structuredCapture: ExportCapture = {
       role: "user",
       text: "How does the structured export work?",
       authorName: "User",
+      images: [
+        {
+          url: "https://files.example.com/uploads/diagram.png",
+          name: "diagram.png"
+        }
+      ],
       node: document.createElement("div")
     },
     {
@@ -132,6 +138,9 @@ describe("useExportActions", () => {
     expect(markdown).toContain("--- BEGIN HEADER ---")
     expect(markdown).toContain("Conversation ID:")
     expect(markdown).toContain("How does the structured export work?")
+    expect(markdown).toContain(
+      "![diagram.png](https://files.example.com/uploads/diagram.png)"
+    )
     expect(markdown).not.toContain("captureMode: page_markdown")
   })
 

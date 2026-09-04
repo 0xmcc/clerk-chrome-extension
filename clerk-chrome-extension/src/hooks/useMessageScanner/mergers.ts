@@ -1,6 +1,18 @@
 import type { Conversation, Message, ScannerStats } from "./types"
 import { now } from "./utils"
 
+const mergeMessageImages = (
+  primary: Message,
+  secondary: Message
+): Message["images"] => {
+  const images = [...(primary.images ?? []), ...(secondary.images ?? [])]
+  if (images.length === 0) return undefined
+
+  return Array.from(
+    new Map(images.map((image) => [image.url, image])).values()
+  )
+}
+
 export const mergeMessagesPreferIncomingOrder = (incoming: Message[], existing: Message[]): Message[] => {
   const byId = new Map<string, Message>()
   for (const m of existing) byId.set(m.id, m)
@@ -13,7 +25,12 @@ export const mergeMessagesPreferIncomingOrder = (incoming: Message[], existing: 
     if (prev) {
       // Prefer the "more complete" text if one is longer
       const pick = (prev.text || "").length > (m.text || "").length ? prev : m
-      merged.push({ ...pick, node: pick.node ?? m.node })
+      const other = pick === prev ? m : prev
+      merged.push({
+        ...pick,
+        images: mergeMessageImages(pick, other),
+        node: pick.node ?? m.node
+      })
     } else {
       merged.push(m)
     }

@@ -9,6 +9,8 @@
 // Types
 // ---------------------------------------------------------------------------
 
+import { extractMetrics, type TweetMetrics } from "./tweet-metrics"
+
 export interface TweetMedia {
   type: "image" | "video" | "gif"
   /**
@@ -53,6 +55,11 @@ export interface TweetData {
   in_reply_to_tweet_id: string | null
   conversation_id: string | null
   raw_json: Record<string, unknown>
+  /**
+   * Engagement counts read from the action bar at save time. Absent keys mean
+   * "not readable", never zero — see tweet-metrics.
+   */
+  public_metrics: TweetMetrics
 }
 
 // ---------------------------------------------------------------------------
@@ -670,6 +677,7 @@ export function extractTweetData(article: Element): TweetData | null {
     quoted_tweet: extractQuotedTweetData(article),
     in_reply_to_tweet_id: extractInReplyToTweetId(article),
     conversation_id: extractConversationId(article),
+    public_metrics: extractMetrics(article),
     raw_json: {}
   }
 

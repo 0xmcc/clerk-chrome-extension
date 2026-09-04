@@ -1,4 +1,8 @@
 import type { CaptureMetadata } from "~lib/capture"
+import {
+  appendImageMarkdown,
+  type MessageImage
+} from "~lib/messageImages"
 import type { TranscriptSegment } from "~lib/transcript-parser"
 import { formatTimestamp } from "~lib/transcript-parser"
 import { deriveConversationIdFromUrl } from "~utils/conversation"
@@ -37,6 +41,7 @@ interface SerializableStructuredMessage {
   text: string
   authorName?: string
   createdAt?: number
+  images?: MessageImage[]
 }
 
 interface SerializableStructuredCapture {
@@ -94,17 +99,22 @@ export const buildCaptureExportPayload = (
       capture.conversationKey
     )
 
-    const messages = capture.messages.map((message) => ({
-      id: message.id,
-      role: message.role,
-      content: message.text,
-      tokens: estimateTokens(message.text),
-      createTime: unixMillisToSeconds(message.createdAt),
-      metadata: {
-        extensionMessageId: message.id,
-        senderName: message.authorName
+    const messages = capture.messages.map((message) => {
+      const content = appendImageMarkdown(message.text, message.images)
+
+      return {
+        id: message.id,
+        role: message.role,
+        content,
+        tokens: estimateTokens(content),
+        createTime: unixMillisToSeconds(message.createdAt),
+        metadata: {
+          extensionMessageId: message.id,
+          senderName: message.authorName,
+          images: message.images ?? []
+        }
       }
-    }))
+    })
 
     return {
       conversationId,

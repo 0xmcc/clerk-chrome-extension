@@ -1,4 +1,5 @@
 import { getPlatformLabel } from "~utils/platform"
+import { collectMessageImages } from "~lib/messageImages"
 import type { Conversation, Message } from "../types"
 import { toMillis, normalizeText, createDetachedNode, generateStableMessageId } from "../utils"
 
@@ -104,6 +105,7 @@ const parseTree = (
       id,
       role,
       text,
+      images: collectMessageImages([msg?.content, msg?.metadata]),
       authorName,
       createdAt: toMillis(msg?.create_time),
       node: createDetachedNode(id)
@@ -171,6 +173,7 @@ const parseLinear = (
       id,
       role,
       text,
+      images: collectMessageImages([msg?.content, msg?.metadata]),
       authorName,
       createdAt: toMillis(createTime),
       node: createDetachedNode(id)
