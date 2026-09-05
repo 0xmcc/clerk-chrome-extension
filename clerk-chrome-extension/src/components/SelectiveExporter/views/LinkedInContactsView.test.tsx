@@ -40,6 +40,7 @@ describe("LinkedInContactsView", () => {
 
   it("switches between contact cards and JSON and exports only checked people", () => {
     const onDownload = vi.fn()
+    const onCopy = vi.fn()
     const contacts = [
       {
         name: "Nayama Rajlich",
@@ -55,7 +56,13 @@ describe("LinkedInContactsView", () => {
       }
     ]
 
-    render(<LinkedInContactsView contacts={contacts} onDownload={onDownload} />)
+    render(
+      <LinkedInContactsView
+        contacts={contacts}
+        onDownload={onDownload}
+        onCopy={onCopy}
+      />
+    )
 
     const nayamaToggle = screen.getByRole("checkbox", {
       name: "Include Nayama Rajlich"
@@ -75,6 +82,9 @@ describe("LinkedInContactsView", () => {
     expect(jsonPreview).toHaveTextContent("Mitra Martin")
     expect(jsonPreview).not.toHaveTextContent("Nayama Rajlich")
 
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }))
+    expect(onCopy).toHaveBeenCalledWith([contacts[1]])
+
     fireEvent.click(screen.getByRole("button", { name: "Download JSON" }))
     expect(onDownload).toHaveBeenCalledWith([contacts[1]])
 
@@ -82,6 +92,73 @@ describe("LinkedInContactsView", () => {
     expect(
       screen.getByRole("checkbox", { name: "Include Mitra Martin" })
     ).toBeChecked()
+  })
+
+  it("adds synchronized backup toggles to the LinkedIn result cards", () => {
+    document.body.innerHTML = `
+      <main>
+        <a href="https://www.linkedin.com/in/nayama-rajlich/">
+          <img src="https://media.licdn.com/nayama.jpg" alt="" />
+          <p>Nayama Rajlich • 3rd+</p>
+          <p>Product Designer</p>
+          <p>San Francisco Bay Area</p>
+        </a>
+      </main>
+    `
+
+    render(
+      <LinkedInContactsView
+        contacts={[
+          {
+            name: "Nayama Rajlich",
+            profileUrl: "https://www.linkedin.com/in/nayama-rajlich/"
+          }
+        ]}
+        onDownload={vi.fn()}
+      />
+    )
+
+    const pageToggle = screen.getByRole("checkbox", {
+      name: "Include Nayama Rajlich on LinkedIn page"
+    })
+    expect(pageToggle).toBeChecked()
+
+    fireEvent.click(pageToggle)
+
+    expect(
+      screen.getByRole("checkbox", { name: "Include Nayama Rajlich" })
+    ).not.toBeChecked()
+    expect(screen.getByText("0 of 1 selected")).toBeInTheDocument()
+  })
+
+  it("copies formatted selected-contact JSON to the clipboard by default", () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    })
+
+    render(
+      <LinkedInContactsView
+        contacts={[
+          {
+            name: "Mitra Martin",
+            location: "San Rafael, California"
+          }
+        ]}
+        onDownload={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }))
+
+    expect(writeText).toHaveBeenCalledWith(
+      JSON.stringify(
+        [{ name: "Mitra Martin", location: "San Rafael, California" }],
+        null,
+        2
+      )
+    )
   })
 
   it("preserves manual selection when the drawer parent re-renders", () => {
@@ -115,5 +192,6 @@ describe("LinkedInContactsView", () => {
       screen.getByText(/No LinkedIn contacts were found/i)
     ).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Download JSON" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Copy" })).toBeDisabled()
   })
 })

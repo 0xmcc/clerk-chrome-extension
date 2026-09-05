@@ -7,6 +7,7 @@ import { DARK_THEME } from "../constants"
 interface LinkedInContactsViewProps {
   contacts: LinkedInContact[]
   onDownload: (contacts: LinkedInContact[]) => void
+  onCopy?: (contacts: LinkedInContact[]) => void
 }
 
 type ContactViewMode = "contacts" | "json"
@@ -14,9 +15,21 @@ type ContactViewMode = "contacts" | "json"
 const contactKey = (contact: LinkedInContact): string =>
   contact.profileUrl ?? contact.name
 
+const canonicalProfileUrl = (href: string): string | null => {
+  try {
+    const url = new URL(href, window.location.origin)
+    url.search = ""
+    url.hash = ""
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
 export const LinkedInContactsView = ({
   contacts,
-  onDownload
+  onDownload,
+  onCopy
 }: LinkedInContactsViewProps) => {
   const [viewMode, setViewMode] = useState<ContactViewMode>("contacts")
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
@@ -41,6 +54,81 @@ export const LinkedInContactsView = ({
       else next.add(key)
       return next
     })
+  }
+
+  useEffect(() => {
+    const contactsByUrl = new Map(
+      contacts.flatMap((contact) => {
+        if (!contact.profileUrl) return []
+        const profileUrl = canonicalProfileUrl(contact.profileUrl)
+        return profileUrl ? [[profileUrl, contact] as const] : []
+      })
+    )
+    const cleanups: Array<() => void> = []
+
+    for (const card of Array.from(
+      document.querySelectorAll<HTMLAnchorElement>('main a[href*="/in/"]')
+    )) {
+      if (!card.querySelector("img") || card.querySelectorAll("p").length < 3) {
+        continue
+      }
+
+      const profileUrl = canonicalProfileUrl(card.href)
+      const contact = profileUrl ? contactsByUrl.get(profileUrl) : undefined
+      if (!contact) continue
+
+      const previousPosition = card.style.position
+      if (window.getComputedStyle(card).position === "static") {
+        card.style.position = "relative"
+      }
+
+      const checkbox = document.createElement("input")
+      checkbox.type = "checkbox"
+      checkbox.checked = selectedKeys.has(contactKey(contact))
+      checkbox.setAttribute(
+        "aria-label",
+        `Include ${contact.name} on LinkedIn page`
+      )
+      checkbox.dataset.linkedinExportToggle = "true"
+      Object.assign(checkbox.style, {
+        position: "absolute",
+        top: "8px",
+        right: "8px",
+        width: "18px",
+        height: "18px",
+        margin: "0",
+        zIndex: "10",
+        accentColor: DARK_THEME.accent,
+        cursor: "pointer"
+      })
+
+      const handleClick = (event: MouseEvent) => {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        toggleContact(contact)
+      }
+
+      checkbox.addEventListener("click", handleClick, true)
+      card.appendChild(checkbox)
+      cleanups.push(() => {
+        checkbox.removeEventListener("click", handleClick, true)
+        checkbox.remove()
+        card.style.position = previousPosition
+      })
+    }
+
+    return () => cleanups.forEach((cleanup) => cleanup())
+  }, [contactsSignature, selectedKeys])
+
+  const copySelectedContacts = () => {
+    if (onCopy) {
+      onCopy(selectedContacts)
+      return
+    }
+
+    void navigator.clipboard.writeText(
+      JSON.stringify(selectedContacts, null, 2)
+    )
   }
 
   const modeButtonStyle = (mode: ContactViewMode) => ({
@@ -88,28 +176,68 @@ export const LinkedInContactsView = ({
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => onDownload(selectedContacts)}
-          disabled={selectedContacts.length === 0}
-          style={{
-            border: `1px solid ${DARK_THEME.border}`,
-            borderRadius: "10px",
-            padding: "8px 12px",
-            fontSize: "12px",
-            fontWeight: 600,
-            background:
-              selectedContacts.length === 0
-                ? DARK_THEME.surface
-                : DARK_THEME.panel,
-            color:
-              selectedContacts.length === 0
-                ? DARK_THEME.muted
-                : DARK_THEME.text,
-            cursor: selectedContacts.length === 0 ? "not-allowed" : "pointer"
-          }}>
-          Download JSON
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <button
+            type="button"
+            onClick={copySelectedContacts}
+            disabled={selectedContacts.length === 0}
+            title="Copy to clipboard"
+            style={{
+              border: `1px solid ${DARK_THEME.border}`,
+              borderRadius: "10px",
+              padding: "8px 12px",
+              fontSize: "12px",
+              fontWeight: 600,
+              background:
+                selectedContacts.length === 0
+                  ? DARK_THEME.surface
+                  : DARK_THEME.panel,
+              color:
+                selectedContacts.length === 0
+                  ? DARK_THEME.muted
+                  : DARK_THEME.text,
+              cursor: selectedContacts.length === 0 ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px"
+            }}>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            Copy
+          </button>
+          <button
+            type="button"
+            onClick={() => onDownload(selectedContacts)}
+            disabled={selectedContacts.length === 0}
+            style={{
+              border: `1px solid ${DARK_THEME.border}`,
+              borderRadius: "10px",
+              padding: "8px 12px",
+              fontSize: "12px",
+              fontWeight: 600,
+              background:
+                selectedContacts.length === 0
+                  ? DARK_THEME.surface
+                  : DARK_THEME.panel,
+              color:
+                selectedContacts.length === 0
+                  ? DARK_THEME.muted
+                  : DARK_THEME.text,
+              cursor: selectedContacts.length === 0 ? "not-allowed" : "pointer"
+            }}>
+            Download JSON
+          </button>
+        </div>
       </div>
 
       {contacts.length === 0 ? (
