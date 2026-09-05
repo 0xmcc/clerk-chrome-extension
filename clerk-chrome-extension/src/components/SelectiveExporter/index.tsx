@@ -17,6 +17,7 @@ import {
   type GitHubRepo,
   type GitHubStatus
 } from "~lib/github"
+import { downloadLinkedInContacts } from "~lib/linkedin-contacts"
 import { loadRecentCaptures } from "~lib/recentCaptures"
 import { requestClerkAuthRefresh, requestClerkSignOut } from "~utils/clerk"
 import { conversationsNeedingSync } from "~utils/conversationSyncState"
@@ -40,6 +41,7 @@ import { AnalysisView } from "./views/AnalysisView"
 import { CollectionView } from "./views/CollectionView"
 import { ExportView } from "./views/ExportView"
 import { Header } from "./views/Header"
+import { LinkedInContactsView } from "./views/LinkedInContactsView"
 import { LinkedInHelperView } from "./views/LinkedInHelperView"
 import { SettingsView } from "./views/SettingsView"
 import { SubHeader } from "./views/SubHeader"
@@ -56,7 +58,8 @@ export const SelectiveExporter = ({
   onSelectConversation,
   onLoadConversation,
   youtubeStatus,
-  youtubeErrorMessage
+  youtubeErrorMessage,
+  linkedinContacts
 }: SelectiveExporterProps) => {
   const hasInitializedRef = useRef(false)
   const platformLabelRef = useRef(getPlatformLabel())
@@ -86,9 +89,12 @@ export const SelectiveExporter = ({
   const isYouTubeCapture = capture?.captureMode === "youtube_transcript"
   const isYouTubeSurface =
     isYouTubeCapture || Boolean(youtubeStatus && youtubeStatus !== "idle")
+  const isLinkedInContactsSurface = linkedinContacts !== undefined
   const captureTitle =
-    (isYouTubeCapture ? capture.videoTitle : capture?.title) ||
-    capture?.metadata.pageTitle ||
+    (isLinkedInContactsSurface
+      ? "LinkedIn contacts"
+      : (isYouTubeCapture ? capture.videoTitle : capture?.title) ||
+        capture?.metadata.pageTitle) ||
     `${platformLabelRef.current} Conversation`
 
   // Derive isSignedOut for minimal churn (keeps existing prop names)
@@ -165,14 +171,16 @@ export const SelectiveExporter = ({
       (m) => includeHiddenMessages || (m.role !== "system" && m.role !== "tool")
     )
   }, [capture, includeHiddenMessages])
-  const selectedCount =
-    capture?.captureMode === "page_markdown"
+  const selectedCount = isLinkedInContactsSurface
+    ? linkedinContacts.length
+    : capture?.captureMode === "page_markdown"
       ? 1
       : capture?.captureMode === "youtube_transcript"
         ? capture.segments.length
         : selectedMessages.length
-  const summaryText =
-    capture?.captureMode === "page_markdown"
+  const summaryText = isLinkedInContactsSurface
+    ? `${selectedCount} contacts detected`
+    : capture?.captureMode === "page_markdown"
       ? "Page markdown capture ready"
       : isYouTubeSurface
         ? youtubeStatus === "loading"
@@ -611,7 +619,12 @@ export const SelectiveExporter = ({
           .analysis-markdown li { list-style: disc; margin: 4px 0; }
           .analysis-markdown strong { font-weight: 700; }
         `}</style>
-        {!capture && !isYouTubeSurface ? (
+        {isLinkedInContactsSurface && view === "export" ? (
+          <LinkedInContactsView
+            contacts={linkedinContacts}
+            onDownload={() => downloadLinkedInContacts(linkedinContacts)}
+          />
+        ) : !capture && !isYouTubeSurface ? (
           <div
             style={{
               textAlign: "center",
@@ -761,53 +774,58 @@ export const SelectiveExporter = ({
       </div>
 
       {/* LinkedIn Response Helper */}
-      {isLinkedIn && view === "export" && promptContainers.length > 0 && (
-        <LinkedInHelperView
-          chatEntries={chatEntries}
-          replyNote={replyNote}
-          promptContainers={promptContainers}
-          selectedPromptId={selectedPromptId}
-          onReplyNoteChange={setReplyNote}
-          onAddChatMessage={handleAddChatMessage}
-          onSuggest={handleSuggest}
+      {isLinkedIn &&
+        !isLinkedInContactsSurface &&
+        view === "export" &&
+        promptContainers.length > 0 && (
+          <LinkedInHelperView
+            chatEntries={chatEntries}
+            replyNote={replyNote}
+            promptContainers={promptContainers}
+            selectedPromptId={selectedPromptId}
+            onReplyNoteChange={setReplyNote}
+            onAddChatMessage={handleAddChatMessage}
+            onSuggest={handleSuggest}
+          />
+        )}
+
+      {!isLinkedInContactsSurface && (
+        <ActionArea
+          view={view}
+          selectedCount={selectedCount}
+          canSave={canSave}
+          exportState={exportState}
+          statusMessage={statusMessage}
+          analysisInput={analysisInput}
+          isSignedOut={isSignedOut}
+          awaitingSignIn={awaitingSignIn}
+          githubButtonLabel={
+            authStatus === "signedIn"
+              ? githubStatus.connected
+                ? undefined
+                : "Connect GitHub"
+              : undefined
+          }
+          githubConnected={githubStatus.connected}
+          onGitHubClick={handleGitHubClick}
+          githubRepos={availableGitHubRepos}
+          selectedGitHubRepoFullNames={selectedGitHubRepoFullNames}
+          githubRepoMenuOpen={isGitHubRepoMenuOpen}
+          githubReposLoading={isGitHubReposLoading}
+          githubRepoSelectionBusy={isSavingGitHubRepos}
+          githubRepoMessage={githubRepoMessage}
+          onGitHubRepoMenuToggle={() =>
+            setIsGitHubRepoMenuOpen((currentValue) => !currentValue)
+          }
+          onGitHubRepoToggle={handleToggleGitHubRepo}
+          onAnalysisInputChange={setAnalysisInput}
+          onAnalysisSend={handleAnalysisSend}
+          onBackToExport={goToExport}
+          onSave={handleSave}
+          onSignInClick={handleSignInClick}
+          onConfirmSignedIn={handleConfirmSignedIn}
         />
       )}
-
-      <ActionArea
-        view={view}
-        selectedCount={selectedCount}
-        canSave={canSave}
-        exportState={exportState}
-        statusMessage={statusMessage}
-        analysisInput={analysisInput}
-        isSignedOut={isSignedOut}
-        awaitingSignIn={awaitingSignIn}
-        githubButtonLabel={
-          authStatus === "signedIn"
-            ? githubStatus.connected
-              ? undefined
-              : "Connect GitHub"
-            : undefined
-        }
-        githubConnected={githubStatus.connected}
-        onGitHubClick={handleGitHubClick}
-        githubRepos={availableGitHubRepos}
-        selectedGitHubRepoFullNames={selectedGitHubRepoFullNames}
-        githubRepoMenuOpen={isGitHubRepoMenuOpen}
-        githubReposLoading={isGitHubReposLoading}
-        githubRepoSelectionBusy={isSavingGitHubRepos}
-        githubRepoMessage={githubRepoMessage}
-        onGitHubRepoMenuToggle={() =>
-          setIsGitHubRepoMenuOpen((currentValue) => !currentValue)
-        }
-        onGitHubRepoToggle={handleToggleGitHubRepo}
-        onAnalysisInputChange={setAnalysisInput}
-        onAnalysisSend={handleAnalysisSend}
-        onBackToExport={goToExport}
-        onSave={handleSave}
-        onSignInClick={handleSignInClick}
-        onConfirmSignedIn={handleConfirmSignedIn}
-      />
     </div>
   )
 }

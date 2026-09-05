@@ -1,14 +1,8 @@
 interface FloatingButtonProps {
   onOpenExporter?: () => void
-  label?: string
-  icon?: string
 }
 
-export const FloatingButton = ({
-  onOpenExporter,
-  label = "Capture this page for AI",
-  icon = "✨"
-}: FloatingButtonProps) => {
+export const FloatingButton = ({ onOpenExporter }: FloatingButtonProps) => {
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault()
     e.stopPropagation()
@@ -42,10 +36,10 @@ export const FloatingButton = ({
       `}</style>
       <button
         type="button"
-        aria-label={label}
+        aria-label="Capture this page for AI"
         onClick={handleClick}
         onContextMenu={handleRightClick}
-        title={label}
+        title="Capture this page for AI"
         style={{
           position: "fixed",
           bottom: "20px",
@@ -79,7 +73,7 @@ export const FloatingButton = ({
           e.currentTarget.style.transform = "scale(1)"
           e.currentTarget.style.boxShadow = "0 4px 20px rgba(0, 0, 0, 0.15)"
         }}>
-        {icon}
+        ✨
       </button>
     </>
   )

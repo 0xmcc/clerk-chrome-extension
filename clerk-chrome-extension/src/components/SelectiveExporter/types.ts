@@ -1,6 +1,7 @@
 import type { Conversation } from "~hooks/useMessageScanner/types"
 import type { TranscriptStatus } from "~hooks/useYouTubeTranscript"
 import type { ExportCapture } from "~lib/capture"
+import type { LinkedInContact } from "~lib/linkedin-contacts"
 import type { TranscriptSegment } from "~lib/transcript-parser"
 
 /**
@@ -18,6 +19,7 @@ export interface SelectiveExporterProps {
   onLoadConversation?: (convoId: string) => Promise<Conversation | undefined>
   youtubeStatus?: TranscriptStatus
   youtubeErrorMessage?: string
+  linkedinContacts?: LinkedInContact[]
 }
 
 /**

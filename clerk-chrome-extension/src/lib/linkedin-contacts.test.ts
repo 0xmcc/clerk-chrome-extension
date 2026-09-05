@@ -101,6 +101,39 @@ describe("LinkedIn people search contact export", () => {
     ])
   })
 
+  it("scrapes LinkedIn's live randomized-class result cards by semantic structure", () => {
+    document.body.innerHTML = `
+      <main>
+        <div class="random-wrapper" data-display-contents="true">
+          <a class="random-card-class" href="https://www.linkedin.com/in/nayama-rajlich-20618323b/?trk=people_search">
+            <div>
+              <img src="https://media.licdn.com/dms/image/nayama.jpg" alt="" />
+              <p class="random-name-class">
+                Nayama Rajlich • 3rd+
+              </p>
+              <p class="random-headline-class">Product Designer | UX + Visual Design</p>
+              <p class="random-location-class">San Francisco Bay Area</p>
+              <button>Message</button>
+              <p class="random-current-class">Current: Product Designer at Barcelino</p>
+            </div>
+          </a>
+        </div>
+      </main>
+    `
+
+    expect(scrapeLinkedInContacts(document)).toEqual([
+      {
+        name: "Nayama Rajlich",
+        profileUrl: "https://www.linkedin.com/in/nayama-rajlich-20618323b/",
+        headline: "Product Designer | UX + Visual Design",
+        location: "San Francisco Bay Area",
+        current: "Product Designer at Barcelino",
+        connectionDegree: "3rd+",
+        imageUrl: "https://media.licdn.com/dms/image/nayama.jpg"
+      }
+    ])
+  })
+
   it("downloads a timestamped, formatted JSON file", () => {
     const createObjectURL = vi.fn(() => "blob:linkedin-contacts")
     const revokeObjectURL = vi.fn()

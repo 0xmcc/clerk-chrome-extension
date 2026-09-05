@@ -8,7 +8,6 @@ import { useCaptureSource } from "~hooks/useCaptureSource"
 import { useMessageScanner } from "~hooks/useMessageScanner"
 import { useYouTubeTranscript } from "~hooks/useYouTubeTranscript"
 import {
-  downloadLinkedInContacts,
   isLinkedInPeopleSearchPage,
   scrapeLinkedInContacts
 } from "~lib/linkedin-contacts"
@@ -79,22 +78,9 @@ const PlasmoOverlay = () => {
     window.location.href
   )
 
-  const handleFloatingButtonClick = useCallback(() => {
-    if (!isLinkedInPeopleSearch) {
-      setIsExporterOpen(true)
-      return
-    }
-
-    const contacts = scrapeLinkedInContacts(document)
-    if (contacts.length === 0) {
-      window.alert(
-        "No LinkedIn contacts were found. Wait for the search results to load and try again."
-      )
-      return
-    }
-
-    downloadLinkedInContacts(contacts)
-  }, [isLinkedInPeopleSearch])
+  const linkedinContacts = isLinkedInPeopleSearch
+    ? scrapeLinkedInContacts(document)
+    : undefined
 
   // Track rescan-on-open attempts with timestamp for cooldown-based retry
   const rescanOnOpenAttemptsRef = useRef<Map<string, number>>(new Map())
@@ -291,15 +277,7 @@ const PlasmoOverlay = () => {
 
   return (
     <>
-      <FloatingButton
-        onOpenExporter={handleFloatingButtonClick}
-        label={
-          isLinkedInPeopleSearch
-            ? "Export LinkedIn contacts as JSON"
-            : "Capture this page for AI"
-        }
-        icon={isLinkedInPeopleSearch ? "{}" : "✨"}
-      />
+      <FloatingButton onOpenExporter={() => setIsExporterOpen(true)} />
       <SelectiveExporter
         isOpen={isExporterOpen}
         onClose={() => setIsExporterOpen(false)}
@@ -312,6 +290,7 @@ const PlasmoOverlay = () => {
         onLoadConversation={(convoId) => rescan(convoId)}
         youtubeStatus={youtubeStatus}
         youtubeErrorMessage={youtubeErrorMessage}
+        linkedinContacts={linkedinContacts}
       />
     </>
   )

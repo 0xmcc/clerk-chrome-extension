@@ -29,4 +29,16 @@ describe("content script host targeting", () => {
     expect(source).not.toContain('"http://*/*"')
     expect(source).not.toContain('"https://*/*"')
   })
+
+  it("keeps the shared launcher behavior and opens the drawer on LinkedIn", () => {
+    const source = fs.readFileSync(
+      path.resolve(process.cwd(), "src/content.tsx"),
+      "utf8"
+    )
+
+    expect(source).toMatch(
+      /<FloatingButton\s+onOpenExporter=\{\(\) => setIsExporterOpen\(true\)\}\s*\/>/
+    )
+    expect(source).not.toContain("window.alert(")
+  })
 })

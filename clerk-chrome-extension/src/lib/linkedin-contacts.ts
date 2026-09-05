@@ -49,12 +49,25 @@ const canonicalProfileUrl = (href: string | null): string | undefined => {
 }
 
 const scrapeCard = (card: Element): LinkedInContact | null => {
-  const profileLink = card.querySelector<HTMLAnchorElement>('a[href*="/in/"]')
-  const name = textFrom(card, [
-    ".entity-result__title-text a span[aria-hidden=true]",
-    'a[href*="/in/"] span[aria-hidden=true]',
-    ".entity-result__title-text a"
-  ])
+  const paragraphs = Array.from(card.querySelectorAll("p"))
+    .map((element) => element.textContent?.replace(/\s+/g, " ").trim())
+    .filter((text): text is string => Boolean(text))
+  const semanticNameLine = paragraphs[0]
+  const semanticDegree = semanticNameLine?.match(
+    /[·•]\s*((?:1st|2nd|3rd)\+?)\s*$/i
+  )?.[1]
+  const semanticName = semanticNameLine
+    ?.replace(/[·•]\s*(?:1st|2nd|3rd)\+?\s*$/i, "")
+    .trim()
+  const profileLink = card.matches('a[href*="/in/"]')
+    ? (card as HTMLAnchorElement)
+    : card.querySelector<HTMLAnchorElement>('a[href*="/in/"]')
+  const name =
+    textFrom(card, [
+      ".entity-result__title-text a span[aria-hidden=true]",
+      'a[href*="/in/"] span[aria-hidden=true]',
+      ".entity-result__title-text a"
+    ]) ?? semanticName
 
   if (!name) return null
 
@@ -62,24 +75,27 @@ const scrapeCard = (card: Element): LinkedInContact | null => {
   const profileUrl = canonicalProfileUrl(
     profileLink?.getAttribute("href") ?? null
   )
-  const headline = textFrom(card, [
-    ".entity-result__primary-subtitle",
-    ".t-14.t-black.t-normal"
-  ])
-  const location = textFrom(card, [
-    ".entity-result__secondary-subtitle",
-    ".t-14.t-normal.t-black--light"
-  ])
-  const current = textFrom(card, [".entity-result__summary"])?.replace(
-    /^Current:\s*/i,
-    ""
-  )
-  const connectionDegree = textFrom(card, [
-    ".entity-result__badge-text span[aria-hidden=true]",
-    ".entity-result__badge-text"
-  ])?.replace(/^[\s·•]+/, "")
+  const headline =
+    textFrom(card, [
+      ".entity-result__primary-subtitle",
+      ".t-14.t-black.t-normal"
+    ]) ?? paragraphs[1]
+  const location =
+    textFrom(card, [
+      ".entity-result__secondary-subtitle",
+      ".t-14.t-normal.t-black--light"
+    ]) ?? paragraphs[2]
+  const currentText =
+    textFrom(card, [".entity-result__summary"]) ??
+    paragraphs.find((text) => /^Current:/i.test(text))
+  const current = currentText?.replace(/^Current:\s*/i, "")
+  const connectionDegree =
+    textFrom(card, [
+      ".entity-result__badge-text span[aria-hidden=true]",
+      ".entity-result__badge-text"
+    ])?.replace(/^[\s·•]+/, "") ?? semanticDegree
   const imageUrl = card.querySelector<HTMLImageElement>(
-    "img.entity-result__img, .entity-result__img img"
+    "img.entity-result__img, .entity-result__img img, img"
   )?.src
 
   if (profileUrl) contact.profileUrl = profileUrl
@@ -107,9 +123,17 @@ export const isLinkedInPeopleSearchPage = (url: string): boolean => {
 export const scrapeLinkedInContacts = (
   root: ParentNode = document
 ): LinkedInContact[] => {
-  const cards = Array.from(
+  const legacyCards = Array.from(
     root.querySelectorAll(RESULT_CARD_SELECTORS.join(","))
   )
+  const semanticCards = Array.from(
+    root.querySelectorAll('main a[href*="/in/"]')
+  ).filter(
+    (element) =>
+      Boolean(element.querySelector("img")) &&
+      element.querySelectorAll("p").length >= 3
+  )
+  const cards = legacyCards.length > 0 ? legacyCards : semanticCards
   const contacts: LinkedInContact[] = []
   const seen = new Set<string>()
 
