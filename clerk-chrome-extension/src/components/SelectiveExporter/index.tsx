@@ -622,7 +622,7 @@ export const SelectiveExporter = ({
         {isLinkedInContactsSurface && view === "export" ? (
           <LinkedInContactsView
             contacts={linkedinContacts}
-            onDownload={() => downloadLinkedInContacts(linkedinContacts)}
+            onDownload={downloadLinkedInContacts}
           />
         ) : !capture && !isYouTubeSurface ? (
           <div
