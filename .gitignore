@@ -7,3 +7,7 @@
 
 .cursorignore
 .gstack/
+
+# local env files — also ignored in clerk-chrome-extension/.gitignore;
+# this belt-and-suspenders rule covers any env file created at the repo root
+.env*
