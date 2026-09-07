@@ -1,0 +1,10 @@
+allowBuilds:
+  '@clerk/shared': true
+  '@parcel/watcher': true
+  '@swc/core': true
+  browser-tabs-lock: true
+  core-js: true
+  esbuild: true
+  lmdb: true
+  msgpackr-extract: true
+  sharp: true
