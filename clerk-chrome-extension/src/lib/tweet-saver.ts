@@ -8,6 +8,7 @@
 import { getSupabaseClient } from "./supabase"
 import type { TweetData } from "./tweet-extractor"
 import { extractTweetData, expandLongPost, findTweetArticle } from "./tweet-extractor"
+import { folderTagsFrom, mergeTags } from "./folder-tags"
 import { resolveMediaFromSyndication } from "./media-resolver"
 
 // ---------------------------------------------------------------------------
@@ -91,6 +92,21 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
     ? tweetData.link_cards[0].url 
     : (tweetData.urls.length > 0 ? tweetData.urls[0] : null)
 
+  // Which bookmarks folder this save came from. The X API cannot filter by
+  // folder, so save time is the only moment this is knowable — and the reels
+  // publisher selects rows by exactly these tags. Merge rather than assign:
+  // the upsert matches on tweet_id, and a tweet can sit in several folders.
+  const folderTags = folderTagsFrom(window.location.pathname)
+  let tags: string[] | null = null
+  if (folderTags.length > 0) {
+    const { data: existing } = await supabase
+      .from("tweets")
+      .select("tags")
+      .eq("tweet_id", tweetData.tweet_id)
+      .maybeSingle()
+    tags = mergeTags(existing?.tags, folderTags)
+  }
+
   // Upsert the main tweet
   const { error } = await supabase.from("tweets").upsert(
     {
@@ -118,7 +134,10 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
       // overwrite good API-sourced counts with nothing on a re-save.
       ...(Object.keys(tweetData.public_metrics ?? {}).length > 0
         ? { public_metrics: tweetData.public_metrics }
-        : {})
+        : {}),
+      // Same reasoning: a save made outside a folder must not clear the tags
+      // a folder save previously wrote.
+      ...(tags ? { tags } : {})
     },
     { onConflict: "tweet_id" }
   )
