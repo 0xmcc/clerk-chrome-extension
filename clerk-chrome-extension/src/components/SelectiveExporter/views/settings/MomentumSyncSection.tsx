@@ -65,6 +65,12 @@ export const MomentumSyncSection = ({
         placeholder="from `momentum serve`"
         onChange={(event) => onMomentumSyncTokenChange(event.target.value)}
       />
+      {momentumSyncToken.trim() === "" && (
+        <div role="alert" style={{ fontSize: "11px", color: DARK_THEME.warning }}>
+          No token set — nothing will sync. The server rejects every request
+          without it.
+        </div>
+      )}
     </div>
 
     <div style={{ fontSize: "11px", color: DARK_THEME.muted }}>

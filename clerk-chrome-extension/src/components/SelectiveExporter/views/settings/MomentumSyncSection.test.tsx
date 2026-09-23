@@ -41,4 +41,32 @@ describe("MomentumSyncSection", () => {
     expect(onUrl).toHaveBeenCalledWith("http://localhost:5000")
     expect(onToken).toHaveBeenCalledWith("abc")
   })
+
+  it.each(["", "   "])("warns that nothing will sync when the token is %j", (token) => {
+    render(
+      <MomentumSyncSection
+        momentumSyncUrl="http://127.0.0.1:4319"
+        momentumSyncToken={token}
+        onMomentumSyncUrlChange={vi.fn()}
+        onMomentumSyncTokenChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "No token set — nothing will sync"
+    )
+  })
+
+  it("shows no warning once a token is set", () => {
+    render(
+      <MomentumSyncSection
+        momentumSyncUrl="http://127.0.0.1:4319"
+        momentumSyncToken="secret-token"
+        onMomentumSyncUrlChange={vi.fn()}
+        onMomentumSyncTokenChange={vi.fn()}
+      />
+    )
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  })
 })
