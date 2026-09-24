@@ -18,6 +18,7 @@ import { useActiveMessages, useConversationStore } from "./state"
 import {
   getChatGPTAuthToken,
   getClaudeOrgId,
+  getNewestUpdatedAt,
   loadPersistedState
 } from "./store"
 import type { InterceptorEvent } from "./types"
@@ -88,7 +89,8 @@ export const useMessageScanner = () => {
   if (!ingestionPipelineRef.current && capturedPlatform === "chatgpt") {
     ingestionPipelineRef.current = createIngestionPipeline({
       upsertMany,
-      getAuthToken: getChatGPTAuthToken
+      getAuthToken: getChatGPTAuthToken,
+      getNewestUpdatedAt: () => getNewestUpdatedAt("chatgpt")
     })
   }
   if (!ingestionPipelineRef.current && capturedPlatform === "claude") {

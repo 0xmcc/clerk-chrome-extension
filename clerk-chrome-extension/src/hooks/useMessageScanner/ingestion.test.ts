@@ -18,14 +18,33 @@ const makeListResponse = (count: number, total: number, startId = 0) => ({
   })),
 })
 
+// The real endpoint is called with order=updated, i.e. newest first. The
+// helper above counts upwards, which is the opposite; incremental sync only
+// makes sense against a descending page, so model that explicitly.
+const makeOrderedListResponse = (
+  updateTimes: number[],
+  total = updateTimes.length
+) => ({
+  total,
+  items: updateTimes.map((t) => ({
+    id: `conv-at-${t}`,
+    title: `Conversation ${t}`,
+    create_time: t,
+    update_time: t,
+  })),
+})
+
 const makeDeps = (overrides?: Partial<{
   getAuthToken: () => string | null
+  getNewestUpdatedAt: () => number | null
   upsertMany: ReturnType<typeof vi.fn>
 }>) => {
   const upsertMany = vi.fn()
   return {
     upsertMany,
     getAuthToken: vi.fn().mockReturnValue("test-jwt-token"),
+    // Null = nothing known yet, i.e. the first ever load.
+    getNewestUpdatedAt: vi.fn().mockReturnValue(null),
     ...overrides,
   }
 }
@@ -485,5 +504,158 @@ describe("handlers Claude collection integration", () => {
     })
 
     expect(onClaudeOrganizationObserved).toHaveBeenCalledTimes(1)
+  })
+})
+
+
+// Ingestion used to start from offset 0 and page to the end of the history on
+// every single page load, ignoring the conversations the store had already
+// restored from session storage. Refreshing ChatGPT a few times therefore
+// re-downloaded the whole list each time, and ChatGPT answered with
+// "Too many requests ... we've temporarily limited access to your conversations".
+//
+// The list arrives newest-first, so everything at or below the newest
+// updatedAt already held is known, and paging past it is wasted traffic.
+describe("createIngestionPipeline — incremental sync", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubGlobal("fetch", vi.fn())
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const SEC = 1700000000
+  const ms = (t: number) => t * 1000
+
+  it("stops paging at the first conversation it already has", async () => {
+    // Store already holds everything up to SEC+50.
+    const deps = makeDeps({
+      getNewestUpdatedAt: vi.fn().mockReturnValue(ms(SEC + 50)),
+    })
+    // Page 1 is newest-first: two genuinely new, then one already known.
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(
+        makeOrderedListResponse([SEC + 52, SEC + 51, SEC + 50, SEC + 49], 400)
+      ),
+    } as unknown as Response)
+
+    const pipeline = createIngestionPipeline(deps)
+    pipeline.trigger()
+    await vi.runAllTimersAsync()
+
+    // total says 400, but everything past the cutoff is already known.
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
+  })
+
+  it("stores only the conversations newer than what it already has", async () => {
+    const deps = makeDeps({
+      getNewestUpdatedAt: vi.fn().mockReturnValue(ms(SEC + 50)),
+    })
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(
+        makeOrderedListResponse([SEC + 52, SEC + 51, SEC + 50, SEC + 49], 400)
+      ),
+    } as unknown as Response)
+
+    const pipeline = createIngestionPipeline(deps)
+    pipeline.trigger()
+    await vi.runAllTimersAsync()
+
+    const stored = deps.upsertMany.mock.calls.flatMap((call) => call[0])
+    expect(stored.map((c: { id: string }) => c.id)).toEqual([
+      `conv-at-${SEC + 52}`,
+      `conv-at-${SEC + 51}`,
+    ])
+  })
+
+  it("a refresh with nothing new costs exactly one request and stores nothing", async () => {
+    // This is the reported bug, stated as a test: reload the page, nothing has
+    // changed, so ingestion must not walk the history again.
+    const deps = makeDeps({
+      getNewestUpdatedAt: vi.fn().mockReturnValue(ms(SEC + 52)),
+    })
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(
+        makeOrderedListResponse([SEC + 52, SEC + 51, SEC + 50], 400)
+      ),
+    } as unknown as Response)
+
+    const pipeline = createIngestionPipeline(deps)
+    pipeline.trigger()
+    await vi.runAllTimersAsync()
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
+    const stored = deps.upsertMany.mock.calls.flatMap((call) => call[0])
+    expect(stored).toEqual([])
+  })
+
+  it("keeps paging while a page is still entirely new", async () => {
+    // The cutoff is older than everything on page 1, so stopping there would
+    // silently lose conversations — the opposite failure to the one above.
+    const deps = makeDeps({
+      getNewestUpdatedAt: vi.fn().mockReturnValue(ms(SEC - 1000)),
+    })
+    const page1 = Array.from({ length: 100 }, (_, i) => SEC + 200 - i)
+    const page2 = [SEC + 99, SEC + 98, SEC - 1000, SEC - 1001]
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue(makeOrderedListResponse(page1, 400)),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue(makeOrderedListResponse(page2, 400)),
+      } as unknown as Response)
+
+    const pipeline = createIngestionPipeline(deps)
+    pipeline.trigger()
+    await vi.runAllTimersAsync()
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2)
+    const urls = vi.mocked(fetch).mock.calls.map(([url]) => url as string)
+    expect(urls[1]).toContain("offset=100")
+    const stored = deps.upsertMany.mock.calls.flatMap((call) => call[0])
+    expect(stored).toHaveLength(102)
+  })
+
+  it("picks up a conversation that was updated since the last load", async () => {
+    const deps = makeDeps({
+      getNewestUpdatedAt: vi.fn().mockReturnValue(ms(SEC + 50)),
+    })
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(
+        makeOrderedListResponse([SEC + 99, SEC + 50, SEC + 49], 400)
+      ),
+    } as unknown as Response)
+
+    const pipeline = createIngestionPipeline(deps)
+    pipeline.trigger()
+    await vi.runAllTimersAsync()
+
+    const stored = deps.upsertMany.mock.calls.flatMap((call) => call[0])
+    expect(stored.map((c: { id: string }) => c.id)).toEqual([`conv-at-${SEC + 99}`])
+  })
+
+  it("first ever load still ingests the whole history", async () => {
+    // Regression guard: with nothing known, behaviour must be unchanged.
+    const deps = makeDeps({ getNewestUpdatedAt: vi.fn().mockReturnValue(null) })
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(makeListResponse(100, 250, 0)) } as unknown as Response)
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(makeListResponse(100, 250, 100)) } as unknown as Response)
+      .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(makeListResponse(50, 250, 200)) } as unknown as Response)
+
+    const pipeline = createIngestionPipeline(deps)
+    pipeline.trigger()
+    await vi.runAllTimersAsync()
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3)
+    const stored = deps.upsertMany.mock.calls.flatMap((call) => call[0])
+    expect(stored).toHaveLength(250)
   })
 })

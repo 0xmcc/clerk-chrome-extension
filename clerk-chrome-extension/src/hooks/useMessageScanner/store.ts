@@ -40,6 +40,22 @@ export const setChatGPTAuthToken = (token: string) => {
 
 export const getChatGPTAuthToken = (): string | null => cachedChatGPTAuthToken
 
+// Newest updatedAt held for one platform, or null when nothing is known yet.
+// Ingestion reads this to stop paging the conversation list once it reaches
+// entries it already has, instead of walking the whole history on every load.
+export const getNewestUpdatedAt = (
+  platform: Conversation["platform"]
+): number | null => {
+  let newest: number | null = null
+  for (const convo of sharedStore.values()) {
+    if (convo.platform !== platform) continue
+    const at = convo.updatedAt
+    if (typeof at !== "number" || !Number.isFinite(at)) continue
+    if (newest === null || at > newest) newest = at
+  }
+  return newest
+}
+
 // Persist minimal conversation metadata (no messages) — debounced 500ms
 // Array alloc is deferred into the timeout so rapid upserts only serialize once
 let _persistTimer: ReturnType<typeof setTimeout> | null = null

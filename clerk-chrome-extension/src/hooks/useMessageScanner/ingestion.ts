@@ -20,6 +20,9 @@ export interface IngestionPipeline {
 interface IngestionDeps {
   upsertMany: (conversations: Conversation[]) => void
   getAuthToken: () => string | null
+  // Newest updatedAt already held for this platform, or null when nothing is
+  // known yet. Read once per run, so a run cannot chase its own writes.
+  getNewestUpdatedAt: () => number | null
 }
 
 interface ClaudeIngestionDeps {
@@ -49,7 +52,9 @@ export function createIngestionPipeline(deps: IngestionDeps): IngestionPipeline 
     abortController = new AbortController()
     const { signal } = abortController
 
-    logIngestion("INGESTION_PHASE1_START")
+    const cutoff = deps.getNewestUpdatedAt()
+
+    logIngestion("INGESTION_PHASE1_START", { cutoff })
     let offset = 0
     let total = Infinity  // updated from first response
 
@@ -93,9 +98,28 @@ export function createIngestionPipeline(deps: IngestionDeps): IngestionPipeline 
       const parsed = parseChatGPTList(json)
       logIngestion("INGESTION_PHASE1_PAGE", { offset, pageCount: parsed.length, total })
 
-      if (parsed.length > 0) {
+      // The list is requested newest-first, so the first entry at or below the
+      // newest updatedAt we already hold means the rest of this page — and
+      // every page behind it — is already known. Without this, every page load
+      // walked the whole history again and ChatGPT answered with "Too many
+      // requests ... we've temporarily limited access to your conversations".
+      // An entry with no usable updatedAt is treated as new: re-storing one
+      // conversation is cheap, stopping early on it would lose the rest.
+      let reachedKnown = false
+      let fresh = parsed
+      if (cutoff !== null) {
+        const firstKnown = parsed.findIndex(
+          m => typeof m.updatedAt === "number" && m.updatedAt <= cutoff
+        )
+        if (firstKnown !== -1) {
+          reachedKnown = true
+          fresh = parsed.slice(0, firstKnown)
+        }
+      }
+
+      if (fresh.length > 0) {
         const seenAt = now()
-        const convos: Conversation[] = parsed.map(m => ({
+        const convos: Conversation[] = fresh.map(m => ({
           id: m.id,
           platform: "chatgpt",
           title: m.title,
@@ -106,7 +130,12 @@ export function createIngestionPipeline(deps: IngestionDeps): IngestionPipeline 
           lastSeenAt: seenAt,
         }))
         deps.upsertMany(convos)
-        offset += parsed.length
+        offset += fresh.length
+      }
+
+      if (reachedKnown) {
+        logIngestion("INGESTION_PHASE1_UP_TO_DATE", { offset, newCount: fresh.length })
+        break
       }
 
       if (parsed.length === 0 || offset >= total) break
