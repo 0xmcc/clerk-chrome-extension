@@ -7,7 +7,9 @@
 
 import { getSupabaseClient } from "./supabase"
 import type { TweetData } from "./tweet-extractor"
-import { extractTweetData, findTweetArticle } from "./tweet-extractor"
+import { extractTweetData, expandLongPost, findTweetArticle } from "./tweet-extractor"
+import { folderTagsFrom, mergeTags } from "./folder-tags"
+import { resolveMediaFromSyndication } from "./media-resolver"
 
 // ---------------------------------------------------------------------------
 // Save tweet
@@ -31,6 +33,7 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
     try {
       const quotedArticle = findTweetArticle(tweetData.quoted_tweet_id)
       if (quotedArticle) {
+        await expandLongPost(quotedArticle)
         const quotedData = extractTweetData(quotedArticle)
         if (quotedData) {
           await saveTweet(quotedData)
@@ -56,6 +59,7 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
     try {
       const parentArticle = findTweetArticle(tweetData.in_reply_to_tweet_id)
       if (parentArticle) {
+        await expandLongPost(parentArticle)
         const parentData = extractTweetData(parentArticle)
         if (parentData) {
           await saveTweet(parentData)
@@ -68,8 +72,18 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
     }
   }
 
+  // X exposes video and GIFs only as blob: URLs, which die with the tab. When
+  // the DOM gave us nothing durable, resolve the real video.twimg.com /
+  // pbs.twimg.com URLs before writing — otherwise the row records media that
+  // can never be fetched again. Best-effort: keep the DOM media on failure.
+  let media = tweetData.media
+  if (media.some((m) => !m.url)) {
+    const resolved = await resolveMediaFromSyndication(tweetData.tweet_id)
+    if (resolved.length > 0) media = resolved
+  }
+
   // Compute content type flags
-  const has_media = tweetData.media.length > 0
+  const has_media = media.length > 0
   const has_article = tweetData.link_cards.length > 0  // Has rich preview card
   const has_link = tweetData.urls.length > 0  // Has any URL (card or plain)
   const has_quote = tweetData.quoted_tweet_id !== null
@@ -77,6 +91,21 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
   const article_url = tweetData.link_cards.length > 0 
     ? tweetData.link_cards[0].url 
     : (tweetData.urls.length > 0 ? tweetData.urls[0] : null)
+
+  // Which bookmarks folder this save came from. The X API cannot filter by
+  // folder, so save time is the only moment this is knowable — and the reels
+  // publisher selects rows by exactly these tags. Merge rather than assign:
+  // the upsert matches on tweet_id, and a tweet can sit in several folders.
+  const folderTags = folderTagsFrom(window.location.pathname)
+  let tags: string[] | null = null
+  if (folderTags.length > 0) {
+    const { data: existing } = await supabase
+      .from("tweets")
+      .select("tags")
+      .eq("tweet_id", tweetData.tweet_id)
+      .maybeSingle()
+    tags = mergeTags(existing?.tags, folderTags)
+  }
 
   // Upsert the main tweet
   const { error } = await supabase.from("tweets").upsert(
@@ -88,7 +117,7 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
       author_avatar_url: tweetData.author_avatar_url,
       timestamp: tweetData.timestamp,
       source_url: tweetData.source_url,
-      media: tweetData.media,
+      media,
       link_cards: tweetData.link_cards,
       quoted_tweet_id: tweetData.quoted_tweet_id,
       in_reply_to_tweet_id: tweetData.in_reply_to_tweet_id,
@@ -100,7 +129,15 @@ export async function saveTweet(tweetData: TweetData): Promise<void> {
       has_link,
       has_quote,
       article_url,
-      urls: tweetData.urls
+      urls: tweetData.urls,
+      // Only write metrics when we actually read some. An empty object would
+      // overwrite good API-sourced counts with nothing on a re-save.
+      ...(Object.keys(tweetData.public_metrics ?? {}).length > 0
+        ? { public_metrics: tweetData.public_metrics }
+        : {}),
+      // Same reasoning: a save made outside a folder must not clear the tags
+      // a folder save previously wrote.
+      ...(tags ? { tags } : {})
     },
     { onConflict: "tweet_id" }
   )
@@ -137,4 +174,73 @@ export async function checkSavedTweets(tweetIds: string[]): Promise<Set<string>>
   }
 
   return new Set((data || []).map((row: { tweet_id: string }) => row.tweet_id))
+}
+
+/** Tweets that already have their content, metrics, and current folder tag. */
+export async function checkCompletedTweets(
+  tweetIds: string[],
+  requiredTags: string[] = []
+): Promise<Set<string>> {
+  if (tweetIds.length === 0) return new Set()
+
+  const { data, error } = await getSupabaseClient()
+    .from("tweets")
+    .select("tweet_id,public_metrics,tags")
+    .in("tweet_id", tweetIds)
+
+  if (error) throw error
+
+  return new Set((data || [])
+    .filter((row: { public_metrics: Record<string, unknown> | null; tags: string[] | null }) =>
+      row.public_metrics && Object.keys(row.public_metrics).length > 0 &&
+      requiredTags.every((tag) => row.tags?.includes(tag))
+    )
+    .map((row: { tweet_id: string }) => row.tweet_id))
+}
+
+/** Fill metrics on an existing save only; this never creates a tweet. */
+export async function backfillMetricsForTweet(
+  tweetId: string,
+  metrics: TweetData["public_metrics"]
+): Promise<"updated" | "skipped"> {
+  if (Object.keys(metrics ?? {}).length === 0) return "skipped"
+
+  const { data, error } = await getSupabaseClient()
+    .from("tweets")
+    .update({ public_metrics: metrics })
+    .eq("tweet_id", tweetId)
+    .is("public_metrics", null)
+    .select("tweet_id")
+
+  if (error) throw error
+  return data?.length ? "updated" : "skipped"
+}
+
+/** Add the current folder to already saved rows without replacing their tags. */
+export async function tagExistingTweets(
+  tweetIds: string[],
+  folderTags: string[]
+): Promise<number> {
+  if (tweetIds.length === 0 || folderTags.length === 0) return 0
+
+  const supabase = getSupabaseClient()
+  const { data, error } = await supabase
+    .from("tweets")
+    .select("tweet_id,tags")
+    .in("tweet_id", tweetIds)
+
+  if (error) throw error
+
+  let tagged = 0
+  for (const row of data || []) {
+    const merged = mergeTags(row.tags, folderTags)
+    if (merged.length === (row.tags?.length ?? 0)) continue
+    const { error: updateError } = await supabase
+      .from("tweets")
+      .update({ tags: merged })
+      .eq("tweet_id", row.tweet_id)
+    if (updateError) throw updateError
+    tagged++
+  }
+  return tagged
 }
