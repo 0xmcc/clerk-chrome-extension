@@ -175,3 +175,72 @@ export async function checkSavedTweets(tweetIds: string[]): Promise<Set<string>>
 
   return new Set((data || []).map((row: { tweet_id: string }) => row.tweet_id))
 }
+
+/** Tweets that already have their content, metrics, and current folder tag. */
+export async function checkCompletedTweets(
+  tweetIds: string[],
+  requiredTags: string[] = []
+): Promise<Set<string>> {
+  if (tweetIds.length === 0) return new Set()
+
+  const { data, error } = await getSupabaseClient()
+    .from("tweets")
+    .select("tweet_id,public_metrics,tags")
+    .in("tweet_id", tweetIds)
+
+  if (error) throw error
+
+  return new Set((data || [])
+    .filter((row: { public_metrics: Record<string, unknown> | null; tags: string[] | null }) =>
+      row.public_metrics && Object.keys(row.public_metrics).length > 0 &&
+      requiredTags.every((tag) => row.tags?.includes(tag))
+    )
+    .map((row: { tweet_id: string }) => row.tweet_id))
+}
+
+/** Fill metrics on an existing save only; this never creates a tweet. */
+export async function backfillMetricsForTweet(
+  tweetId: string,
+  metrics: TweetData["public_metrics"]
+): Promise<"updated" | "skipped"> {
+  if (Object.keys(metrics ?? {}).length === 0) return "skipped"
+
+  const { data, error } = await getSupabaseClient()
+    .from("tweets")
+    .update({ public_metrics: metrics })
+    .eq("tweet_id", tweetId)
+    .is("public_metrics", null)
+    .select("tweet_id")
+
+  if (error) throw error
+  return data?.length ? "updated" : "skipped"
+}
+
+/** Add the current folder to already saved rows without replacing their tags. */
+export async function tagExistingTweets(
+  tweetIds: string[],
+  folderTags: string[]
+): Promise<number> {
+  if (tweetIds.length === 0 || folderTags.length === 0) return 0
+
+  const supabase = getSupabaseClient()
+  const { data, error } = await supabase
+    .from("tweets")
+    .select("tweet_id,tags")
+    .in("tweet_id", tweetIds)
+
+  if (error) throw error
+
+  let tagged = 0
+  for (const row of data || []) {
+    const merged = mergeTags(row.tags, folderTags)
+    if (merged.length === (row.tags?.length ?? 0)) continue
+    const { error: updateError } = await supabase
+      .from("tweets")
+      .update({ tags: merged })
+      .eq("tweet_id", row.tweet_id)
+    if (updateError) throw updateError
+    tagged++
+  }
+  return tagged
+}

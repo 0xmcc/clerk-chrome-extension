@@ -8,7 +8,8 @@
 
 import type { PlasmoCSConfig } from "plasmo"
 import { extractTweetData, expandLongPost } from "~lib/tweet-extractor"
-import { saveTweet, checkSavedTweets } from "~lib/tweet-saver"
+import { saveTweet, checkSavedTweets, checkCompletedTweets, backfillMetricsForTweet, tagExistingTweets } from "~lib/tweet-saver"
+import { folderTagsFrom } from "~lib/folder-tags"
 import { ENABLE_TWEET_BOOKMARK } from "~config/features"
 
 // ---------------------------------------------------------------------------
@@ -112,10 +113,15 @@ function injectStyles(): void {
     }
     .tweet-saver-bulk-container {
       display: flex;
+      flex-wrap: wrap;
       justify-content: center;
       gap: 8px;
       padding: 12px 16px;
       border-bottom: 1px solid rgb(47, 51, 54);
+      position: sticky;
+      z-index: 30;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
     }
 
     /* Floating Dashboard Overlay */
@@ -329,6 +335,20 @@ function injectStyles(): void {
     .stashy-dashboard.done .stashy-stop-btn:hover {
       background: rgb(0, 160, 105);
     }
+    .stashy-continue-btn {
+      display: none;
+      width: 100%;
+      padding: 10px 16px;
+      margin-bottom: 8px;
+      border: none;
+      border-radius: 9999px;
+      background: rgb(29, 155, 240);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .stashy-dashboard.done .stashy-continue-btn { display: block; }
     .stashy-hint {
       text-align: center;
       font-size: 11px;
@@ -351,12 +371,13 @@ interface DashboardState {
   failed: number
   queued: number
   isComplete: boolean
+  reason?: "stopped" | "idle" | "reset"
 }
 
 let dashboardElement: HTMLDivElement | null = null
 let dashboardMinimized = false
 
-function createDashboard(onStop: () => void): HTMLDivElement {
+function createDashboard(onStop: () => void, onContinue: () => void): HTMLDivElement {
   // Remove existing dashboard if any
   document.getElementById(DASHBOARD_ID)?.remove()
 
@@ -401,6 +422,7 @@ function createDashboard(onStop: () => void): HTMLDivElement {
           <span class="stashy-stat-label">Failed</span>
         </div>
       </div>
+      <button class="stashy-continue-btn" data-action="continue">▶ Continue where it left off</button>
       <button class="stashy-stop-btn" data-action="stop">⏹ Stop Saving</button>
       <div class="stashy-hint">Press Esc to stop</div>
     </div>
@@ -427,6 +449,8 @@ function createDashboard(onStop: () => void): HTMLDivElement {
       onStop()
     }
   })
+
+  dashboard.querySelector('[data-action="continue"]')?.addEventListener("click", onContinue)
 
   document.body.appendChild(dashboard)
   dashboardElement = dashboard
@@ -460,22 +484,16 @@ function updateDashboard(state: DashboardState): void {
 
   if (state.isComplete) {
     dashboardElement.classList.add("done")
-    if (statusText) statusText.textContent = "Done! All bookmarks saved"
+    if (statusText) statusText.textContent = state.reason === "stopped"
+      ? "Stopped — saved items are safe"
+      : "Scroll paused — see results below"
     if (stopBtn) stopBtn.textContent = "✓ Close"
-    if (hintEl) hintEl.textContent = "Your bookmarks are safely stashed"
-    if (progressEl) progressEl.style.width = "100%"
-
-    // Auto-hide after 8 seconds
-    setTimeout(() => {
-      if (dashboardElement?.classList.contains("done")) {
-        hideDashboard()
-      }
-    }, 8000)
+    if (hintEl) hintEl.textContent = "Continue from this position or close"
   }
 }
 
-function showDashboard(onStop: () => void): void {
-  createDashboard(onStop)
+function showDashboard(onStop: () => void, onContinue: () => void): void {
+  createDashboard(onStop, onContinue)
 }
 
 function hideDashboard(): void {
@@ -756,6 +774,7 @@ interface ScrollSaveStats {
   saved: number
   skipped: number
   failed: number
+  reason: "stopped" | "idle" | "reset"
 }
 
 interface ScrollSaveCallbacks {
@@ -763,153 +782,157 @@ interface ScrollSaveCallbacks {
   onComplete?: (stats: ScrollSaveStats) => void
 }
 
-function autoScrollAndSave(
+export async function autoScrollAndSave(
   btn: HTMLButtonElement,
   signal: AbortSignal,
   callbacks: ScrollSaveCallbacks = {},
-  idleMs = 8000,
+  mode: "save" | "backfill" = "save",
+  idleMs = 20000,
   scrollStep = 1200,
   scrollInterval = 600
 ): Promise<ScrollSaveStats> {
-  return new Promise<ScrollSaveStats>((resolve) => {
-    const stats: ScrollSaveStats = { saved: 0, skipped: 0, failed: 0 }
-    const savedTweetIds = new Set<string>()
-    let lastArticleCount = 0
-    let idleStart = Date.now()
-    let lastScrollY = window.scrollY
-    let stuckAtTopCount = 0
+  const stats: ScrollSaveStats = { saved: 0, skipped: 0, failed: 0, reason: "idle" }
+  const seenIds = new Set<string>()
+  const saveQueue: { tweetData: NonNullable<ReturnType<typeof extractTweetData>>, article: Element }[] = []
+  const requiredTags = folderTagsFrom(window.location.pathname)
+  let worker: Promise<void> | null = null
+  let idleStart = Date.now()
+  let lastScrollY = window.scrollY
+  let resetCount = 0
+  let consecutiveSkips = 0
 
-    // Queue of tweet data to save (extracted immediately, saved async)
-    const saveQueue: { tweetData: ReturnType<typeof extractTweetData>, article: Element }[] = []
-    let savingInProgress = false
+  function notifyUpdate() {
+    callbacks.onUpdate?.({ ...stats, queued: saveQueue.length })
+  }
 
-    // Notify callbacks of updates
-    function notifyUpdate() {
-      callbacks.onUpdate?.({
-        ...stats,
-        queued: saveQueue.length
-      })
-    }
+  async function extractVisibleArticles() {
+    const candidates = Array.from(document.querySelectorAll("article"))
+      .map((article) => ({ article, id: getTweetIdFromArticle(article) }))
+      .filter((item): item is { article: HTMLElement; id: string } => Boolean(item.id) && !seenIds.has(item.id!))
+    if (candidates.length === 0) return
 
-    // Extract all currently visible articles into the save queue
-    async function extractVisibleArticles() {
-      const articles = document.querySelectorAll("article")
-      for (const article of articles) {
-        const tweetId = getTweetIdFromArticle(article)
-        if (!tweetId || savedTweetIds.has(tweetId)) continue
-
-        savedTweetIds.add(tweetId)
-
-        await expandLongPost(article)
-        const tweetData = extractTweetData(article)
-        if (!tweetData) {
-          stats.skipped++
-          notifyUpdate()
-          continue
-        }
-
-        console.log(`[TweetSaver] Queued tweet ${tweetId} (${tweetData.tweet_text?.slice(0, 40)}...)`)
-        saveQueue.push({ tweetData, article })
-        notifyUpdate()
+    // Query once per viewport. This makes repeat runs skip saved rows without
+    // discarding missing metrics or a folder tag that still needs writing.
+    let completed = new Set<string>()
+    if (mode === "save") {
+      try {
+        completed = await checkCompletedTweets(candidates.map((item) => item.id), requiredTags)
+      } catch (err) {
+        console.warn("[TweetSaver] Could not check existing saves; retrying them", err)
       }
     }
 
-    // Process the save queue without blocking scroll
-    async function processSaveQueue() {
-      if (savingInProgress) return
-      savingInProgress = true
+    for (const { article, id } of candidates) {
+      if (signal.aborted) break
+      if (seenIds.has(id)) continue
+      seenIds.add(id)
+      idleStart = Date.now()
+      if (completed.has(id)) {
+        stats.skipped++
+        consecutiveSkips++
+        notifyUpdate()
+        continue
+      }
 
-      while (saveQueue.length > 0) {
-        if (signal.aborted) break
+      if (mode === "save") await expandLongPost(article)
+      const tweetData = extractTweetData(article)
+      if (!tweetData) {
+        stats.skipped++
+        notifyUpdate()
+        continue
+      }
+      saveQueue.push({ tweetData, article })
+      notifyUpdate()
+    }
+  }
+
+  function processSaveQueue(): Promise<void> {
+    if (worker) return worker
+    worker = (async () => {
+      while (saveQueue.length && !signal.aborted) {
         const item = saveQueue.shift()!
-
         try {
-          await saveTweet(item.tweetData)
-          stats.saved++
-
-          // Update per-tweet button if it still exists in DOM
-          const perBtn = item.article.querySelector?.(`[${BUTTON_ATTR}]`) as HTMLButtonElement | null
-          if (perBtn) setButtonState(perBtn, "saved")
+          if (mode === "backfill") {
+            const result = await backfillMetricsForTweet(item.tweetData.tweet_id, item.tweetData.public_metrics)
+            if (result === "updated") {
+              stats.saved++
+              consecutiveSkips = 0
+            } else {
+              stats.skipped++
+              consecutiveSkips++
+            }
+          } else {
+            await saveTweet(item.tweetData)
+            stats.saved++
+            consecutiveSkips = 0
+            const perBtn = item.article.querySelector?.(`[${BUTTON_ATTR}]`) as HTMLButtonElement | null
+            if (perBtn) setButtonState(perBtn, "saved")
+          }
         } catch (err) {
           stats.failed++
+          consecutiveSkips = 0
           console.error("[TweetSaver] Scroll-save error:", err)
         }
-
         notifyUpdate()
       }
+    })().finally(() => { worker = null })
+    return worker
+  }
 
-      savingInProgress = false
+  function waitForNextScroll(): Promise<void> {
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer)
+        signal.removeEventListener("abort", done)
+        resolve()
+      }
+      const timer = setTimeout(done, consecutiveSkips >= 15 ? 250 : scrollInterval)
+      signal.addEventListener("abort", done, { once: true })
+    })
+  }
+
+  while (!signal.aborted) {
+    await extractVisibleArticles()
+    void processSaveQueue()
+    if (signal.aborted) break
+
+    btn.textContent = `${consecutiveSkips >= 15 ? "⏩ Skipping saved" : "⏹ Stop"} (${stats.saved} saved, ${saveQueue.length} queued)`
+    // Keep the same step size during fast-forward. Jumping five viewports can
+    // miss tweets because X recycles offscreen articles.
+    window.scrollBy({ top: scrollStep, behavior: "auto" })
+    await waitForNextScroll()
+    if (signal.aborted) break
+
+    const currentScrollY = window.scrollY
+    if (currentScrollY < lastScrollY && currentScrollY < 500) {
+      resetCount++
+      if (resetCount >= 3) {
+        stats.reason = "reset"
+        break
+      }
+      window.scrollTo({ top: lastScrollY + scrollStep, behavior: "auto" })
+    } else {
+      resetCount = 0
+      lastScrollY = Math.max(lastScrollY, currentScrollY)
     }
 
-    const timer = setInterval(() => {
-      if (signal.aborted) {
-        clearInterval(timer)
-        // Drain remaining queue before resolving
-        processSaveQueue().then(() => {
-          callbacks.onComplete?.(stats)
-          resolve(stats)
-        })
-        return
-      }
+    if (Date.now() - idleStart >= idleMs) {
+      stats.reason = "idle"
+      break
+    }
+  }
 
-      // Extract tweets from DOM immediately (fast, sync-ish)
-      void extractVisibleArticles()
-
-      // Kick off async saves without blocking the scroll
-      processSaveQueue()
-
-      // Update button with live stats
-      const queued = saveQueue.length
-      const queueLabel = queued > 0 ? ` (${queued} queued)` : ""
-      btn.textContent = `⏹ Stop (${stats.saved} saved${queueLabel})`
-
-      // Scroll down
-      window.scrollBy({ top: scrollStep, behavior: "smooth" })
-
-      // Check if Twitter reset scroll position to top
-      const currentScrollY = window.scrollY
-      if (currentScrollY < lastScrollY && currentScrollY < 500) {
-        stuckAtTopCount++
-        if (stuckAtTopCount >= 3) {
-          console.log("[TweetSaver] Scroll reset detected, stopping auto-scroll")
-          clearInterval(timer)
-          processSaveQueue().then(() => {
-            callbacks.onComplete?.(stats)
-            resolve(stats)
-          })
-          return
-        }
-        window.scrollTo({ top: lastScrollY + scrollStep, behavior: "smooth" })
-      } else {
-        stuckAtTopCount = 0
-        lastScrollY = Math.max(lastScrollY, currentScrollY)
-      }
-
-      // Check for new unique tweets to detect end of list
-      const uniqueCount = savedTweetIds.size
-      if (uniqueCount > lastArticleCount) {
-        lastArticleCount = uniqueCount
-        idleStart = Date.now()
-      } else if (Date.now() - idleStart >= idleMs) {
-        // No new tweets found — we've reached the end
-        console.log(`[TweetSaver] End of list detected. ${uniqueCount} unique tweets found.`)
-        void extractVisibleArticles() // one final pass
-        clearInterval(timer)
-        processSaveQueue().then(() => {
-          callbacks.onComplete?.(stats)
-          resolve(stats)
-        })
-      }
-    }, scrollInterval)
-
-    signal.addEventListener("abort", () => {
-      clearInterval(timer)
-      processSaveQueue().then(() => {
-        callbacks.onComplete?.(stats)
-        resolve(stats)
-      })
-    })
-  })
+  if (!signal.aborted) {
+    await extractVisibleArticles()
+    while (!signal.aborted && (saveQueue.length || worker)) await processSaveQueue()
+  }
+  if (signal.aborted) {
+    stats.reason = "stopped"
+    if (worker) await worker
+    saveQueue.length = 0
+  }
+  callbacks.onComplete?.(stats)
+  return stats
 }
 
 // ---------------------------------------------------------------------------
@@ -924,11 +947,56 @@ function injectBulkButton(): void {
   container.id = BULK_BTN_ID
   container.className = "tweet-saver-bulk-container"
 
-  // --- "Scroll & Save All" button (auto-scroll then save) ---
+  const saveVisibleBtn = document.createElement("button")
+  saveVisibleBtn.className = "tweet-saver-bulk-btn"
+  saveVisibleBtn.textContent = "Save Visible"
+  saveVisibleBtn.title = "Save the bookmarks currently loaded on this page"
+
+  saveVisibleBtn.addEventListener("click", async () => {
+    if (scrollAbortController || saveVisibleBtn.disabled) return
+    saveVisibleBtn.disabled = true
+    const articles = Array.from(document.querySelectorAll("article"))
+    const ids = articles.map(getTweetIdFromArticle).filter((id): id is string => Boolean(id))
+    let completed = new Set<string>()
+    try {
+      completed = await checkCompletedTweets(ids, folderTagsFrom(window.location.pathname))
+    } catch (err) {
+      console.warn("[TweetSaver] Could not check existing saves; retrying them", err)
+    }
+    let saved = 0
+    let failed = 0
+    for (const article of articles) {
+      const id = getTweetIdFromArticle(article)
+      if (!id || completed.has(id)) continue
+      try {
+        await expandLongPost(article)
+        const tweetData = extractTweetData(article)
+        if (!tweetData) continue
+        await saveTweet(tweetData)
+        saved++
+      } catch (err) {
+        failed++
+        console.error("[TweetSaver] Save visible error:", err)
+      }
+      saveVisibleBtn.textContent = `${saved} saved, ${failed} failed`
+    }
+    saveVisibleBtn.textContent = `✓ ${saved} saved, ${failed} failed`
+    setTimeout(() => {
+      saveVisibleBtn.disabled = false
+      saveVisibleBtn.textContent = "Save Visible"
+    }, 5000)
+  })
+
+  // --- "Scroll & Save All" button ---
   const scrollSaveBtn = document.createElement("button")
   scrollSaveBtn.className = "tweet-saver-bulk-btn"
   scrollSaveBtn.textContent = "Scroll & Save All"
   scrollSaveBtn.title = "Auto-scroll to load all tweets, then save everything"
+
+  const backfillBtn = document.createElement("button")
+  backfillBtn.className = "tweet-saver-bulk-btn"
+  backfillBtn.textContent = "Scroll & Backfill Metrics"
+  backfillBtn.title = "Fill engagement counts on already saved tweets without adding new tweets"
 
   const handleEscape = (e: KeyboardEvent) => {
     if (e.key === "Escape" && scrollAbortController) {
@@ -937,31 +1005,30 @@ function injectBulkButton(): void {
     }
   }
 
-  scrollSaveBtn.addEventListener("click", async () => {
-    // If currently scrolling, abort
-    if (scrollAbortController) {
-      scrollAbortController.abort()
-      return
-    }
-
+  async function runScrollPass(mode: "save" | "backfill", fromTop: boolean) {
+    if (scrollAbortController) return
+    if (fromTop) window.scrollTo({ top: 0, behavior: "auto" })
     scrollAbortController = new AbortController()
     const { signal } = scrollAbortController
+    const activeBtn = mode === "save" ? scrollSaveBtn : backfillBtn
+    saveVisibleBtn.disabled = true
+    if (mode === "save") backfillBtn.disabled = true
+    else scrollSaveBtn.disabled = true
 
-    // Show the floating dashboard
-    showDashboard(() => {
-      scrollAbortController?.abort()
-    })
+    showDashboard(
+      () => scrollAbortController?.abort(),
+      () => { void runScrollPass(mode, false) }
+    )
 
-    // Visual state: scrolling
-    scrollSaveBtn.classList.add("scrolling")
+    activeBtn.classList.add("scrolling")
     const articleCount = document.querySelectorAll("article").length
-    scrollSaveBtn.textContent = `⏹ Stop (${articleCount} tweets)`
+    activeBtn.textContent = `⏹ Stop (${articleCount} tweets)`
 
     // Listen for Escape key
     document.addEventListener("keydown", handleEscape)
 
     // Auto-scroll AND save as we go (Twitter recycles DOM elements)
-    const stats = await autoScrollAndSave(scrollSaveBtn, signal, {
+    const stats = await autoScrollAndSave(activeBtn, signal, {
       onUpdate: (state) => {
         updateDashboard({
           saved: state.saved,
@@ -977,32 +1044,74 @@ function injectBulkButton(): void {
           skipped: finalStats.skipped,
           failed: finalStats.failed,
           queued: 0,
-          isComplete: true
+          isComplete: true,
+          reason: finalStats.reason
         })
       }
-    })
+    }, mode)
 
     // Cleanup scroll state
     document.removeEventListener("keydown", handleEscape)
     scrollAbortController = null
-    scrollSaveBtn.classList.remove("scrolling")
+    activeBtn.classList.remove("scrolling")
+    saveVisibleBtn.disabled = false
+    scrollSaveBtn.disabled = false
+    backfillBtn.disabled = false
 
     // Show results
-    const parts = [`✓ ${stats.saved} saved`]
+    const parts = [`✓ ${stats.saved} ${mode === "save" ? "saved" : "backfilled"}`]
     if (stats.skipped) parts.push(`${stats.skipped} skipped`)
     if (stats.failed) parts.push(`${stats.failed} failed`)
-    scrollSaveBtn.textContent = parts.join(", ")
+    activeBtn.textContent = parts.join(", ")
 
     console.log(`[TweetSaver] Scroll & Save complete:`, stats)
 
     // Reset button text after a few seconds
     setTimeout(() => {
-      scrollSaveBtn.textContent = "Scroll & Save All"
+      activeBtn.textContent = mode === "save" ? "Scroll & Save All" : "Scroll & Backfill Metrics"
     }, 5000)
+  }
 
+  scrollSaveBtn.addEventListener("click", () => {
+    if (scrollAbortController) scrollAbortController.abort()
+    else void runScrollPass("save", false)
   })
 
+  backfillBtn.addEventListener("click", () => {
+    if (scrollAbortController) scrollAbortController.abort()
+    else void runScrollPass("backfill", true)
+  })
+
+  container.appendChild(saveVisibleBtn)
   container.appendChild(scrollSaveBtn)
+  container.appendChild(backfillBtn)
+
+  const currentFolderTags = folderTagsFrom(window.location.pathname)
+  if (currentFolderTags.length) {
+    const tagBtn = document.createElement("button")
+    tagBtn.className = "tweet-saver-bulk-btn"
+    tagBtn.textContent = "Tag Existing Saves"
+    tagBtn.title = "Add this folder to already saved bookmarks currently visible"
+    tagBtn.addEventListener("click", async () => {
+      if (tagBtn.disabled || scrollAbortController) return
+      tagBtn.disabled = true
+      try {
+        const ids = Array.from(document.querySelectorAll("article"))
+          .map(getTweetIdFromArticle)
+          .filter((id): id is string => Boolean(id))
+        const tagged = await tagExistingTweets(ids, currentFolderTags)
+        tagBtn.textContent = `✓ Tagged ${tagged}`
+      } catch (err) {
+        console.error("[TweetSaver] Folder tagging error:", err)
+        tagBtn.textContent = "Tagging failed"
+      }
+      setTimeout(() => {
+        tagBtn.disabled = false
+        tagBtn.textContent = "Tag Existing Saves"
+      }, 5000)
+    })
+    container.appendChild(tagBtn)
+  }
 
   // Insert after the primary column header (h2 area)
   const header = document.querySelector(
@@ -1016,6 +1125,7 @@ function injectBulkButton(): void {
       primary.insertBefore(container, primary.firstChild)
     }
   }
+  container.style.top = `${header instanceof HTMLElement ? header.getBoundingClientRect().height : 53}px`
 }
 
 // ---------------------------------------------------------------------------
@@ -1029,11 +1139,11 @@ function onUrlChange(): void {
   if (currentUrl === lastUrl) return
   lastUrl = currentUrl
 
+  scrollAbortController?.abort()
+  removeBulkButton()
   if (isBookmarksPage()) {
     // Slight delay to let Twitter render the header
     setTimeout(injectBulkButton, 800)
-  } else {
-    removeBulkButton()
   }
 }
 

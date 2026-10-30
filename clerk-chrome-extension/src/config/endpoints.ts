@@ -361,20 +361,18 @@ export const HOST_PATTERNS = {
 export const ALL_HOST_PATTERNS = [
   ...HOST_PATTERNS.CHATGPT,
   ...HOST_PATTERNS.CLAUDE,
-  ...HOST_PATTERNS.TWITTER,
   ...HOST_PATTERNS.YOUTUBE,
 ] as const
 
 /**
- * Check if a URL string matches target sites.
+ * Network interception is for chat and YouTube traffic. The separate X
+ * bookmark content script still matches HOST_PATTERNS.TWITTER directly.
  */
 export function isTargetSite(url: string): boolean {
   return (
     url.includes("chat.openai.com") ||
     url.includes("chatgpt.com") ||
     url.includes("claude.ai") ||
-    url.includes("x.com") ||
-    url.includes("twitter.com") ||
     url.includes("youtube.com")
   )
 }
