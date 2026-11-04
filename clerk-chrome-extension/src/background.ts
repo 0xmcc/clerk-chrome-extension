@@ -1,3 +1,4 @@
+import { registerAssessmentListener } from "./lib/bookmark-assessment-background"
 import { createClerkClient } from "@clerk/chrome-extension/background"
 
 import {
@@ -184,6 +185,8 @@ chrome.storage?.onChanged?.addListener((changes, areaName) => {
 
   void refreshClerkClient("storage-change")
 })
+
+registerAssessmentListener()
 
 // Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
