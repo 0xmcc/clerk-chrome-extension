@@ -86,4 +86,14 @@ describe("fetchAssessments", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("http://127.0.0.1:7338/v1/assessments?ids=1")
     expect(r).toEqual({ ok: true, assessments: { "1": base } })
   })
+
+  it("shows a like on the recommendation and stays quiet without one", () => {
+    const rec = { id: 7, title: "Add hook", change: "Add a hook", status: "rejected",
+      status_label: "Rejected", status_ref: null, impact: 3, effort: 1 }
+    const base = { tweet_id: "1", status: "assessed" as const, evaluated_at: null, setup_changes_since: 0 }
+    const liked = describeAssessment({ ...base, recommendation: { ...rec, liked: true } })
+    expect(liked.rows.find((r) => r.label === "Liked")?.value).toBe("You liked this idea.")
+    const plain = describeAssessment({ ...base, recommendation: rec })
+    expect(plain.rows.find((r) => r.label === "Liked")).toBeUndefined()
+  })
 })

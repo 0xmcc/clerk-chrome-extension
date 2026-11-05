@@ -17,6 +17,7 @@ export interface AssessmentRecommendation {
   status_ref: string | null
   impact: number
   effort: number
+  liked?: boolean
 }
 
 export interface Assessment {
@@ -106,6 +107,7 @@ export function describeAssessment(a: Assessment, now: Date = new Date()): Asses
   if (rec) {
     rows.push({ label: "Recommendation", value: `${rec.status_label}. Item ${rec.id}. ${rec.change}` })
     if (rec.status === "implemented" && rec.status_ref) rows.push({ label: "Change made", value: rec.status_ref })
+    if (rec.liked) rows.push({ label: "Liked", value: "You liked this idea." })
   }
   if (a.needs_verification && a.verification_note) rows.push({ label: "Check first", value: a.verification_note })
   return { ...shared, rows, badge: rec ? "Recommendation" : "No recommendation", tone: rec ? "action" : "quiet",
